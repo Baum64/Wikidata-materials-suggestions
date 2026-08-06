@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Wortfeld-Explorer — Wikidata</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  :root{
+    --bark:#20180f;
+    --bark-2:#2b2015;
+    --amber:#c98a3b;
+    --amber-bright:#e3a85c;
+    --birch:#efe6d3;
+    --birch-dim:#b8ab8f;
+    --sage:#7c8b6f;
+    --line:#4a3c28;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bark);color:var(--birch);font-family:'Inter',sans-serif;overflow:hidden;}
+
+  #app{display:flex;flex-direction:column;height:100vh;}
+
+  header{
+    padding:22px 28px 16px;
+    border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg, var(--bark-2), var(--bark));
+    flex-shrink:0;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:26px;
+    margin:0 0 2px 0;
+    letter-spacing:0.2px;
+  }
+  h1 .ring{color:var(--amber-bright);}
+  .subtitle{
+    font-size:12.5px;
+    color:var(--birch-dim);
+    font-family:'IBM Plex Mono', monospace;
+    margin-bottom:16px;
+  }
+
+  .controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;}
+  #search{
+    background:var(--bark);
+    border:1px solid var(--line);
+    color:var(--birch);
+    padding:9px 14px;
+    border-radius:3px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    width:260px;
+    outline:none;
+    transition:border-color .15s;
+  }
+  #search:focus{border-color:var(--amber);}
+  #search::placeholder{color:var(--birch-dim);}
+
+  button{
+    background:var(--amber);
+    color:var(--bark);
+    border:none;
+    padding:9px 18px;
+    border-radius:3px;
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    cursor:pointer;
+    transition:background .15s, transform .1s;
+  }
+  button:hover{background:var(--amber-bright);}
+  button:active{transform:scale(0.97);}
+  button:disabled{opacity:0.5;cursor:default;}
+
+  .depth-toggle{
+    display:flex;
+    border:1px solid var(--line);
+    border-radius:3px;
+    overflow:hidden;
+  }
+  .depth-toggle button{
+    background:transparent;
+    color:var(--birch-dim);
+    border-radius:0;
+    padding:9px 14px;
+    font-weight:500;
+  }
+  .depth-toggle button.active{background:var(--amber);color:var(--bark);font-weight:600;}
+
+  .hull{stroke-width:1px;stroke-opacity:0.5;fill-opacity:0.10;pointer-events:none;}
+
+  .cluster-legend{
+    position:absolute;
+    top:18px;
+    right:18px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:10.5px;
+    color:var(--birch-dim);
+    background:rgba(32,24,15,0.85);
+    border:1px solid var(--line);
+    padding:10px 14px;
+    border-radius:4px;
+    line-height:1.9;
+    max-width:220px;
+    max-height:60vh;
+    overflow-y:auto;
+  }
+  .cluster-legend .title{color:var(--birch);font-weight:600;margin-bottom:4px;}
+  .cluster-legend span{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:middle;}
+
+  #status{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12px;
+    color:var(--sage);
+    margin-left:auto;
+    min-height:16px;
+  }
+  #status.err{color:#c9683b;}
+
+  #graph-wrap{flex:1;position:relative;overflow:hidden;}
+  svg{width:100%;height:100%;display:block;cursor:grab;}
+  svg:active{cursor:grabbing;}
+
+  .link{stroke:var(--line);stroke-opacity:0.7;}
+  .link-label{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:9.5px;
+    fill:var(--birch-dim);
+    pointer-events:none;
+  }
+  .node circle{stroke-width:1.5px;cursor:pointer;}
+  .node.center circle{fill:var(--amber);stroke:var(--amber-bright);}
+  .node.out circle{fill:var(--bark-2);stroke:var(--sage);}
+  .node.in circle{fill:var(--bark-2);stroke:#8a6a45;}
+  .node text{
+    font-family:'Inter',sans-serif;
+    font-size:11.5px;
+    fill:var(--birch);
+    pointer-events:none;
+  }
+  .node.center text{font-weight:600;font-size:13px;fill:var(--amber-bright);}
+
+  .legend{
+    position:absolute;
+    bottom:18px;
+    left:18px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    color:var(--birch-dim);
+    background:rgba(32,24,15,0.85);
+    border:1px solid var(--line);
+    padding:10px 14px;
+    border-radius:4px;
+    line-height:1.8;
+  }
+  .legend span{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px;vertical-align:middle;}
+
+  #hint{
+    position:absolute;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    text-align:center;
+    color:var(--birch-dim);
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13px;
+    max-width:340px;
+    line-height:1.7;
+  }
+  #hint .big{font-family:'Fraunces',serif;font-size:20px;color:var(--birch);display:block;margin-bottom:10px;}
+
+  .tooltip{
+    position:absolute;
+    background:var(--bark-2);
+    border:1px solid var(--amber);
+    color:var(--birch);
+    padding:6px 10px;
+    border-radius:3px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    pointer-events:none;
+    max-width:220px;
+    z-index:10;
+    display:none;
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>Wort<span class="ring">feld</span>-Explorer</h1>
+    <div class="subtitle">Wikidata-Beziehungsnetz um einen Zielartikel &mdash; live über SPARQL</div>
+    <div class="controls">
+      <input id="search" type="text" placeholder="z.B. Holz, Eiche, Wikipedia-Titel oder Qxxx" value="Holz" />
+      <button id="go">Graph erzeugen</button>
+      <div class="depth-toggle">
+        <button id="depth1" class="active" data-depth="1">nah</button>
+        <button id="depth2" data-depth="2">weiter</button>
+      </div>
+      <div class="depth-toggle" id="dir-toggle">
+        <button id="dirBoth" class="active" data-dir="both">beide</button>
+        <button id="dirOut" data-dir="out">ausgehend</button>
+        <button id="dirIn" data-dir="in">eingehend</button>
+      </div>
+      <div id="status"></div>
+    </div>
+  </header>
+  <div id="graph-wrap">
+    <div id="hint"><span class="big">Bereit</span>Titel eingeben und "Graph erzeugen" klicken.<br/>Ziehe Knoten, scrolle zum Zoomen, klicke einen Nachbarn um ihn zum neuen Zentrum zu machen.</div>
+    <svg></svg>
+    <div class="legend">
+      <div><span style="background:var(--amber)"></span>Zielartikel (Zentrum)</div>
+      <div><span style="background:var(--bark-2);border:1.5px solid var(--sage)"></span>ausgehende Beziehung</div>
+      <div><span style="background:var(--bark-2);border:1.5px solid #8a6a45"></span>eingehende Beziehung</div>
+    </div>
+    <div class="cluster-legend" id="cluster-legend" style="display:none;">
+      <div class="title">Cluster nach Beziehungstyp</div>
+      <div id="cluster-legend-items"></div>
+    </div>
+    <div class="tooltip"></div>
+  </div>
+</div>
+
+<script>
+const svg = d3.select("svg");
+const tooltip = d3.select(".tooltip");
+const statusEl = document.getElementById("status");
+const hintEl = document.getElementById("hint");
+let width, height;
+
+function resize(){
+  const wrap = document.getElementById("graph-wrap");
+  width = wrap.clientWidth; height = wrap.clientHeight;
+  svg.attr("viewBox", [0,0,width,height]);
+}
+window.addEventListener("resize", resize);
+resize();
+
+const g = svg.append("g");
+svg.call(d3.zoom().scaleExtent([0.2, 4]).on("zoom", (e) => g.attr("transform", e.transform)));
+
+function setStatus(msg, isErr){
+  statusEl.textContent = msg || "";
+  statusEl.classList.toggle("err", !!isErr);
+}
+
+// Resolve a search term (Wikipedia title or Qxxx or German label) to a QID + label
+async function resolveToQid(term){
+  term = term.trim();
+  if (/^Q\d+$/i.test(term)) return { qid: term.toUpperCase(), label: term };
+
+  // Try German Wikipedia page -> wikibase_item
+  try {
+    const url = `https://de.wikipedia.org/w/api.php?action=query&prop=pageprops&titles=${encodeURIComponent(term)}&format=json&origin=*`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const pages = data.query && data.query.pages;
+    if (pages) {
+      const page = Object.values(pages)[0];
+      if (page && page.pageprops && page.pageprops.wikibase_item) {
+        return { qid: page.pageprops.wikibase_item, label: page.title || term };
+      }
+    }
+  } catch(e) { /* fall through */ }
+
+  // Fallback: Wikidata entity search by label
+  try {
+    const url2 = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(term)}&language=de&format=json&origin=*`;
+    const res2 = await fetch(url2);
+    const data2 = await res2.json();
+    if (data2.search && data2.search.length > 0) {
+      return { qid: data2.search[0].id, label: data2.search[0].label || term };
+    }
+  } catch(e) { /* fall through */ }
+
+  return null;
+}
+
+async function runSparql(qid, twoHop){
+  const endpoint = "https://query.wikidata.org/sparql";
+  const query = `
+    SELECT ?linked ?linkedLabel ?propLabel ?dir WHERE {
+      {
+        wd:${qid} ?p ?linked .
+        ?prop wikibase:directClaim ?p .
+        BIND("out" AS ?dir)
+      } UNION {
+        ?linked ?p wd:${qid} .
+        ?prop wikibase:directClaim ?p .
+        BIND("in" AS ?dir)
+      }
+      FILTER(isIRI(?linked))
+      FILTER(STRSTARTS(STR(?linked), "http://www.wikidata.org/entity/Q"))
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "de,en". }
+    }
+    LIMIT ${twoHop ? 60 : 120}
+  `;
+  const url = endpoint + "?query=" + encodeURIComponent(query) + "&format=json";
+  const res = await fetch(url, { headers: { "Accept": "application/sparql-results+json" } });
+  if (!res.ok) throw new Error("SPARQL-Anfrage fehlgeschlagen (" + res.status + ")");
+  const data = await res.json();
+  return data.results.bindings;
+}
+
+const CLUSTER_PALETTE = ["#c98a3b","#7c8b6f","#b0553a","#a68a5b","#5f7a6b","#c9a227","#6b5b8a","#8a6a45","#3f6b6b","#9c6b8a"];
+
+function bindingsToGraphData(centerQid, centerLabel, bindings, directionFilter){
+  const nodes = new Map();
+  const links = [];
+  nodes.set(centerQid, { id: centerQid, label: centerLabel, type: "center" });
+
+  bindings.forEach(b => {
+    const qidMatch = b.linked.value.match(/Q\d+$/);
+    if (!qidMatch) return;
+    const qid = qidMatch[0];
+    if (qid === centerQid) return;
+    const dir = b.dir.value;
+    if (directionFilter !== "both" && dir !== directionFilter) return;
+    const label = b.linkedLabel ? b.linkedLabel.value : qid;
+    const prop = b.propLabel ? b.propLabel.value : "(unbenannt)";
+    if (!nodes.has(qid)) nodes.set(qid, { id: qid, label, type: dir, cluster: prop });
+    links.push({
+      source: dir === "out" ? centerQid : qid,
+      target: dir === "out" ? qid : centerQid,
+      label: prop
+    });
+  });
+
+  return { nodes: Array.from(nodes.values()), links };
+}
+
+// Assign a color per distinct relation-type cluster, position groups evenly on a ring
+function computeClusters(graphData){
+  const clusterKeys = Array.from(new Set(graphData.nodes.filter(n => n.type !== "center").map(n => n.cluster)));
+  const color = d3.scaleOrdinal().domain(clusterKeys).range(CLUSTER_PALETTE);
+  const angleStep = (2 * Math.PI) / Math.max(clusterKeys.length, 1);
+  const clusterAngle = new Map(clusterKeys.map((k, i) => [k, i * angleStep]));
+  graphData.nodes.forEach(n => {
+    if (n.type === "center") return;
+    n.clusterColor = color(n.cluster);
+    n.clusterAngle = clusterAngle.get(n.cluster);
+  });
+  return { clusterKeys, color };
+}
+
+function renderClusterLegend(clusterKeys, color){
+  const box = document.getElementById("cluster-legend");
+  const items = document.getElementById("cluster-legend-items");
+  if (clusterKeys.length === 0){ box.style.display = "none"; return; }
+  items.innerHTML = "";
+  clusterKeys.forEach(k => {
+    const row = document.createElement("div");
+    row.innerHTML = `<span style="background:${color(k)}"></span>${k}`;
+    items.appendChild(row);
+  });
+  box.style.display = "block";
+}
+
+let simulation;
+
+function render(graphData){
+  g.selectAll("*").remove();
+  hintEl.style.display = "none";
+
+  const { clusterKeys, color } = computeClusters(graphData);
+  renderClusterLegend(clusterKeys, color);
+
+  const clusterRadius = Math.min(width, height) * 0.32;
+
+  const linkForce = d3.forceLink(graphData.links).id(d => d.id).distance(140).strength(0.6);
+  simulation = d3.forceSimulation(graphData.nodes)
+    .force("link", linkForce)
+    .force("charge", d3.forceManyBody().strength(-260))
+    .force("center", d3.forceCenter(width/2, height/2))
+    .force("collide", d3.forceCollide().radius(46))
+    .force("clusterX", d3.forceX(d => d.type === "center" ? width/2 : width/2 + Math.cos(d.clusterAngle) * clusterRadius).strength(d => d.type === "center" ? 0 : 0.12))
+    .force("clusterY", d3.forceY(d => d.type === "center" ? height/2 : height/2 + Math.sin(d.clusterAngle) * clusterRadius).strength(d => d.type === "center" ? 0 : 0.12));
+
+  const hullLayer = g.append("g");
+
+  const link = g.append("g").selectAll("line")
+    .data(graphData.links).join("line")
+    .attr("class", "link")
+    .attr("stroke-width", 1.2);
+
+  const linkLabel = g.append("g").selectAll("text")
+    .data(graphData.links).join("text")
+    .attr("class", "link-label")
+    .text(d => d.label);
+
+  const node = g.append("g").selectAll("g")
+    .data(graphData.nodes).join("g")
+    .attr("class", d => "node " + d.type)
+    .call(drag(simulation));
+
+  node.append("circle")
+    .attr("r", d => d.type === "center" ? 26 : 16)
+    .attr("fill", d => d.type === "center" ? null : d.clusterColor)
+    .attr("fill-opacity", d => d.type === "center" ? 1 : 0.35);
+
+  node.append("text")
+    .attr("dy", d => d.type === "center" ? 42 : 30)
+    .attr("text-anchor", "middle")
+    .text(d => d.label.length > 22 ? d.label.slice(0,20) + "…" : d.label);
+
+  function hullPoints(nodes){
+    const pts = nodes.map(n => [n.x, n.y]);
+    if (pts.length < 3) return null;
+    const hull = d3.polygonHull(pts);
+    if (!hull) return null;
+    const centroid = d3.polygonCentroid(hull);
+    return hull.map(p => {
+      const dx = p[0] - centroid[0], dy = p[1] - centroid[1];
+      const len = Math.sqrt(dx*dx + dy*dy) || 1;
+      return [p[0] + (dx/len) * 22, p[1] + (dy/len) * 22];
+    });
+  }
+
+  node.on("click", (event, d) => {
+    if (d.type !== "center") {
+      document.getElementById("search").value = d.label;
+      loadGraph(d.id, d.label);
+    }
+  });
+
+  node.on("mouseenter", (event, d) => {
+    tooltip.style("display","block").text(d.label + (d.type==="center" ? " (Zentrum)" : d.type==="out" ? " · ausgehend" : " · eingehend"));
+  }).on("mousemove", (event) => {
+    tooltip.style("left", (event.pageX + 14) + "px").style("top", (event.pageY + 4) + "px");
+  }).on("mouseleave", () => tooltip.style("display","none"));
+
+  simulation.on("tick", () => {
+    link
+      .attr("x1", d => d.source.x).attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x).attr("y2", d => d.target.y);
+    linkLabel
+      .attr("x", d => (d.source.x + d.target.x)/2)
+      .attr("y", d => (d.source.y + d.target.y)/2);
+    node.attr("transform", d => `translate(${d.x},${d.y})`);
+
+    const grouped = d3.group(graphData.nodes.filter(n => n.type !== "center"), n => n.cluster);
+    const hullData = Array.from(grouped, ([key, nodes]) => ({ key, pts: hullPoints(nodes), color: color(key) })).filter(h => h.pts);
+    hullLayer.selectAll("path").data(hullData, d => d.key).join("path")
+      .attr("class", "hull")
+      .attr("d", d => "M" + d.pts.map(p => p.join(",")).join("L") + "Z")
+      .attr("fill", d => d.color)
+      .attr("stroke", d => d.color);
+  });
+}
+
+function drag(sim){
+  function started(event, d){
+    if (!event.active) sim.alphaTarget(0.3).restart();
+    d.fx = d.x; d.fy = d.y;
+  }
+  function dragged(event, d){ d.fx = event.x; d.fy = event.y; }
+  function ended(event, d){
+    if (!event.active) sim.alphaTarget(0);
+    d.fx = null; d.fy = null;
+  }
+  return d3.drag().on("start", started).on("drag", dragged).on("end", ended);
+}
+
+let currentDepth = 1;
+let currentDirection = "both";
+let lastBindings = null;
+let lastTarget = null;
+
+document.querySelectorAll(".depth-toggle button[data-depth]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".depth-toggle button[data-depth]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentDepth = parseInt(btn.dataset.depth, 10);
+  });
+});
+
+document.querySelectorAll("#dir-toggle button[data-dir]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll("#dir-toggle button[data-dir]").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentDirection = btn.dataset.dir;
+    if (lastBindings && lastTarget) rerenderFromCache();
+  });
+});
+
+function rerenderFromCache(){
+  const graphData = bindingsToGraphData(lastTarget.qid, lastTarget.label, lastBindings, currentDirection);
+  if (graphData.nodes.length <= 1){
+    setStatus(`${lastTarget.label} (${lastTarget.qid}) — keine Kanten in dieser Richtung.`, true);
+    return;
+  }
+  render(graphData);
+  setStatus(`${lastTarget.label} (${lastTarget.qid}) — ${graphData.nodes.length - 1} Nachbarn, ${graphData.links.length} Kanten`, false);
+}
+
+async function loadGraph(prefilledQid, prefilledLabel){
+  const term = prefilledQid ? null : document.getElementById("search").value;
+  document.getElementById("go").disabled = true;
+  setStatus("löse Begriff auf …", false);
+  try {
+    let target;
+    if (prefilledQid) {
+      target = { qid: prefilledQid, label: prefilledLabel };
+    } else {
+      target = await resolveToQid(term);
+    }
+    if (!target) {
+      setStatus("Kein Wikidata-Eintrag gefunden für „" + term + "“.", true);
+      document.getElementById("go").disabled = false;
+      return;
+    }
+    setStatus(`${target.label} (${target.qid}) — frage Wikidata ab …`, false);
+    const bindings = await runSparql(target.qid, currentDepth === 2);
+    if (bindings.length === 0) {
+      setStatus(`${target.label} (${target.qid}) hat keine passenden Verknüpfungen (isIRI).`, true);
+      document.getElementById("go").disabled = false;
+      return;
+    }
+    lastBindings = bindings;
+    lastTarget = target;
+    const graphData = bindingsToGraphData(target.qid, target.label, bindings, currentDirection);
+    render(graphData);
+    setStatus(`${target.label} (${target.qid}) — ${graphData.nodes.length - 1} Nachbarn, ${graphData.links.length} Kanten`, false);
+  } catch (err) {
+    setStatus("Fehler: " + err.message, true);
+  }
+  document.getElementById("go").disabled = false;
+}
+
+document.getElementById("go").addEventListener("click", () => loadGraph());
+document.getElementById("search").addEventListener("keydown", (e) => { if (e.key === "Enter") loadGraph(); });
+
+// initial load
+loadGraph(null, null);
+</script>
+</body>
+</html>
