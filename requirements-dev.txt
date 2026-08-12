@@ -1,2 +1,3 @@
+# Entwicklung/Tests: enthaelt die Laufzeit-Abhaengigkeiten.
 -r requirements.txt
-pytest>=8.0
+pytest>=9.0
