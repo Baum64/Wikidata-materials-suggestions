@@ -32,7 +32,7 @@ WICHTIG - vor dem Einsatz anpassen
 
 Ablauf in der Praxis
 ---------------------
-  python nomad_wikidata_vorschlaege.py --elements Ti O --max 50
+  python -m nomadwiki.cli --elements Ti O --max 50
   -> erzeugt vorschlaege.csv zur manuellen Durchsicht
   -> NICHTS wird automatisch nach Wikidata geschrieben
 """

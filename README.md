@@ -1,25 +1,31 @@
 # WikiKnowledgeGraph
 
-Vergleicht die **ausgehenden Hyperlinks eines Wikipedia-Artikels** mit den
-**ausgehenden Item-Beziehungen des entsprechenden Wikidata-Items** und zeigt
-auf, welche in Wikipedia verlinkten Begriffe in Wikidata (noch) **nicht** als
-strukturierte Beziehung (Statement) hinterlegt sind — also mögliche
-Kandidaten für Ergänzungen im Wikidata-Datensatz.
+Zwei eigenständige Anwendungen rund um die Frage: **Welches Wissen fehlt in
+Wikidata noch als strukturierte Aussage?** Beide erzeugen ausschließlich
+Vorschlagslisten zur manuellen Prüfung — es wird nie automatisch nach Wikidata
+geschrieben.
 
-## Idee
+| Anwendung | Verzeichnis | Was sie macht |
+|---|---|---|
+| **Wikidata Knowledge Graph** | [wikikg/](wikikg/) | Vergleicht die ausgehenden Links eines Wikipedia-Artikels mit den Statements des zugehörigen Wikidata-Items und zeigt fehlende Beziehungen. Enthält zusätzlich den browserbasierten *Wortfeld-Explorer*. |
+| **NOMAD Wiki** | [nomadwiki/](nomadwiki/) | Holt DOI-belegte Materialdaten aus der NOMAD-Datenbank und schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). |
 
-1. Artikel `X` in Wikipedia → Wikidata-Item `Q...` auflösen.
-2. Alle ausgehenden Links von `X` im Artikelnamensraum sammeln, jeweils mit
-   dem Wikidata-Item des verlinkten Artikels (falls vorhanden).
-3. Alle ausgehenden "Item → Item"-Statements von `Q...` in Wikidata laden
-   (z.B. `instance of`, `subclass of`, `made from material`, `part of`, ...).
-4. Abgleichen: Für jeden Wikipedia-Link prüfen, ob das Ziel-Item auch als
-   Wikidata-Statement-Ziel existiert.
-   - **matched** — Beziehung existiert in beiden.
-   - **missing** — Wikipedia verlinkt den Begriff, Wikidata kennt (noch)
-     keine direkte Beziehung dorthin → Ergänzungskandidat.
-   - **no_wikidata_item** — verlinkter Artikel hat kein Wikidata-Item, daher
-     nicht vergleichbar.
+Details, Nutzung und Grenzen stehen jeweils im README der Anwendung:
+[wikikg/README.md](wikikg/README.md) · [nomadwiki/README.md](nomadwiki/README.md)
+
+## Repo-Aufbau
+
+```
+wikikg/        Anwendung 1 — Wikipedia ↔ Wikidata Abgleich
+  cli.py             Kommandozeile (python -m wikikg)
+  compare.py         reine Vergleichslogik, netzwerkfrei und offline testbar
+  wikipedia_client.py  MediaWiki-API: Titel → QID, ausgehende Links
+  wikidata_client.py   Wikidata-API: ausgehende Item-Statements, Property-Labels
+  web/               Wortfeld-Explorer (statisches HTML, D3 + SPARQL)
+nomadwiki/     Anwendung 2 — NOMAD → Wikidata Vorschläge
+  cli.py             Kommandozeile (python -m nomadwiki) inkl. Abgleichlogik
+tests/         Offline-Tests (pytest)
+```
 
 ## Installation
 
@@ -29,36 +35,22 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
 ```
 
-## Nutzung
+Beide Anwendungen teilen sich dieselbe Abhängigkeit (`requests`) und werden aus
+dem Repo-Wurzelverzeichnis heraus als Module gestartet:
 
 ```bash
-python -m wikikg.cli --title Holz --lang de
-python -m wikikg.cli --title Holz --lang de --format json --output output/holz.json
-python -m wikikg.cli --title Holz --lang de --format csv --output output/holz.csv
+python -m wikikg --title Holz --lang de
+python -m nomadwiki --elements Ti O --max 50
 ```
 
-`--lang` steuert sowohl die Wikipedia-Sprachversion als auch die
-Wikidata-Label-Sprache (Fallback: Englisch).
-
 ## Tests
-
-Die Vergleichslogik (`wikikg/compare.py`) ist bewusst frei von
-Netzwerkaufrufen und wird vollständig offline getestet:
 
 ```bash
 pytest
 ```
 
-## Grenzen / nächste Schritte
+Getestet wird die netzwerkfreie Vergleichslogik; alle Tests laufen offline.
 
-- Es werden nur **direkte** Claims (`mainsnak`) verglichen, keine Qualifier
-  oder Referenzen.
-- Ein "missing" Ergebnis heißt nicht automatisch, dass die Beziehung *falsch*
-  fehlt — manche Wikipedia-Links sind rein redaktionell/kontextuell und
-  gehören nicht zwingend als Wikidata-Statement modelliert. Das Tool liefert
-  Kandidaten, keine automatischen Edits.
-- Denkbare Erweiterung: Property-Vorschlag für "missing"-Kandidaten (z.B. per
-  Heuristik über die `instance of`/`subclass of`-Klasse des Zielitems, oder
-  über ein Sprachmodell), sowie automatisches Anlegen von Statements über die
-  Wikidata-`wbeditentity`-API (erfordert Login/OAuth und sollte nur mit
-  Vorsicht bzw. manueller Prüfung erfolgen).
+## Lizenz
+
+Siehe [LICENSE](LICENSE).
