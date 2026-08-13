@@ -68,8 +68,42 @@ NOMAD_FIELD_MAP = {
     "results.material.chemical_formula_reduced": "formula",
     "results.material.chemical_formula_hill": "formula_hill",
     "results.properties.structures.structure_original.mass_density": "density",
+    "results.material.symmetry.crystal_system": "crystal_system",
     # Beispiel weiterer Felder - vor Gebrauch prüfen/ergänzen:
     # "results.properties.thermodynamic.melting_point": "melting_point",
+    #
+    # Bandlücke: NOMAD hat die Größe
+    # (results.properties.electronic.band_structure_electronic.band_gap[].value,
+    # eine LISTE je Spinkanal, Werte in Joule), Wikidata hat aber KEINE
+    # Property dafür.
+    #
+    # Q806352 ist das Konzept-Item "Bandlücke" - korrekt, aber als Prädikat
+    # unbrauchbar: an der mittleren Stelle einer Aussage steht zwingend eine
+    # P-Nummer, "<Material> Q806352 1.1" ist kein gültiges Statement.
+    # Geprüft am 2026-08-13:
+    #   - Q806352 hat kein P1687 ("Wikidata property")
+    #   - keine Property trägt P1629 -> Q806352
+    #   - Sweep über ALLE quantity-Properties auf band/gap/semiconduct liefert
+    #     nur P2911 "time gap" und P9279 "Egapro" - nichts Passendes
+    #   - Q806352 wird in nur 6 Statements verwendet, alle ontologisch
+    #     (P1889/P366/P527/P2578); nirgends als Messwert an einem Material
+    #   - auch Silizium (Q670) und Galliumarsenid (Q147395) führen keine
+    #     solche Aussage
+    # Der saubere Weg wäre ein Property-Proposal auf Wikidata; das neue
+    # Property bekäme dann P1629 -> Q806352. Bis dahin wird hier nichts
+    # eingetragen (siehe Regel im Modul-Docstring).
+    # Mechanisch gültig wäre allenfalls P1552 (hat Merkmal) -> Q806352, also
+    # "hat eine Bandlücke" OHNE Zahlenwert - für einen Datenaustausch wertlos
+    # und bisher auf Wikidata für diesen Fall unbenutzt.
+    #
+    # Wärmekapazität: Wikidata hat P2056 (spezifische Wärmekapazität, J/(kg*K)).
+    # NOMAD liefert unter
+    # results.properties.vibrational.heat_capacity_constant_volume nur
+    # heat_capacities + temperatures, und zwar als Archiv-Referenz auf eine
+    # KURVE (C_v über Temperatur) für die Simulationszelle - kein Skalar und
+    # nicht massenbezogen. Für einen Austausch fehlen zwei Festlegungen:
+    # (a) bei welcher Temperatur abgegriffen wird, (b) Umrechnung C_v [J/K] der
+    # Zelle -> c_p [J/(kg*K)] des Stoffs. Erst danach eintragen.
     #
     # Wärme- und elektrische Leitfähigkeit (P2068 / P2055) sind in PROPERTY_MAP
     # definiert, haben hier aber bewusst KEINEN Pfad: NOMAD führt beide
@@ -85,33 +119,72 @@ NOMAD_FIELD_MAP = {
     # "results.properties.<pfad>.electrical_conductivity": "electrical_conductivity",
 }
 
-# Interner Schlüssel -> (Wikidata-Property, Einheit-QID, Beschreibung)
+# Interner Schlüssel -> (Wikidata-Property, Datentyp, Einheit-QID, Beschreibung)
 # NUR mit auf wikidata.org verifizierten Properties befüllen!
+#
+# "datatype" muss zum Wikidata-Datentyp der Property passen:
+#   "quantity" -> Zahlwert + unit_qid
+#   "item"     -> QID-Wert; "value_map" uebersetzt den NOMAD-String in ein QID.
+#                 Werte ausserhalb der value_map werden NICHT geraten, sondern
+#                 zur manuellen Klaerung markiert.
 PROPERTY_MAP = {
     "density": {
         "pid": "P2054",
+        "datatype": "quantity",
         "unit_qid": "Q844211",  # Kilogramm pro Kubikmeter, kg/m^3
         "label": "Dichte",
     },
     "melting_point": {
         "pid": "P2101",
+        "datatype": "quantity",
         "unit_qid": "Q11579",  # Kelvin
         "label": "Schmelzpunkt",
     },
     "boiling_point": {
         "pid": "P2102",
+        "datatype": "quantity",
         "unit_qid": "Q11579",  # Kelvin
         "label": "Siedepunkt",
     },
+    # P556 ist item-wertig. Die sieben QIDs sind nicht geraten, sondern die
+    # tatsaechlich in Wikidata verwendeten P556-Werte (per SPARQL nach
+    # Haeufigkeit abgefragt, 2026-08-13). NOMADs crystal_system-Vokabular
+    # (results.material.symmetry.crystal_system) hat genau dieselben sieben
+    # Auspraegungen - die Abbildung ist damit 1:1 und vollstaendig.
+    "crystal_system": {
+        "pid": "P556",
+        "datatype": "item",
+        "unit_qid": "",
+        "label": "Kristallsystem",
+        "value_map": {
+            "cubic": ("Q473227", "kubisches Kristallsystem"),
+            "hexagonal": ("Q663314", "hexagonales Kristallsystem"),
+            "monoclinic": ("Q624543", "monoklines Kristallsystem"),
+            "orthorhombic": ("Q648961", "orthorhombisches Kristallsystem"),
+            "tetragonal": ("Q503601", "tetragonales Kristallsystem"),
+            "triclinic": ("Q376927", "triklines Kristallsystem"),
+            "trigonal": ("Q588274", "trigonales Kristallsystem"),
+        },
+    },
     "thermal_conductivity": {
         "pid": "P2068",
+        "datatype": "quantity",
         "unit_qid": "Q1463969",  # Watt pro Meter-Kelvin, W/(m*K)
         "label": "Waermeleitfaehigkeit",
     },
     "electrical_conductivity": {
         "pid": "P2055",
+        "datatype": "quantity",
         "unit_qid": "Q80842107",  # Siemens pro Meter, S/m
         "label": "Elektrische Leitfaehigkeit",
+    },
+    # Spezifische Waermekapazitaet - verifiziert, aber noch ohne NOMAD-Pfad,
+    # siehe Kommentar in NOMAD_FIELD_MAP.
+    "specific_heat_capacity": {
+        "pid": "P2056",
+        "datatype": "quantity",
+        "unit_qid": "Q3085309",  # Joule pro Kilogramm-Kelvin, J/(kg*K)
+        "label": "Spezifische Waermekapazitaet",
     },
 }
 
@@ -189,11 +262,11 @@ def fetch_entry_values(entry_id: str) -> dict:
 
     Feldpfade unbedingt vor Produktivbetrieb im API-Dashboard verifizieren.
     """
-    payload = {
-        "required": {
-            "include": list(NOMAD_FIELD_MAP.keys()),
-        }
-    }
+    # Achtung: Der Archiv-Endpunkt ignoriert die Punktnotation aus
+    # required.include stillschweigend (er liefert dann nur m_ref_archives).
+    # Nur die verschachtelte Form greift - alle Pfade in NOMAD_FIELD_MAP
+    # liegen unter "results".
+    payload = {"required": {"results": "*"}}
     resp = requests.post(
         f"{NOMAD_API}/entries/{entry_id}/archive/query",
         json=payload,
@@ -202,7 +275,10 @@ def fetch_entry_values(entry_id: str) -> dict:
     )
     if resp.status_code != 200:
         return {}
-    return resp.json().get("data", {})
+    # Die Nutzdaten liegen unter data.archive; data selbst enthaelt nur
+    # entry_id/upload_id/parser_name. Ohne dieses Auspacken laeuft jeder
+    # _dig("results....") ins Leere.
+    return resp.json().get("data", {}).get("archive", {})
 
 
 def get_with_retry(url: str, params: dict, attempts: int = 4):
@@ -325,6 +401,29 @@ def build_proposals(elements: Optional[list], max_entries: int) -> list:
 
             prop_info = PROPERTY_MAP[internal_key]
             pid = prop_info["pid"]
+            value_label = ""
+
+            if prop_info.get("datatype") == "item":
+                # Item-wertige Property: NOMAD-String -> QID. Unbekannte
+                # Auspraegungen werden nicht geraten.
+                mapped = prop_info.get("value_map", {}).get(str(value))
+                if mapped is None:
+                    proposals.append(
+                        {
+                            "status": f"MANUELLE_KLAERUNG_NOETIG (Wert '{value}' "
+                            f"nicht in value_map fuer {pid})",
+                            "qid": wd_match["qid"],
+                            "label": wd_match["label"],
+                            "property": f"{pid} ({prop_info['label']})",
+                            "value": value,
+                            "formula": entry["formula"],
+                            "entry_id": entry["entry_id"],
+                            "doi": entry["doi"],
+                            "doi_url": entry["doi_url"],
+                        }
+                    )
+                    continue
+                value, value_label = mapped
 
             time.sleep(REQUEST_DELAY_SEC)
             already_present = item_has_statement(wd_match["qid"], pid)
@@ -336,6 +435,8 @@ def build_proposals(elements: Optional[list], max_entries: int) -> list:
                     "label": wd_match["label"],
                     "property": f"{pid} ({prop_info['label']})",
                     "value": value,
+                    "value_label": value_label,
+                    "datatype": prop_info.get("datatype", "quantity"),
                     "unit_qid": prop_info["unit_qid"],
                     "formula": entry["formula"],
                     "entry_id": entry["entry_id"],
@@ -368,6 +469,8 @@ def write_csv(proposals: list, path: str = "vorschlaege.csv") -> None:
         "label",
         "property",
         "value",
+        "value_label",
+        "datatype",
         "unit_qid",
         "formula",
         "entry_id",
@@ -397,12 +500,18 @@ def write_quickstatements_draft(proposals: list, path: str = "quickstatements_en
             continue
         qid = row["qid"]
         pid = row["property"].split(" ")[0]
-        value = row["value"]
         doi = row["doi"]
+        # Item-wertige Aussagen stehen als blankes QID (z. B. Q473227),
+        # Mengenwerte als Zahl. Ein in Anfuehrungszeichen gesetztes QID wuerde
+        # QuickStatements als Zeichenkette interpretieren.
+        value = row["value"]
         # P356 = DOI (als Referenz-Statement fuer die Quelle empfohlen,
         # zusaetzlich zu einem eigenen "stated in"-Item, falls vorhanden)
         lines.append(f"{qid}\t{pid}\t{value}\tS854\t\"{row.get('doi_url', '')}\"")
-        lines.append(f"# Quelle: DOI {doi} / NOMAD entry_id {row['entry_id']}")
+        klartext = f" ({row['value_label']})" if row.get("value_label") else ""
+        lines.append(
+            f"# Quelle: DOI {doi} / NOMAD entry_id {row['entry_id']}{klartext}"
+        )
 
     with open(path, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
