@@ -26,9 +26,14 @@ WICHTIG - vor dem Einsatz anpassen
 - PROPERTY_MAP: nur Properties eintragen, deren P-Nummer auf
   https://www.wikidata.org/wiki/Property:Pxxxx tatsächlich existiert und zum
   Datentyp passt. Aktuell nur mit sicher verifizierten Properties befüllt
-  (Schmelzpunkt, Siedepunkt, Dichte, Molmasse). Mechanische Kenngrößen wie
-  E-Modul haben aktuell KEINE etablierte Property - nicht ergänzen, bevor das
-  nicht auf wikidata.org geprüft wurde.
+  (Dichte P2054, Schmelzpunkt P2101, Siedepunkt P2102, Wärmeleitfähigkeit
+  P2068, elektrische Leitfähigkeit P2055 - alle Datentyp "quantity").
+  Mechanische Kenngrößen wie E-Modul haben aktuell KEINE etablierte
+  Property - nicht ergänzen, bevor das nicht auf wikidata.org geprüft wurde.
+
+  Achtung: Ein Eintrag in PROPERTY_MAP allein erzeugt noch keine Vorschläge.
+  Vorschläge entstehen nur für Schlüssel, die auch in NOMAD_FIELD_MAP einen
+  Pfad haben - siehe Kommentar dort zu den beiden Leitfähigkeiten.
 
 Ablauf in der Praxis
 ---------------------
@@ -65,6 +70,19 @@ NOMAD_FIELD_MAP = {
     "results.properties.structures.structure_original.mass_density": "density",
     # Beispiel weiterer Felder - vor Gebrauch prüfen/ergänzen:
     # "results.properties.thermodynamic.melting_point": "melting_point",
+    #
+    # Wärme- und elektrische Leitfähigkeit (P2068 / P2055) sind in PROPERTY_MAP
+    # definiert, haben hier aber bewusst KEINEN Pfad: NOMAD führt beide
+    # Größen derzeit nicht in seiner harmonisierten results-Sektion.
+    # Geprüft am 2026-08-13 gegen das vollständige kontrollierte Vokabular
+    # results.properties.available_properties (192 Terme, 66 Top-Level-Sektionen)
+    # - kein Treffer auf conduct/thermal/transport/resistiv. Vorhanden sind nur
+    # electronic (band_gap, dos), mechanical (bulk_modulus, shear_modulus),
+    # vibrational (heat_capacity_constant_volume, energy_free_helmholtz),
+    # structures, spectra, solar_cell, trajectory, geometry_optimization.
+    # Sobald NOMAD die Größen aufnimmt, genügt hier je eine Zeile:
+    # "results.properties.<pfad>.thermal_conductivity": "thermal_conductivity",
+    # "results.properties.<pfad>.electrical_conductivity": "electrical_conductivity",
 }
 
 # Interner Schlüssel -> (Wikidata-Property, Einheit-QID, Beschreibung)
@@ -72,7 +90,7 @@ NOMAD_FIELD_MAP = {
 PROPERTY_MAP = {
     "density": {
         "pid": "P2054",
-        "unit_qid": "Q844211",  # Kilogramm pro Kubikmeter (prüfen!)
+        "unit_qid": "Q844211",  # Kilogramm pro Kubikmeter, kg/m^3
         "label": "Dichte",
     },
     "melting_point": {
@@ -84,6 +102,16 @@ PROPERTY_MAP = {
         "pid": "P2102",
         "unit_qid": "Q11579",  # Kelvin
         "label": "Siedepunkt",
+    },
+    "thermal_conductivity": {
+        "pid": "P2068",
+        "unit_qid": "Q1463969",  # Watt pro Meter-Kelvin, W/(m*K)
+        "label": "Waermeleitfaehigkeit",
+    },
+    "electrical_conductivity": {
+        "pid": "P2055",
+        "unit_qid": "Q80842107",  # Siemens pro Meter, S/m
+        "label": "Elektrische Leitfaehigkeit",
     },
 }
 
