@@ -97,9 +97,12 @@ def fetch_nomad_entries_with_doi(elements: Optional[list], max_entries: int = 50
 
     Gibt eine Liste von dicts zurück, jeweils mit entry_id, formula, doi.
     """
-    query: dict = {"datasets.doi": {"exists": True}}
+    # NOMAD kennt keinen "exists"-Operator. Eine offene Range auf das
+    # Keyword-Feld datasets.doi wirkt aber als Existenzfilter: jede echte DOI
+    # beginnt mit "10." und liegt damit lexikografisch ueber "0".
+    query: dict = {"datasets.doi:gt": "0"}
     if elements:
-        query["results.material.elements"] = {"all": elements}
+        query["results.material.elements:all"] = elements
 
     payload = {
         "query": query,
@@ -109,13 +112,22 @@ def fetch_nomad_entries_with_doi(elements: Optional[list], max_entries: int = 50
                 "entry_id",
                 "results.material.chemical_formula_reduced",
                 "results.material.chemical_formula_hill",
-                "datasets",
+                # Unterfelder einzeln anfordern - "datasets" allein liefert
+                # nur leere Objekte zurueck.
+                "datasets.doi",
+                "datasets.dataset_id",
+                "datasets.dataset_name",
             ]
         },
     }
 
     resp = requests.post(f"{NOMAD_API}/entries/query", json=payload, headers=HEADERS, timeout=30)
-    resp.raise_for_status()
+    if not resp.ok:
+        # NOMAD begruendet Query-Fehler (422) im Body - sonst geht die
+        # eigentliche Ursache im generischen HTTPError verloren.
+        raise RuntimeError(
+            f"NOMAD-Query fehlgeschlagen ({resp.status_code}): {resp.text[:500]}"
+        )
     data = resp.json()
 
     results = []
@@ -135,9 +147,9 @@ def fetch_nomad_entries_with_doi(elements: Optional[list], max_entries: int = 50
                 "formula": material.get("chemical_formula_reduced"),
                 "formula_hill": material.get("chemical_formula_hill"),
                 "doi": doi,
-                "doi_url": f"https://doi.org/{doi.lstrip('doi:').lstrip('https://doi.org/')}"
-                if not doi.startswith("http")
-                else doi,
+                "doi_url": doi
+                if doi.startswith("http")
+                else f"https://doi.org/{doi[4:] if doi.startswith('doi:') else doi}",
             }
         )
 
@@ -165,6 +177,35 @@ def fetch_entry_values(entry_id: str) -> dict:
     return resp.json().get("data", {})
 
 
+def get_with_retry(url: str, params: dict, attempts: int = 4):
+    """GET mit Backoff bei 429/5xx.
+
+    Der Wikidata-Query-Service liefert unter Last sporadisch 502; ohne Retry
+    reisst ein einzelner Ausrutscher den kompletten Lauf ab.
+    """
+    delay = 2.0
+    for attempt in range(1, attempts + 1):
+        try:
+            resp = requests.get(url, params=params, headers=HEADERS, timeout=60)
+        except requests.RequestException:
+            if attempt == attempts:
+                raise
+        else:
+            if resp.status_code < 500 and resp.status_code != 429:
+                resp.raise_for_status()
+                return resp
+            if attempt == attempts:
+                resp.raise_for_status()
+            print(
+                f"  HTTP {resp.status_code} von {url} - Versuch "
+                f"{attempt}/{attempts}, warte {delay:.0f}s",
+                file=sys.stderr,
+            )
+        time.sleep(delay)
+        delay *= 2
+    raise RuntimeError(f"Unerreichbar: {url}")
+
+
 # ---------------------------------------------------------------------------
 # Schritt 2: Bestehendes Wikidata-Item ueber Formel finden
 # ---------------------------------------------------------------------------
@@ -183,13 +224,7 @@ def find_wikidata_item_by_formula(formula: str) -> Optional[dict]:
     }}
     LIMIT 5
     """
-    resp = requests.get(
-        WIKIDATA_SPARQL,
-        params={"query": sparql, "format": "json"},
-        headers=HEADERS,
-        timeout=30,
-    )
-    resp.raise_for_status()
+    resp = get_with_retry(WIKIDATA_SPARQL, {"query": sparql, "format": "json"})
     bindings = resp.json().get("results", {}).get("bindings", [])
     if not bindings:
         return None
@@ -207,18 +242,15 @@ def find_wikidata_item_by_formula(formula: str) -> Optional[dict]:
 # ---------------------------------------------------------------------------
 
 def item_has_statement(qid: str, pid: str) -> bool:
-    resp = requests.get(
+    resp = get_with_retry(
         WIKIDATA_API,
-        params={
+        {
             "action": "wbgetclaims",
             "entity": qid,
             "property": pid,
             "format": "json",
         },
-        headers=HEADERS,
-        timeout=30,
     )
-    resp.raise_for_status()
     claims = resp.json().get("claims", {})
     return bool(claims.get(pid))
 
