@@ -77,24 +77,27 @@ NOMAD_FIELD_MAP = {
     # eine LISTE je Spinkanal, Werte in Joule), Wikidata hat aber KEINE
     # Property dafür.
     #
-    # Q806352 ist das Konzept-Item "Bandlücke" - korrekt, aber als Prädikat
-    # unbrauchbar: an der mittleren Stelle einer Aussage steht zwingend eine
-    # P-Nummer, "<Material> Q806352 1.1" ist kein gültiges Statement.
+    # Es gibt zwei passende ITEMS, aber beide sind als Prädikat unbrauchbar:
+    # an der mittleren Stelle einer Aussage steht zwingend eine P-Nummer,
+    # "<Material> Q103982939 1.1" ist kein gültiges Statement.
+    #   Q806352     "Bandlücke"          - Konzept (Energiebereich)
+    #   Q103982939  "Bandlückenenergie"  - physikalische Größe, P279 -> Energie,
+    #               ISQ-Dimension P4020, empfohlene Einheiten P8111 =
+    #               Joule (Q25269) / Elektronenvolt (Q83327)
     # Geprüft am 2026-08-13:
-    #   - Q806352 hat kein P1687 ("Wikidata property")
-    #   - keine Property trägt P1629 -> Q806352
+    #   - keines der beiden hat P1687 ("Wikidata property")
+    #   - keine Property trägt P1629 auf eines der beiden
     #   - Sweep über ALLE quantity-Properties auf band/gap/semiconduct liefert
     #     nur P2911 "time gap" und P9279 "Egapro" - nichts Passendes
-    #   - Q806352 wird in nur 6 Statements verwendet, alle ontologisch
-    #     (P1889/P366/P527/P2578); nirgends als Messwert an einem Material
+    #   - beide werden nie als Messwert an einem Material verwendet, nur
+    #     ontologisch (P1889/P279/P366/P527/P921/P2578/P9758)
     #   - auch Silizium (Q670) und Galliumarsenid (Q147395) führen keine
     #     solche Aussage
-    # Der saubere Weg wäre ein Property-Proposal auf Wikidata; das neue
-    # Property bekäme dann P1629 -> Q806352. Bis dahin wird hier nichts
-    # eingetragen (siehe Regel im Modul-Docstring).
-    # Mechanisch gültig wäre allenfalls P1552 (hat Merkmal) -> Q806352, also
-    # "hat eine Bandlücke" OHNE Zahlenwert - für einen Datenaustausch wertlos
-    # und bisher auf Wikidata für diesen Fall unbenutzt.
+    #   - auf den Property-Proposal-Seiten läuft kein Antrag dazu
+    # Der saubere Weg ist ein Property-Proposal mit P1629 -> Q103982939
+    # (das besser modellierte der beiden Items). Einheit dann Elektronenvolt;
+    # NOMAD liefert Joule, also fester Umrechnungsfaktor. Bis dahin wird hier
+    # nichts eingetragen (siehe Regel im Modul-Docstring).
     #
     # Wärmekapazität: Wikidata hat P2056 (spezifische Wärmekapazität, J/(kg*K)).
     # NOMAD liefert unter
