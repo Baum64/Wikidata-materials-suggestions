@@ -12,9 +12,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterator, Optional
 
+import os
+import sys
+
+# konfig.py liegt im Repo-Wurzelverzeichnis.
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import konfig  # noqa: E402
 import requests
 
-USER_AGENT = "WikiKnowledgeGraph/0.1 (https://github.com/Baum64/WikiKnowledgeGraph; contact: set-your-email-here)"
+# Kontaktadresse aus .env im Repo-Wurzelverzeichnis - siehe .env.beispiel.
+USER_AGENT = (
+    "WikiKnowledgeGraph/0.1 (https://github.com/Baum64/WikiKnowledgeGraph; "
+    f'contact: {konfig.wert("CONTACT_EMAIL", "set-your-email-here")})'
+)
 
 
 @dataclass(frozen=True)

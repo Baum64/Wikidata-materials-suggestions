@@ -4,7 +4,7 @@ Benchmark: Wie gut sind metallische Werkstoffe in Wikidata belegt?
 
 Zaehlt fuer jede Property, wie viele Items unterhalb von "Metallischer
 Werkstoff" (Q1924900) diese Aussage tatsaechlich tragen. Damit wird sichtbar,
-wo sich Vorschlaege aus NOMAD ueberhaupt lohnen.
+wo sich Vorschlaege aus dem Materials Project ueberhaupt lohnen.
 
 Woher kommt die Property-Liste?
 -------------------------------
@@ -17,8 +17,8 @@ Vorlagendoku werden verworfen, Unterabschnitte gehoeren zum Elternabschnitt).
 Die Liste wird live geholt und als Momentaufnahme in properties_snapshot.json
 abgelegt - damit bleibt ein Lauf reproduzierbar und --offline moeglich.
 
-Zusaetzlich wird markiert, welche Properties nomadwiki ueberhaupt bedienen
-kann: PROPERTY_MAP und NOMAD_FIELD_MAP werden importiert, nicht kopiert.
+Zusaetzlich wird markiert, welche Properties materialswiki ueberhaupt bedienen
+kann: PROPERTY_MAP und MP_FIELD_MAP werden importiert, nicht kopiert.
 
 Grundgesamtheit
 ---------------
@@ -47,15 +47,18 @@ from typing import Optional
 
 import requests
 
-# Repo-Wurzel in den Pfad, damit "import nomadwiki" auch bei direktem
+# Repo-Wurzel in den Pfad, damit "import materialswiki" auch bei direktem
 # Aufruf (python benchmark/benchmark.py) funktioniert.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from nomadwiki.cli import NOMAD_FIELD_MAP, PROPERTY_MAP  # noqa: E402
+import konfig  # noqa: E402
+from materialswiki.cli import MP_FIELD_MAP, PROPERTY_MAP  # noqa: E402
 
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
-USER_AGENT = "MaterialsWikidataSuggestBot/0.1 (mailto:DEINE-ADRESSE@example.org)"
+# Kontaktadresse aus .env - siehe .env.beispiel.
+USER_AGENT = ("MaterialsWikidataSuggestBot/0.1 "
+              f'(mailto:{konfig.wert("CONTACT_EMAIL", "DEINE-ADRESSE@example.org")})')
 HEADERS = {"User-Agent": USER_AGENT}
 
 DEFAULT_ROOT = "Q1924900"  # Metallischer Werkstoff
@@ -239,9 +242,11 @@ def best_covered(root: str, pids: list, limit: int = 10) -> list:
 # ---------------------------------------------------------------------------
 
 def build_rows(sections: dict, meta: dict, filled: dict, total: int) -> list:
-    # Welche Properties kann nomadwiki bedienen?
+    # Welche Properties kann materialswiki bedienen?
     pid_to_key = {info["pid"]: key for key, info in PROPERTY_MAP.items()}
-    mit_nomad_pfad = set(NOMAD_FIELD_MAP.values())
+    # MP_FIELD_MAP bildet Feldpfad -> (Schluessel, Faktor) ab; hier zaehlt
+    # nur der Schluessel.
+    mit_mp_pfad = {schluessel for schluessel, _ in MP_FIELD_MAP.values()}
 
     rows = []
     for section, pids in sections.items():
@@ -257,7 +262,7 @@ def build_rows(sections: dict, meta: dict, filled: dict, total: int) -> list:
                 "luecke": total - n,
                 "anteil_prozent": round(100.0 * n / total, 2) if total else 0.0,
                 "in_property_map": key or "",
-                "nomad_quelle": "ja" if key in mit_nomad_pfad else "nein",
+                "mp_quelle": "ja" if key in mit_mp_pfad else "nein",
             })
     return rows
 
@@ -277,13 +282,13 @@ def print_report(root: str, population: dict, rows: list) -> None:
         print()
         print(f"== {section}  ({len(teil)} Properties, {belegt} davon belegt)")
         kopf = (f"  {'PID':<8}{'Label':<34}{'Typ':<12}"
-                f"{'gefuellt':>9}{'Anteil':>9}  nomadwiki")
+                f"{'gefuellt':>9}{'Anteil':>9}  materialswiki")
         print(kopf)
         print("  " + "-" * (len(kopf) - 2))
         for r in teil:
             marker = "<- " + r["in_property_map"] if r["in_property_map"] else ""
-            if r["nomad_quelle"] == "ja":
-                marker += " [NOMAD]"
+            if r["mp_quelle"] == "ja":
+                marker += " [MP]"
             print(f"  {r['pid']:<8}{r['label'][:33]:<34}{r['datatype'][:11]:<12}"
                   f"{r['gefuellt']:>9}{r['anteil_prozent']:>8.2f}%  {marker}")
 
@@ -292,9 +297,9 @@ def print_report(root: str, population: dict, rows: list) -> None:
     print(f"Zusammenfassung: {len(rows)} Properties, "
           f"{len(rows) - len(leer)} mindestens einmal belegt, "
           f"{len(leer)} komplett leer.")
-    belegbar = [r for r in rows if r["nomad_quelle"] == "ja"]
+    belegbar = [r for r in rows if r["mp_quelle"] == "ja"]
     if belegbar:
-        print("Aus NOMAD tatsaechlich belegbar:")
+        print("Aus dem Materials Project tatsaechlich belegbar:")
         for r in belegbar:
             print(f"  {r['pid']} {r['label']:<28} {r['gefuellt']:>6} von "
                   f"{total} gefuellt  ->  {r['luecke']} offen")

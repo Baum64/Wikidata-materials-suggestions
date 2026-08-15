@@ -1,29 +1,41 @@
 # WikiKnowledgeGraph
 
-Zwei eigenständige Anwendungen rund um die Frage: **Welches Wissen fehlt in
-Wikidata noch als strukturierte Aussage?** Beide erzeugen ausschließlich
-Vorschlagslisten zur manuellen Prüfung — es wird nie automatisch nach Wikidata
-geschrieben.
+Werkzeuge rund um die Frage: **Welches Wissen fehlt in Wikidata noch als
+strukturierte Aussage?** Alle erzeugen ausschließlich Vorschlagslisten,
+Auswertungen und Graphen zur manuellen Prüfung — es wird nie automatisch nach
+Wikidata geschrieben.
 
 | Anwendung | Verzeichnis | Was sie macht |
 |---|---|---|
 | **Wikidata Knowledge Graph** | [wikikg/](wikikg/) | Vergleicht die ausgehenden Links eines Wikipedia-Artikels mit den Statements des zugehörigen Wikidata-Items und zeigt fehlende Beziehungen. Enthält zusätzlich den browserbasierten *Wortfeld-Explorer*. |
-| **NOMAD Wiki** | [nomadwiki/](nomadwiki/) | Holt DOI-belegte Materialdaten aus der NOMAD-Datenbank und schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). |
+| **Materials Wiki** | [materialswiki/](materialswiki/) | Holt kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel.** |
+| **Benchmark** | [benchmark/](benchmark/) | Misst, wie gut metallische Werkstoffe in Wikidata belegt sind — je Property aus dem WikiProject Materials. Zeigt, wo Vorschläge sich überhaupt lohnen. |
+| **Kategorie-Hierarchie** | [Kategorie Hirachie/](Kategorie%20Hirachie/) | Prüft und zeichnet, wie Werkstoffe in der Wikidata-Klassenhierarchie unter `material` (Q214609) hängen — und welche über einen parallelen Zweig laufen. |
 
 Details, Nutzung und Grenzen stehen jeweils im README der Anwendung:
-[wikikg/README.md](wikikg/README.md) · [nomadwiki/README.md](nomadwiki/README.md)
+[wikikg/README.md](wikikg/README.md) ·
+[materialswiki/README.md](materialswiki/README.md) ·
+[benchmark/README.md](benchmark/README.md) ·
+[Kategorie Hirachie/README.md](Kategorie%20Hirachie/README.md)
 
 ## Repo-Aufbau
 
 ```
-wikikg/        Anwendung 1 — Wikipedia ↔ Wikidata Abgleich
+wikikg/        Wikipedia ↔ Wikidata Abgleich
   cli.py             Kommandozeile (python -m wikikg)
   compare.py         reine Vergleichslogik, netzwerkfrei und offline testbar
   wikipedia_client.py  MediaWiki-API: Titel → QID, ausgehende Links
   wikidata_client.py   Wikidata-API: ausgehende Item-Statements, Property-Labels
   web/               Wortfeld-Explorer (statisches HTML, D3 + SPARQL)
-nomadwiki/     Anwendung 2 — NOMAD → Wikidata Vorschläge
-  cli.py             Kommandozeile (python -m nomadwiki) inkl. Abgleichlogik
+materialswiki/ Materials Project → Wikidata Vorschläge
+  cli.py             Kommandozeile (python -m materialswiki) inkl. Abgleichlogik
+  Werkstoff wikidata vorschläge.py
+                     Multi-Source-Variante (Materials Project + PubChem)
+benchmark/     Abdeckungsmessung der Werkstoff-Properties in Wikidata
+  benchmark.py       Kommandozeile (python -m benchmark.benchmark)
+  properties_snapshot.json  Momentaufnahme der Property-Liste (für --offline)
+Kategorie Hirachie/  Klassenhierarchie-Analyse (Graphen als PNG)
+  material_hierarchy_check.py
 tests/         Offline-Tests (pytest)
 ```
 
@@ -32,16 +44,85 @@ tests/         Offline-Tests (pytest)
 ```bash
 python -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements-dev.txt
+pip install -r requirements.txt
 ```
 
-Beide Anwendungen teilen sich dieselbe Abhängigkeit (`requests`) und werden aus
-dem Repo-Wurzelverzeichnis heraus als Module gestartet:
+[requirements.txt](requirements.txt) enthält alles: `requests` für alle
+Anwendungen, `networkx` + `matplotlib` zusätzlich für die
+Kategorie-Hierarchie-Graphen und `pytest` für die Tests.
+
+Gestartet wird aus dem Repo-Wurzelverzeichnis heraus:
 
 ```bash
 python -m wikikg --title Holz --lang de
-python -m nomadwiki --elements Ti O --max 50
+python -m materialswiki --elements Ti O --max 50
+python -m benchmark.benchmark --offline
+python "Kategorie Hirachie/material_hierarchy_check.py" --skip-tree
 ```
+
+## Ausgabedateien
+
+Alle Anwendungen schreiben ihre Ergebnisse als Datei in das
+**aktuelle Arbeitsverzeichnis** (`--out`, `--qs-out`, `--csv`, `--output`,
+`--trace-out` steuern Ziel und Namen). Diese Dateien sind Momentaufnahmen
+eines Laufs und stehen deshalb in [.gitignore](.gitignore) — sie gehören
+nicht ins Repo:
+
+| Datei | Erzeugt von |
+|---|---|
+| `vorschlaege_<Zeitstempel>.csv`, `quickstatements_entwurf_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
+| `werkstoffe_vorschlaege.csv`, `werkstoffe_quickstatements_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
+| `abdeckung.csv` (bzw. was `--csv` angibt) | [benchmark/benchmark.py](benchmark/benchmark.py) |
+| `werkstoff_check.csv`, `werkstoff_graph.png`, `subclass_tree_material.png`, `trace_*.png` | [Kategorie Hirachie/material_hierarchy_check.py](Kategorie%20Hirachie/material_hierarchy_check.py) |
+| `output/…` (`--output`) | [wikikg/cli.py](wikikg/cli.py) |
+
+Einzige bewusst versionierte Ergebnisdatei ist
+[benchmark/properties_snapshot.json](benchmark/properties_snapshot.json):
+Sie hält die Property-Liste der Projektseite fest und macht `--offline`-Läufe
+reproduzierbar.
+
+## Rate Limits und User-Agent
+
+Alle Skripte drosseln sich auf eine Anfrage pro Sekunde
+(`REQUEST_DELAY_SEC = 1.0`). Vor produktiver Nutzung ist der `USER_AGENT` im
+jeweiligen Skript mit echtem Namen und Kontaktadresse zu füllen — so verlangt
+es die
+[Wikimedia-User-Agent-Richtlinie](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy).
+
+## Zugangsdaten (`.env`)
+
+API-Schlüssel und Kontaktadresse stehen an **einer** Stelle: `.env` im
+Repo-Wurzelverzeichnis. Die Datei ist in [.gitignore](.gitignore) eingetragen
+und wird nie committet — im Quelltext steht kein Zugangsdatum mehr.
+
+Einrichten:
+
+```bash
+cp .env.beispiel .env
+chmod 600 .env
+# dann .env ausfüllen
+```
+
+| Eintrag | Wofür |
+|---|---|
+| `MP_API_KEY` | Materials Project, Pflicht für `materialswiki` (kostenlos unter <https://next-gen.materialsproject.org/api>) |
+| `CONTACT_EMAIL` | landet im User-Agent **aller** Anwendungen — so verlangt es die Wikimedia-Richtlinie |
+| `CONTACT_NAME` | Klarname für den User-Agent (optional) |
+| `MP_ACCOUNT_EMAIL`, `WIKIDATA_USERNAME` | nur zur Dokumentation, werden nicht abgefragt |
+
+[.env.beispiel](.env.beispiel) ist die versionierte Vorlage und enthält nur
+Platzhalter.
+
+Gelesen wird in dieser Rangfolge: **echte Umgebungsvariable → `.env` →
+Vorgabewert im Skript**. Die Umgebung gewinnt, damit sich ein einzelner Lauf
+umstellen lässt, ohne die Datei zu ändern:
+
+```bash
+MP_API_KEY=zweitschluessel python -m materialswiki --periodic-table
+```
+
+Gelesen wird über [konfig.py](konfig.py) — 20 Zeilen ohne zusätzliche
+Abhängigkeit; `python-dotenv` wäre dafür zu viel.
 
 ## Tests
 
@@ -49,7 +130,16 @@ python -m nomadwiki --elements Ti O --max 50
 pytest
 ```
 
-Getestet wird die netzwerkfreie Vergleichslogik; alle Tests laufen offline.
+Getestet wird die netzwerkfreie Logik:
+
+| Datei | Deckt ab |
+|---|---|
+| [tests/test_compare.py](tests/test_compare.py) | Wikipedia-↔-Wikidata-Vergleich |
+| [tests/test_formula.py](tests/test_formula.py) | Formel-Normalisierung und Infobox-Parser |
+| [tests/test_mp.py](tests/test_mp.py) | Materials-Project-Feldabbildung und Einheitenumrechnung |
+| [tests/test_quickstatements.py](tests/test_quickstatements.py) | Aufbau des QuickStatements-Entwurfs |
+
+Alle Tests laufen offline und brauchen **keinen** API-Schlüssel.
 
 ## Lizenz
 

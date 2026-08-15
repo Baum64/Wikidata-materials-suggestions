@@ -1,4 +1,4 @@
-"""Erlaubt `python -m nomadwiki` als Kurzform von `python -m nomadwiki.cli`."""
+"""Erlaubt `python -m materialswiki` als Kurzform von `python -m materialswiki.cli`."""
 from .cli import main
 
-main()
+raise SystemExit(main())

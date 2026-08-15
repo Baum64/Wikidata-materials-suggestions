@@ -4,7 +4,41 @@ __pycache__/
 venv/
 .pytest_cache/
 
+# ---------------------------------------------------------------------------
+# Zugangsdaten - NIEMALS committen
+# API-Schluessel und Kontaktadressen stehen in .env. Die Vorlage
+# .env.beispiel ist bewusst versioniert und enthaelt nur Platzhalter.
+# ---------------------------------------------------------------------------
+.env
+.env.*
+!.env.beispiel
+
+# ---------------------------------------------------------------------------
 # Generierte Ergebnisdateien
+# Alle Anwendungen hier schreiben Vorschlagslisten, Entwuerfe und Graphen -
+# also Momentaufnahmen eines Laufs, keinen Quellcode. Sie bleiben deshalb
+# ausserhalb der Versionierung; einzige Ausnahme ist
+# benchmark/properties_snapshot.json (siehe unten).
+# ---------------------------------------------------------------------------
+
+# wikikg (--output, per Konvention nach output/)
 output/
-vorschlaege.csv
-quickstatements_entwurf.txt
+
+# nomadwiki/cli.py (--out / --qs-out; Default traegt einen Zeitstempel)
+vorschlaege*.csv
+quickstatements_entwurf*.txt
+
+# nomadwiki/Werkstoff wikidata vorschlaege.py (--out / --qs-out)
+werkstoffe_vorschlaege.csv
+werkstoffe_quickstatements_entwurf.txt
+
+# benchmark/benchmark.py (--csv; properties_snapshot.json ist bewusst
+# versioniert, damit --offline reproduzierbar bleibt)
+abdeckung.csv
+
+# Kategorie Hirachie/material_hierarchy_check.py (CSV + Graphen)
+werkstoff_check.csv
+werkstoff_graph.png
+subclass_tree_material.png
+trace_graph.png
+trace_*.png
