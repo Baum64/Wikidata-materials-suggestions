@@ -17,22 +17,35 @@ Vorlagendoku werden verworfen, Unterabschnitte gehoeren zum Elternabschnitt).
 Die Liste wird live geholt und als Momentaufnahme in properties_snapshot.json
 abgelegt - damit bleibt ein Lauf reproduzierbar und --offline moeglich.
 
+Die Projektseite listet nur Messgroessen. Die CAS-Nummer (P231) wird deshalb
+fest ergaenzt (Abschnitt "Identifikatoren", abschaltbar mit --no-extra) - sie
+ist der zentrale externe Schluessel zu Stoffdatenbanken.
+
 Zusaetzlich wird markiert, welche Properties materialswiki ueberhaupt bedienen
 kann: PROPERTY_MAP und MP_FIELD_MAP werden importiert, nicht kopiert.
 
 Grundgesamtheit
 ---------------
-Konkrete Werkstoffe sind in Wikidata ueberwiegend als UNTERKLASSEN modelliert
-(Stahl ist eine Unterklasse von metallischem Werkstoff, keine Instanz).
-Ausgewertet wird deshalb die Vereinigung aus
+Zwei Modi, umschaltbar mit --population:
+
+'subtree' (Default): Konkrete Werkstoffe sind in Wikidata ueberwiegend als
+UNTERKLASSEN modelliert (Stahl ist eine Unterklasse von metallischem
+Werkstoff, keine Instanz). Ausgewertet wird deshalb die Vereinigung aus
   - Instanzen:     ?i wdt:P31/wdt:P279* wd:Q1924900
   - Unterklassen:  ?i wdt:P279*         wd:Q1924900
 Beide Teilmengen werden zusaetzlich einzeln ausgewiesen.
+
+'periodensystem': die chemischen Elemente, also Instanzen von Q11344 mit
+Ordnungszahl (P1086) bis --max-z. Hier taugt der Subtree-Ansatz NICHT: unter
+Q11344 haengen 1706 Items, weil Elementgruppen (Halbmetalle, Uebergangs-
+metalle, ...) als Unterklassen modelliert sind. Die Z-Grenze ist noetig, weil
+Wikidata auch hypothetische Elemente bis Z=184 fuehrt.
 
 Aufruf
 ------
   python -m benchmark.benchmark
   python -m benchmark.benchmark --root Q11426 --csv abdeckung.csv
+  python -m benchmark.benchmark --population periodensystem
   python -m benchmark.benchmark --offline          # ohne Wiki-Abruf
 """
 
@@ -68,10 +81,25 @@ DEFAULT_SECTIONS = ["Physics", "Mechanical", "Thermal", "Chemical",
 SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "properties_snapshot.json")
 
+# Die Projektseite listet nur Messgroessen, keine Identifikatoren. Die
+# CAS-Nummer ist fuer Werkstoffe und Elemente aber der zentrale externe
+# Schluessel (und die Bruecke zu Stoffdatenbanken), deshalb hier fest ergaenzt.
+# Herkunft bleibt getrennt sichtbar: eigener Abschnitt, nicht in "Chemical".
+EXTRA_SECTIONS = {"Identifikatoren": ["P231"]}  # P231 = CAS-Nummer
+
 # Instanzen ODER Unterklassen - siehe Modul-Docstring.
 POPULATION_PATTERN = (
     "{{ ?i wdt:P31/wdt:P279* wd:{root} }} UNION {{ ?i wdt:P279* wd:{root} }}"
 )
+
+# "Elemente des Periodensystems": Instanzen von chemisches Element (Q11344)
+# MIT Ordnungszahl. Der Subtree-Ansatz taugt hier nicht - P279* unter Q11344
+# zieht 1706 Items (Elementgruppen, Halbmetalle, ...) statt der Elemente.
+# Die Z-Grenze ist noetig, weil Wikidata auch hypothetische Elemente bis
+# Z=184 fuehrt: ohne Filter 174 Items, mit Z<=118 genau das reale
+# Periodensystem.
+PERIODENSYSTEM_PATTERN = "?i wdt:P31 wd:Q11344 ; wdt:P1086 ?z . FILTER(?z <= {max_z})"
+DEFAULT_MAX_Z = 118
 
 HEADING_RE = re.compile(r"^(={2,})\s*(.+?)\s*\1\s*$", re.M)
 ROW_ID_RE = re.compile(r"/Row\|id=(\d+)")  # nur echte Zahlen, "new" faellt raus
@@ -195,19 +223,33 @@ def fetch_property_meta(pids: list) -> dict:
 # Zaehlung
 # ---------------------------------------------------------------------------
 
-def count_population(root: str) -> dict:
+def build_population(args) -> tuple:
+    """(Muster der Grundgesamtheit, {Bezeichnung: Teilmuster zum Zaehlen}).
+
+    Zwei Modi: der Subtree unter einer Wurzel (Default) oder das
+    Periodensystem. Beim Periodensystem ist die Aufteilung in Instanzen und
+    Unterklassen sinnlos - die Elemente sind ausnahmslos Instanzen.
+    """
+    if args.population == "periodensystem":
+        pattern = PERIODENSYSTEM_PATTERN.format(max_z=args.max_z)
+        return pattern, {"gesamt": pattern}
+    pattern = POPULATION_PATTERN.format(root=args.root)
+    return pattern, {
+        "instanzen": f"?i wdt:P31/wdt:P279* wd:{args.root}",
+        "unterklassen": f"?i wdt:P279* wd:{args.root}",
+        "gesamt": pattern,
+    }
+
+
+def count_population(teilmengen: dict) -> dict:
     counts = {}
-    for key, pattern in {
-        "instanzen": f"?i wdt:P31/wdt:P279* wd:{root}",
-        "unterklassen": f"?i wdt:P279* wd:{root}",
-        "gesamt": POPULATION_PATTERN.format(root=root),
-    }.items():
+    for key, pattern in teilmengen.items():
         rows = sparql(f"SELECT (COUNT(DISTINCT ?i) AS ?n) WHERE {{ {pattern} }}")
         counts[key] = int(rows[0]["n"]["value"])
     return counts
 
 
-def count_filled(root: str, pids: list, chunk: int = 60) -> dict:
+def count_filled(population: str, pids: list, chunk: int = 60) -> dict:
     """{pid: Anzahl Items der Grundgesamtheit mit dieser Aussage}.
 
     Properties ohne Treffer fehlen im GROUP BY und werden auf 0 vorbelegt.
@@ -218,7 +260,7 @@ def count_filled(root: str, pids: list, chunk: int = 60) -> dict:
     for i in range(0, len(pids), chunk):
         values = " ".join(f"wdt:{p}" for p in pids[i:i + chunk])
         rows = sparql(f"""SELECT ?p (COUNT(DISTINCT ?i) AS ?n) WHERE {{
-  {POPULATION_PATTERN.format(root=root)}
+  {population}
   VALUES ?p {{ {values} }}
   ?i ?p ?v .
 }} GROUP BY ?p""")
@@ -227,10 +269,10 @@ def count_filled(root: str, pids: list, chunk: int = 60) -> dict:
     return filled
 
 
-def best_covered(root: str, pids: list, limit: int = 10) -> list:
+def best_covered(population: str, pids: list, limit: int = 20) -> list:
     values = " ".join(f"wdt:{p}" for p in pids)
     return sparql(f"""SELECT ?i ?iLabel (COUNT(DISTINCT ?p) AS ?n) WHERE {{
-  {POPULATION_PATTERN.format(root=root)}
+  {population}
   VALUES ?p {{ {values} }}
   ?i ?p ?v .
   SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
@@ -267,13 +309,16 @@ def build_rows(sections: dict, meta: dict, filled: dict, total: int) -> list:
     return rows
 
 
-def print_report(root: str, population: dict, rows: list) -> None:
+def print_report(titel: str, population: dict, rows: list) -> None:
     total = population["gesamt"]
     print()
-    print(f"Grundgesamtheit unterhalb von {root}")
-    print(f"  Instanzen (P31/P279*)          {population['instanzen']:>7}")
-    print(f"  Unterklassen (P279*)           {population['unterklassen']:>7}")
-    print(f"  ausgewertet (Vereinigung)      {total:>7}")
+    print(f"Grundgesamtheit: {titel}")
+    if "instanzen" in population:
+        print(f"  Instanzen (P31/P279*)          {population['instanzen']:>7}")
+        print(f"  Unterklassen (P279*)           {population['unterklassen']:>7}")
+        print(f"  ausgewertet (Vereinigung)      {total:>7}")
+    else:
+        print(f"  ausgewertet                    {total:>7}")
 
     for section in dict.fromkeys(r["abschnitt"] for r in rows):
         teil = sorted((r for r in rows if r["abschnitt"] == section),
@@ -329,22 +374,47 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--csv", default=None, help="Ergebnis zusaetzlich als CSV")
     parser.add_argument("--top", type=int, default=10,
                         help="Anzahl der am besten belegten Items (0 = aus)")
+    parser.add_argument("--population", choices=["subtree", "periodensystem"],
+                        default="subtree",
+                        help="Grundgesamtheit: 'subtree' = Instanzen und "
+                             "Unterklassen unter --root (Default), "
+                             "'periodensystem' = die chemischen Elemente "
+                             "(--root wird dann nicht verwendet)")
+    parser.add_argument("--max-z", type=int, default=DEFAULT_MAX_Z,
+                        help=f"nur mit --population periodensystem: hoechste "
+                             f"Ordnungszahl (Default {DEFAULT_MAX_Z}; darueber "
+                             f"fuehrt Wikidata nur hypothetische Elemente)")
+    parser.add_argument("--no-extra", action="store_true",
+                        help="die fest ergaenzten Properties weglassen "
+                             f"({', '.join(p for v in EXTRA_SECTIONS.values() for p in v)})")
     args = parser.parse_args(argv)
 
     sections = fetch_project_properties(args.sections, args.offline)
+    aus_projekt = sum(len(v) for v in sections.values())
+    # nach dem Snapshot-Schreiben ergaenzen, damit der Snapshot die
+    # Projektseite unvermischt abbildet
+    if not args.no_extra:
+        sections.update(EXTRA_SECTIONS)
     pids = list(dict.fromkeys(p for v in sections.values() for p in v))
-    print(f"{len(pids)} Properties aus {len(sections)} Abschnitten von "
-          f"[[{PROJECT_PAGE}]]", file=sys.stderr)
+    print(f"{aus_projekt} Properties aus {len(args.sections)} Abschnitten von "
+          f"[[{PROJECT_PAGE}]]"
+          + (f" + {len(pids) - aus_projekt} fest ergaenzt"
+             if len(pids) > aus_projekt else ""), file=sys.stderr)
+
+    population_pattern, teilmengen = build_population(args)
+    titel = (f"Periodensystem (chemische Elemente, Z <= {args.max_z})"
+             if args.population == "periodensystem"
+             else f"unterhalb von {args.root}")
 
     meta = fetch_property_meta(pids)
-    population = count_population(args.root)
-    filled = count_filled(args.root, pids)
+    population = count_population(teilmengen)
+    filled = count_filled(population_pattern, pids)
     rows = build_rows(sections, meta, filled, population["gesamt"])
-    print_report(args.root, population, rows)
+    print_report(titel, population, rows)
 
     if args.top:
         print(f"Am besten belegte Items (max. {len(pids)} Aussagen):")
-        for b in best_covered(args.root, pids, args.top):
+        for b in best_covered(population_pattern, pids, args.top):
             qid = b["i"]["value"].rsplit("/", 1)[-1]
             print(f"  {b['n']['value']:>3}/{len(pids)}  {qid:<12} "
                   f"{b['iLabel']['value']}")

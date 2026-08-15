@@ -52,11 +52,12 @@ WICHTIG - vor dem Einsatz
 --------------------------
 - MP_API_KEY: die Materials-Project-API verlangt einen Schlüssel, ohne ihn
   antwortet jeder Endpunkt mit HTTP 401. Kostenlos unter
-  https://next-gen.materialsproject.org/api - dann als Umgebungsvariable
-  setzen:  export MP_API_KEY="..."
+  https://next-gen.materialsproject.org/api - dann in die gitignorierte .env
+  im Repo-Wurzelverzeichnis eintragen (Vorlage: .env.beispiel).
   Bewusst NICHT im Quelltext hinterlegen; ein Schlüssel im Repo wäre ein
   Leck, sobald das Repo geteilt wird.
-- USER_AGENT: gemäß Wikidata-Richtlinie mit echtem Namen/Kontakt ausfüllen
+- CONTACT_EMAIL: steht ebenfalls in .env und landet im User-Agent - so
+  verlangt es die Wikimedia-Richtlinie
   (https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy)
 - MP_FIELD_MAP: Feldnamen und Einheiten stammen aus dem öffentlichen
   OpenAPI-Schema (https://api.materialsproject.org/openapi.json, ausgewertet
@@ -71,7 +72,6 @@ WICHTIG - vor dem Einsatz
 
 Ablauf in der Praxis
 ---------------------
-  export MP_API_KEY="..."
   python -m materialswiki --elements Ti O --max 50
   -> erzeugt vorschlaege_<Zeitstempel>.csv zur manuellen Durchsicht
   -> NICHTS wird automatisch nach Wikidata geschrieben
@@ -232,6 +232,125 @@ DETERMINATION_PID = "P459"
 DFT_QID = "Q1048589"
 DFT_LABEL = "Dichtefunktionaltheorie"
 
+# ---------------------------------------------------------------------------
+# Messbedingungen der Dichte (P2054)
+# ---------------------------------------------------------------------------
+#
+# Die Nutzungsanweisung von P2054 verlangt zwei Qualifikatoren:
+#     P2076 "Temperatur"        - eine Dichte ohne Temperatur ist unvollstaendig,
+#                                 Stoffe dehnen sich aus
+#     P515  "Aggregatzustand"   - 13,5 g/cm^3 fuer Quecksilber meint die
+#                                 FLUESSIGKEIT, nicht den Festkoerper
+#
+# Verifiziert am 2026-08-15: beide sind laut Property-Scope-Constraint als
+# Qualifikator zugelassen (P515 sogar ausschliesslich). P2076 ist mengenwertig,
+# P515 itemwertig. Die drei Zustands-QIDs sind nicht geraten, sondern die
+# tatsaechlich als P515-Qualifikator verwendeten (per SPARQL nach Haeufigkeit).
+TEMPERATUR_PID = "P2076"
+AGGREGAT_PID = "P515"
+CELSIUS_QID = "Q25267"
+KELVIN_QID = "Q11579"
+AGGREGAT_FEST = "Q11438"      # Festkoerper
+AGGREGAT_FLUESSIG = "Q11435"  # Fluessigkeit
+AGGREGAT_GAS = "Q11432"       # Gas
+
+# Vorgabe, wenn die Quelle keine Messtemperatur nennt. Nicht willkuerlich:
+# die deutschen Elementinfoboxen schreiben ueberwiegend "(20 °C)".
+STANDARD_TEMPERATUR_C = 20.0
+
+# ---------------------------------------------------------------------------
+# Groessen, die NICHT mit der Rechnung belegt werden
+# ---------------------------------------------------------------------------
+#
+# Fuer manche Groessen ist die DFT-Rechnung ein schwacher Beleg, obwohl der
+# Wert selbst unstrittig ist. Das Kristallsystem ist der Musterfall: dass
+# Kupfer kubisch und Titan hexagonal kristallisiert, ist seit Jahrzehnten
+# etablierte Kristallographie und steht in jedem Standardwerk. Eine
+# Symmetrieanalyse einer DFT-Zelle dafuer zu zitieren, waere die schlechtere
+# Quelle - sie belegt die Rechnung, nicht den Stoff.
+#
+# Solche Groessen bekommen deshalb einen LITERATURBELEG statt der Datenbank-
+# DOI, und folgerichtig auch KEINEN P459-Qualifikator "berechnet (DFT)":
+# als Literaturwert ausgewiesen, waere er falsch.
+#
+# Der Wert selbst stammt weiterhin aus der Symmetrieanalyse des Materials
+# Project - das steht in der Notiz, und genau deshalb muss die Zeile vor der
+# Uebernahme gegen das Werk geprueft werden. Elemente und Verbindungen haben
+# je nach Modifikation verschiedene Kristallsysteme (Graphit/Diamant,
+# alpha-/beta-Titan); welche Modifikation MP gerechnet hat, entscheidet die
+# Zeile nicht.
+# ---------------------------------------------------------------------------
+# Physikalische Plausibilitaet
+# ---------------------------------------------------------------------------
+#
+# Die Qualitaetsfilter der API (theoretical/is_stable/deprecated) sagen etwas
+# ueber das MATERIAL aus, nichts ueber die einzelne Rechnung. Am Bestand
+# gefunden (2026-08-15), Zink mp-aaaaaadb, theoretical=false UND is_stable:
+#
+#     shear_modulus: {voigt: 44.248, reuss: -5606.668, vrh: -2781.21}
+#     homogeneous_poisson: -1.153
+#
+# Die Reuss-Schranke ist hier havariert und reisst das VRH-Mittel mit. Ein
+# negativer Schubmodul bedeutet mechanische Instabilitaet - Zink ist aber
+# schlicht stabil, der Wert ist Rechenmuell. Ohne Pruefung stuende an
+# Wikidatas Zink-Item ein Schubmodul von -2781 GPa (Literaturwert: 43 GPa).
+#
+# Geprueft wird deshalb gegen physikalische Schranken, in Wikidata-Einheiten:
+#   Moduln       muessen positiv sein; die Obergrenze liegt weit ueber
+#                Diamant (Kompressionsmodul ~443 GPa, Schubmodul ~535 GPa)
+#   Poissonzahl  ist fuer isotrope lineare Elastizitaet thermodynamisch auf
+#                [-1; 0,5] beschraenkt - ausserhalb ist sie unmoeglich
+#   Dichte       zwischen Lithium (534 kg/m^3) und Osmium (22590 kg/m^3),
+#                grosszuegig gefasst
+#
+# Unplausible Werte werden NICHT still verworfen, sondern als
+# MANUELLE_KLAERUNG_NOETIG ausgewiesen: sonst faellt nie auf, dass die
+# Datenbank an dieser Stelle kaputt ist.
+PLAUSIBEL = {
+    "density": (10.0, 30000.0),            # kg/m^3
+    "bulk_modulus": (1e6, 1e12),           # Pa, also 0,001 bis 1000 GPa
+    "shear_modulus": (1e6, 1e12),          # Pa
+    "poisson_ratio": (-1.0, 0.5),          # dimensionslos, thermodynamisch
+}
+
+
+def ist_plausibel(internal_key: str, wert) -> bool:
+    """False, wenn der Wert physikalisch unmoeglich ist."""
+    grenzen = PLAUSIBEL.get(internal_key)
+    if grenzen is None or not isinstance(wert, (int, float)):
+        return True
+    return grenzen[0] <= wert <= grenzen[1]
+
+
+# ---------------------------------------------------------------------------
+# Groessen, die gar keinen Beleg bekommen
+# ---------------------------------------------------------------------------
+#
+# Externe Identifikatoren belegen sich selbst: Die CAS-Nummer 7440-50-8 IST
+# der Verweis auf den Eintrag im CAS-Register - man schlaegt sie dort nach
+# und hat damit die Pruefung. Ein zusaetzliches "importiert aus Wikipedia"
+# sagt darueber nichts aus; es belegt nur, wo die Zeichenkette abgeschrieben
+# wurde, nicht dass sie stimmt.
+#
+# Solche Aussagen gehen deshalb OHNE S-Angabe in den QuickStatements-Entwurf.
+# Die Herkunft bleibt in der CSV-Spalte ref_note stehen, damit die Zeile beim
+# Durchsehen pruefbar ist - sie ist nur kein Beleg im Sinne von Wikidata.
+#
+# Entschieden ueber den Datentyp statt ueber einzelne P-Nummern: was als
+# external-id gefuehrt wird, ist per Definition ein Identifikator. Zurzeit
+# betrifft das nur P231 (CAS-Nummer).
+OHNE_BELEG_DATENTYPEN = {"external-id"}
+
+LITERATUR_BELEG = {
+    "crystal_system": {
+        # Greenwood/Earnshaw, Chemistry of the Elements, 2. Aufl. 1997.
+        # ISBN am 2026-08-15 geprueft: Pruefsumme gueltig, ueber OpenLibrary
+        # als dieses Werk bestaetigt. ISBN-10 -> QuickStatements S957.
+        "isbn": "0-08-037941-9",
+        "werk": "Greenwood/Earnshaw, Chemistry of the Elements, 2. Aufl. 1997",
+    },
+}
+
 # MP schreibt das Kristallsystem gross ("Tetragonal"), die value_map unten
 # klein. Verglichen wird deshalb in Kleinschreibung; das Vokabular ist
 # ansonsten identisch (dieselben sieben Systeme).
@@ -263,11 +382,25 @@ PROPERTY_MAP = {
         "unit_qid": "Q11579",  # Kelvin
         "label": "Siedepunkt",
     },
-    # P556 ist item-wertig. Die sieben QIDs sind nicht geraten, sondern die
-    # tatsaechlich in Wikidata verwendeten P556-Werte (per SPARQL nach
-    # Haeufigkeit abgefragt, 2026-08-13). NOMADs crystal_system-Vokabular
-    # (results.material.symmetry.crystal_system) hat genau dieselben sieben
-    # Auspraegungen - die Abbildung ist damit 1:1 und vollstaendig.
+    # P556 ist item-wertig. Die QIDs sind nicht geraten, sondern der
+    # "one-of"-Constraint der Property, am 2026-08-15 ausgelesen. Er umfasst
+    # inzwischen ELF Werte: die sieben Kristallsysteme plus
+    #
+    #   Q3006714  face-centered cubic  (fcc, kubisch flaechenzentriert)
+    #   Q851536   body-centered cubic  (bcc, kubisch raumzentriert)
+    #   Q103382   amorphes Material
+    #   Q263214   Quasikristall
+    #
+    # fcc und bcc sind streng genommen Bravais-Gitter und keine
+    # Kristallsysteme; Wikidata laesst sie auf P556 dennoch zu, und sie sind
+    # die AUSSAGEKRAEFTIGEREN Werte - "kubisch" allein unterschlaegt den
+    # Unterschied zwischen Kupfer und Wolfram. Wo die Quelle die Zentrierung
+    # hergibt, wird deshalb der spezifischere Wert genommen (siehe
+    # verfeinere_zentrierung und die Stichwortlisten der beiden Wikipedias).
+    #
+    # amorph und Quasikristall stehen bewusst NICHT hier: weder MP noch die
+    # Infoboxen liefern sie, und ein Wert ausserhalb der value_map wird
+    # ohnehin zur manuellen Klaerung markiert statt geraten.
     "crystal_system": {
         "pid": "P556",
         "datatype": "item",
@@ -275,6 +408,8 @@ PROPERTY_MAP = {
         "label": "Kristallsystem",
         "value_map": {
             "cubic": ("Q473227", "kubisches Kristallsystem"),
+            "fcc": ("Q3006714", "kubisch flaechenzentriert"),
+            "bcc": ("Q851536", "kubisch raumzentriert"),
             "hexagonal": ("Q663314", "hexagonales Kristallsystem"),
             "monoclinic": ("Q624543", "monoklines Kristallsystem"),
             "orthorhombic": ("Q648961", "orthorhombisches Kristallsystem"),
@@ -725,6 +860,13 @@ WIKIPEDIA_DE_FIELDS = {
 }
 
 WIKIPEDIA_DE_CRYSTAL_KEYWORDS = [
+    # Zentrierung zuerst: "kubisch flaechenzentriert" ist aussagekraeftiger
+    # als "kubisch", und die allgemeine Regel wuerde sonst greifen. Die
+    # Bindestrichvarianten kommen im Bestand beide vor.
+    ("kubisch flächenzentriert", "fcc"),
+    ("kubisch-flächenzentriert", "fcc"),
+    ("kubisch raumzentriert", "bcc"),
+    ("kubisch-raumzentriert", "bcc"),
     ("orthorhombisch", "orthorhombic"),
     ("rhombisch", "orthorhombic"),
     ("tetragonal", "tetragonal"),
@@ -952,7 +1094,11 @@ def wikipedia_de_values(fields: dict, article_wikitext: str = "") -> dict:
 
     roh = fields.get("Kristallstruktur", "")
     if roh and "<br" not in roh.lower() and ":" not in _WIKI_REF.sub(" ", roh):
-        xtal = strip_wiki_markup(roh).lower()
+        # Wikilinks aufloesen, BEVOR nach Stichworten gesucht wird: Aluminium
+        # schreibt "[[Kubisches Kristallsystem|kubisch]] flächenzentriert",
+        # und die Klammern zerreissen die Phrase, nach der wir suchen.
+        xtal = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r"\1",
+                      strip_wiki_markup(roh)).lower()
         for keyword, system in WIKIPEDIA_DE_CRYSTAL_KEYWORDS:
             if keyword in xtal:
                 merken("crystal_system", system, "Kristallstruktur",
@@ -982,11 +1128,66 @@ def wikipedia_de_proposals_for_item(wd_match: dict, de_title: str,
     return _infobox_proposals(
         wd_match, werte, skip_keys,
         "Wikipedia (de)", WIKIPEDIA_DE_QID, permalink,
+        messtemperatur=parse_de_messtemperatur(fields.get("Dichte", "")),
     )
 
 
+# Messtemperatur der Dichte, z. B. "8,96 g/cm³ (20 °C)". Sie steht in
+# Klammern hinter dem Wert - die Elementinfoboxen sind darin uneinheitlich:
+# Kupfer/Silber/Aluminium/Blei nennen 20 °C, Titan und Zink 25 °C, Eisen und
+# Quecksilber gar nichts. Blind 20 °C anzunehmen waere also fuer einen Teil
+# des Bestands schlicht falsch.
+_DE_MESSTEMPERATUR = re.compile(r"\(\s*([+-]?[\d.,]+)\s*°\s*C\s*\)")
+
+
+def parse_de_messtemperatur(raw: str) -> Optional[float]:
+    """Messtemperatur aus einem Infobox-Feld in Grad Celsius, sonst None."""
+    s = strip_wiki_markup(raw or "")
+    s = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r"\1", s)  # [[Grad Celsius|°C]]
+    treffer = _DE_MESSTEMPERATUR.search(s)
+    return _de_zahl(treffer.group(1)) if treffer else None
+
+
+def aggregatzustand_bei(temperatur_c: float, werte: dict) -> Optional[str]:
+    """QID des Aggregatzustands bei dieser Temperatur, sonst None.
+
+    Abgeleitet aus Schmelz- und Siedepunkt DESSELBEN Artikels, beide in
+    Kelvin. Fehlt einer der beiden, wird nichts behauptet - lieber kein
+    Qualifikator als ein falscher.
+
+    Noetig, weil "fest" gerade nicht immer stimmt: Quecksilber schmilzt bei
+    234 K, seine Dichteangabe bei 20 °C meint also die FLUESSIGKEIT.
+    """
+    kelvin = temperatur_c + 273.15
+    schmelz = werte.get("melting_point")
+    if schmelz is None:
+        return None
+    if kelvin < schmelz[0]:
+        return AGGREGAT_FEST
+    siede = werte.get("boiling_point")
+    if siede is None:
+        return None  # oberhalb des Schmelzpunkts, aber fluessig oder gasfoermig?
+    return AGGREGAT_FLUESSIG if kelvin < siede[0] else AGGREGAT_GAS
+
+
+def dichte_qualifikatoren(temperatur_c: float, zustand_qid: Optional[str]) -> list:
+    """Qualifikatoren fuer eine Dichteaussage: Temperatur, Aggregatzustand.
+
+    Der Temperaturwert steht in QuickStatements-Schreibweise, also mit
+    Einheit - "20U25267" ist 20 Grad Celsius (Q25267).
+    """
+    zahl = format(Decimal(str(temperatur_c)).normalize(), "f")
+    qual = [(TEMPERATUR_PID, f"{zahl}U{CELSIUS_QID[1:]}",
+             f"{zahl} °C")]
+    if zustand_qid:
+        klartext = {AGGREGAT_FEST: "fest", AGGREGAT_FLUESSIG: "fluessig",
+                    AGGREGAT_GAS: "gasfoermig"}[zustand_qid]
+        qual.append((AGGREGAT_PID, zustand_qid, klartext))
+    return qual
+
+
 def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
-                       permalink) -> list:
+                       permalink, messtemperatur=None) -> list:
     """Gemeinsame Zeilenerzeugung fuer beide Wikipedia-Sprachen.
 
     Der Beleg wird in dieser Reihenfolge gewaehlt: DOI aus dem
@@ -1015,6 +1216,14 @@ def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
                 imported_from=projekt_qid, import_url=permalink, note=note
             )
         value_label = ""
+        qualifiers = []
+        if key == "density":
+            # P2054 verlangt Temperatur und Aggregatzustand als Qualifikator.
+            # Die Temperatur steht meist im Feld selbst; sonst 20 °C.
+            temperatur = (messtemperatur if messtemperatur is not None
+                          else STANDARD_TEMPERATUR_C)
+            qualifiers = dichte_qualifikatoren(
+                temperatur, aggregatzustand_bei(temperatur, werte))
         if prop_info.get("datatype") == "item":
             mapped = prop_info.get("value_map", {}).get(str(value))
             if mapped is None:
@@ -1032,6 +1241,7 @@ def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
         proposals.append(make_row(
             "BEREITS_VORHANDEN" if already_present else "VORSCHLAG",
             quelle, wd_match, prop_info, value, value_label, reference,
+            qualifiers=qualifiers,
         ))
     return proposals
 
@@ -1067,6 +1277,10 @@ WIKIPEDIA_NUMERIC_FIELDS = {
 # "face centered cubic"), deshalb wird normalisiert und nach Schluesselwort
 # gesucht. Reihenfolge ist wichtig: spezifisch vor allgemein.
 WIKIPEDIA_CRYSTAL_KEYWORDS = [
+    # Zentrierung zuerst, aus demselben Grund wie in der deutschen Liste.
+    # Ohne Bindestrich, weil die Auswertung "-" vorher durch " " ersetzt.
+    ("face centered cubic", "fcc"),
+    ("body centered cubic", "bcc"),
     ("orthorhombic", "orthorhombic"),
     ("tetragonal", "tetragonal"),
     ("monoclinic", "monoclinic"),
@@ -1186,6 +1400,7 @@ def wikipedia_proposals_for_item(wd_match: dict, name_en: str,
     return _infobox_proposals(
         wd_match, wikipedia_values(fields, wikitext), skip_keys,
         "Wikipedia (en)", WIKIPEDIA_EN_QID, permalink,
+        messtemperatur=parse_de_messtemperatur(fields.get("density", "")),
     )
 
 
@@ -1252,6 +1467,7 @@ def wikipedia_en_chem_proposals_for_item(wd_match: dict, en_title: str,
     return _infobox_proposals(
         wd_match, wikipedia_en_chem_values(fields, wikitext), skip_keys,
         "Wikipedia (en)", WIKIPEDIA_EN_QID, permalink,
+        messtemperatur=parse_de_messtemperatur(fields.get("Density", "")),
     )
 
 
@@ -1296,6 +1512,11 @@ def wikipedia_fallback_proposals(wd_match: dict, pids_belegt: set,
 # Schritt 2a: Elemente des Periodensystems -> bestehende Wikidata-Items
 # ---------------------------------------------------------------------------
 
+# Echte Elementsymbole haben ein oder zwei Zeichen; die systematischen
+# IUPAC-Platzhalter fuer unentdeckte Elemente immer drei (siehe unten).
+_ECHTES_ELEMENTSYMBOL = re.compile(r"[A-Z][a-z]?")
+
+
 def fetch_element_qids() -> dict:
     """{Elementsymbol: {qid, label, name_en}} fuer alle chemischen Elemente.
 
@@ -1303,10 +1524,24 @@ def fetch_element_qids() -> dict:
     title_de den deutschen Artikel (per Sitelink, nicht geraten).
 
     Ueber das Symbol (P246) statt ueber die Summenformel - fuer Reinstoffe
-    ist das eindeutig und umgeht die Formel-Normalisierung (NOMAD schreibt
-    "O2Ti", Wikidata P274 "TiO₂") vollstaendig.
+    ist das eindeutig und umgeht die Formel-Normalisierung (Datenbanken
+    schreiben "O2Ti", Wikidata P274 "TiO₂") vollstaendig.
+
     Geprueft am 2026-08-14: 174 Items mit P31=Q11344 und P246, KEIN Symbol
     doppelt vergeben - die Abbildung ist damit kollisionsfrei.
+
+    ABER: 56 dieser 174 sind gar keine Elemente, sondern systematische
+    IUPAC-Platzhalter fuer UNENTDECKTE Elemente - "Ubb" (Unbibium, Z=122),
+    "Uue" (Ununennium, Z=119) und so fort. Wikidata fuehrt sie voellig
+    korrekt als P31=Q11344, es gibt sie nur nicht. Materials Project
+    beantwortet eine Abfrage danach mit HTTP 400 ("Please provide a
+    comma-seperated list of elements") und riss so einen Periodensystem-Lauf
+    bei Element 112 von 174 ab.
+
+    Aussortiert werden sie an der Symbollaenge: echte Elementsymbole haben
+    ein oder zwei Zeichen, die systematischen Platzhalter immer drei. Am
+    Bestand geprueft (2026-08-15) trennt das exakt - 118 echte Elemente,
+    genau die Zahl der bekannten, und 56 Platzhalter.
     """
     query = """
     SELECT ?e ?sym ?eLabel ?enLabel ?deTitle WHERE {
@@ -1322,9 +1557,14 @@ def fetch_element_qids() -> dict:
     """
     resp = get_with_retry(WIKIDATA_SPARQL, {"query": query, "format": "json"})
     out = {}
+    platzhalter = []
     for b in resp.json()["results"]["bindings"]:
         qid = b["e"]["value"].rsplit("/", 1)[-1]
-        out[b["sym"]["value"]] = {
+        symbol = b["sym"]["value"]
+        if not _ECHTES_ELEMENTSYMBOL.fullmatch(symbol):
+            platzhalter.append(symbol)
+            continue
+        out[symbol] = {
             "qid": qid,
             "label": b.get("eLabel", {}).get("value", qid),
             "name_en": b["enLabel"]["value"],
@@ -1332,6 +1572,12 @@ def fetch_element_qids() -> dict:
             # "Titan (Element)".
             "title_de": b.get("deTitle", {}).get("value", ""),
         }
+    if platzhalter:
+        print(
+            f"  {len(platzhalter)} systematische Platzhalter fuer unentdeckte "
+            f"Elemente uebersprungen ({', '.join(sorted(platzhalter)[:3])} ...)",
+            file=sys.stderr,
+        )
     return out
 
 
@@ -1612,6 +1858,25 @@ def item_has_statement(qid: str, pid: str) -> bool:
     return pid in fetch_item_pids(qid)
 
 
+def verfeinere_zentrierung(system, hm_symbol) -> str:
+    """'cubic' -> 'fcc'/'bcc' anhand des Hermann-Mauguin-Symbols.
+
+    MPs Feld crystal_system sagt nur "Cubic" und verschenkt damit die
+    Unterscheidung zwischen Kupfer und Wolfram. Der ERSTE Buchstabe des
+    Raumgruppensymbols nennt aber genau die Bravais-Zentrierung:
+
+        P  primitiv            Fe (Im-3m) -> bcc
+        F  flaechenzentriert   Cu (Fm-3m) -> fcc
+        I  raumzentriert       W  (Im-3m) -> bcc
+
+    Nur fuer kubische Systeme angewandt; bei allem anderen bleibt es beim
+    Kristallsystem. Ein unbekannter Anfangsbuchstabe aendert nichts.
+    """
+    if system != "cubic" or not hm_symbol:
+        return system
+    return {"F": "fcc", "I": "bcc"}.get(str(hm_symbol).strip()[:1], system)
+
+
 def mp_value(raw, faktor):
     """Rohwert aus dem MP-Dokument -> Wert in der Wikidata-Einheit.
 
@@ -1742,10 +2007,10 @@ def proposals_for_material(material: dict, wd_match: dict) -> list:
     icsd = [i for i in (material.get("database_IDs") or {}).get("icsd", [])]
     if icsd:
         belege.append(f"ICSD {', '.join(str(i) for i in icsd[:3])}")
-    reference = Reference(doi=MP_DOI, note="; ".join(belege))
+    mp_reference = Reference(doi=MP_DOI, note="; ".join(belege))
 
-    # Jede MP-Aussage ist gerechnet - siehe Abschnitt "Bestimmungsmethode".
-    qualifiers = [(DETERMINATION_PID, DFT_QID, DFT_LABEL)]
+    # Gerechnete Aussagen tragen P459 - siehe "Bestimmungsmethode".
+    mp_qualifiers = [(DETERMINATION_PID, DFT_QID, DFT_LABEL)]
 
     proposals = []
     for mp_field, (internal_key, faktor) in MP_FIELD_MAP.items():
@@ -1755,6 +2020,38 @@ def proposals_for_material(material: dict, wd_match: dict) -> list:
         value = mp_value(_dig(material, mp_field), faktor)
         if value is None:
             continue
+        if internal_key == "crystal_system":
+            # Spezifischer als "kubisch", wo die Raumgruppe es hergibt.
+            value = verfeinere_zentrierung(
+                value, _dig(material, "symmetry.symbol"))
+
+        # Literaturbeleg statt Rechnung, wo die Rechnung die schlechtere
+        # Quelle waere - siehe LITERATUR_BELEG.
+        lit = LITERATUR_BELEG.get(internal_key)
+        if lit:
+            reference = Reference(
+                isbn=lit["isbn"],
+                note=f"{lit['werk']}; Wert aus der Symmetrieanalyse von "
+                     f"Materials Project {mp_id} - Modifikation gegen das "
+                     f"Werk pruefen",
+            )
+            qualifiers = []  # kein "berechnet (DFT)" auf einem Literaturwert
+        else:
+            reference = mp_reference
+            qualifiers = list(mp_qualifiers)
+
+        if internal_key == "density":
+            # P2054 verlangt Temperatur und Aggregatzustand. Hier NICHT die
+            # 20-°C-Vorgabe: eine DFT-Rechnung liefert das Volumen des
+            # relaxierten Grundzustands, also 0 K. Genau daher ruehrt auch
+            # die systematische Abweichung von den Handbuchwerten - bei
+            # Raumtemperatur ist die Zelle thermisch geweitet.
+            # MP fuehrt ausschliesslich kristalline Festkoerper, "fest" ist
+            # hier also keine Annahme.
+            qualifiers += [
+                (TEMPERATUR_PID, f"0U{KELVIN_QID[1:]}", "0 K (DFT-Grundzustand)"),
+                (AGGREGAT_PID, AGGREGAT_FEST, "fest"),
+            ]
 
         pid = prop_info["pid"]
         value_label = ""
@@ -1777,6 +2074,20 @@ def proposals_for_material(material: dict, wd_match: dict) -> list:
             value, value_label = mapped
         else:
             value = round_significant(value)
+            # Physikalisch Unmoegliches nie vorschlagen - siehe PLAUSIBEL.
+            if not ist_plausibel(internal_key, value):
+                grenzen = PLAUSIBEL[internal_key]
+                proposals.append(
+                    make_row(
+                        f"MANUELLE_KLAERUNG_NOETIG (unplausibler Wert "
+                        f"{value:g}, erwartet {grenzen[0]:g}..{grenzen[1]:g} "
+                        f"- Rechnung in {mp_id} vermutlich fehlgeschlagen)",
+                        "MaterialsProject", wd_match, prop_info, value, "",
+                        reference, formula=material.get("formula", ""),
+                        entry_id=mp_id, qualifiers=qualifiers,
+                    )
+                )
+                continue
 
         already_present = item_has_statement(wd_match["qid"], pid)
 
@@ -1805,11 +2116,14 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
              reference, formula="", entry_id="", qualifiers=None):
     """Baut eine Vorschlagszeile - einheitlich fuer alle Quellen.
 
-    qualifiers ist eine Liste (pid, wert_qid, klartext); sie landet sowohl
+    qualifiers ist eine Liste (pid, quickstatements_wert, klartext). Der Wert
+    steht bereits in QuickStatements-Schreibweise - "Q1048589" fuer eine
+    itemwertige, "20U25267" fuer eine mengenwertige Angabe. Er landet sowohl
     lesbar in der CSV-Spalte "bestimmungsmethode" als auch maschinenlesbar
     im QuickStatements-Entwurf.
     """
     qualifiers = qualifiers or []
+    datentyp = prop_info.get("datatype", "quantity")
     row = {
         "status": status,
         "source": source,
@@ -1818,7 +2132,7 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
         "property": f"{prop_info['pid']} ({prop_info['label']})",
         "value": value,
         "value_label": value_label,
-        "datatype": prop_info.get("datatype", "quantity"),
+        "datatype": datentyp,
         "unit_qid": prop_info["unit_qid"],
         "formula": formula,
         "bestimmungsmethode": "; ".join(
@@ -1826,10 +2140,25 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
         ),
         "entry_id": entry_id,
     }
-    row.update(reference.as_csv_fields())
+
+    ohne_beleg = datentyp in OHNE_BELEG_DATENTYPEN
+    if ohne_beleg:
+        # Belegspalten leer lassen - eine gefuellte ref_doi wuerde beim
+        # Durchsehen suggerieren, dass ein Beleg mitgeschrieben wird.
+        # Die HERKUNFT bleibt in ref_note stehen, damit die Zeile pruefbar
+        # ist; sie ist nur kein Beleg im Sinne von Wikidata.
+        row.update({
+            "ref_mode": "ohne Beleg (Identifikator)",
+            "ref_doi": "", "ref_isbn": "", "ref_url": "", "ref_retrieved": "",
+            "ref_note": reference.note,
+        })
+    else:
+        row.update(reference.as_csv_fields())
+
     row["_ref"] = reference
     row["_pid"] = prop_info["pid"]
     row["_qualifiers"] = qualifiers
+    row["_ohne_beleg"] = ohne_beleg
     return row
 
 
@@ -1865,17 +2194,41 @@ def build_periodic_table_proposals(
     print(f"{len(symbols)} chemische Elemente in Wikidata gefunden.", file=sys.stderr)
 
     todo = sorted(only) if only else sorted(symbols)
+    gescheitert = []
     for i, sym in enumerate(todo, 1):
         if sym not in symbols:
-            print(f"  {sym}: kein Wikidata-Item mit diesem Symbol", file=sys.stderr)
+            # Zwei verschiedene Gruende - der Unterschied ist wichtig, sonst
+            # sucht man den Tippfehler in "Ubb", den es gar nicht gibt.
+            grund = (
+                "systematischer Platzhalter fuer ein unentdecktes Element"
+                if not _ECHTES_ELEMENTSYMBOL.fullmatch(sym)
+                else "kein Wikidata-Item mit diesem Symbol"
+            )
+            print(f"  {sym}: uebersprungen - {grund}", file=sys.stderr)
             continue
         info = symbols[sym]
         wd_match = {"qid": info["qid"], "label": info["label"], "ambiguous": False}
 
-        materials = fetch_mp_materials(
-            None, max_per_element, pure_element=sym,
-            nur_experimentell=nur_experimentell, nur_stabil=nur_stabil,
-        )
+        # Ein einzelnes Element darf den Lauf nicht abreissen. Ueber 118
+        # Elemente mal drei Quellen dauert ein Durchlauf Stunden; ein
+        # Fehler bei Element 112 warf bisher alles Weitere weg, obwohl die
+        # uebrigen 6 voellig in Ordnung gewesen waeren. Genau so ist es
+        # passiert (HTTP 400 auf einen Platzhalter, siehe
+        # fetch_element_qids). Fehlender Schluessel bleibt toedlich - der
+        # trifft jedes Element, da waere Weitermachen sinnlos.
+        try:
+            materials = fetch_mp_materials(
+                None, max_per_element, pure_element=sym,
+                nur_experimentell=nur_experimentell, nur_stabil=nur_stabil,
+            )
+        except MissingApiKey:
+            raise
+        except (RuntimeError, requests.RequestException) as fehler:
+            gescheitert.append(sym)
+            print(f"  [{i}/{len(todo)}] {sym}: uebersprungen - {fehler}",
+                  file=sys.stderr)
+            continue
+
         pids_belegt = set()
         n_mp = 0
         for material in materials:
@@ -1886,10 +2239,17 @@ def build_periodic_table_proposals(
 
         zaehler = collections.Counter()
         if wikipedia:
-            zeilen, zaehler = wikipedia_fallback_proposals(
-                wd_match, pids_belegt,
-                de_title=info["title_de"], en_element=info["name_en"],
-            )
+            try:
+                zeilen, zaehler = wikipedia_fallback_proposals(
+                    wd_match, pids_belegt,
+                    de_title=info["title_de"], en_element=info["name_en"],
+                )
+            except (RuntimeError, requests.RequestException) as fehler:
+                # Die MP-Zeilen dieses Elements sind schon geliefert; nur
+                # die Wikipedia-Ergaenzung faellt aus.
+                zeilen = []
+                print(f"  {sym}: Wikipedia-Stufe uebersprungen - {fehler}",
+                      file=sys.stderr)
             yield from zeilen
 
         print(
@@ -1897,6 +2257,17 @@ def build_periodic_table_proposals(
             f"MP {n_mp}"
             + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
                if wikipedia else ""),
+            file=sys.stderr,
+        )
+
+    if gescheitert:
+        # Am Ende noch einmal gesammelt - im Protokoll eines stundenlangen
+        # Laufs geht eine einzelne Zeile von vor zwei Stunden unter.
+        print(
+            f"\n{len(gescheitert)} Element(e) uebersprungen: "
+            f"{', '.join(gescheitert)}\n"
+            f"Gezielt nachholen mit: --periodic-table --elements "
+            f"{' '.join(gescheitert)}",
             file=sys.stderr,
         )
 
@@ -2148,12 +2519,17 @@ def write_quickstatements_draft(proposals: list, path: str = "quickstatements_en
             f"\t{pid}\t{wert_qid}"
             for pid, wert_qid, _ in row.get("_qualifiers") or []
         )
+        # Identifikatoren gehen ohne S-Angabe raus - siehe
+        # OHNE_BELEG_DATENTYPEN. Die Herkunft steht trotzdem im Kommentar.
+        beleg = "" if row.get("_ohne_beleg") else ref.as_quickstatements()
         lines.append(
-            f"{row['qid']}\t{row['_pid']}\t{wert}{qual}"
-            f"{ref.as_quickstatements()}"
+            f"{row['qid']}\t{row['_pid']}\t{wert}{qual}{beleg}"
         )
         klartext = f" ({row['value_label']})" if row.get("value_label") else ""
-        lines.append(f"# Quelle: {row['source']} ({ref.mode}) - {ref.note}{klartext}")
+        modus = ("ohne Beleg, Identifikator"
+                 if row.get("_ohne_beleg") else ref.mode)
+        lines.append(
+            f"# Quelle: {row['source']} ({modus}) - {ref.note}{klartext}")
     if not vorschlaege:
         lines.append("# (keine)")
 

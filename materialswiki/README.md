@@ -42,14 +42,24 @@ Endpunkt mit HTTP 401, mit einem falschen Schlüssel mit HTTP 403. Beides fängt
 das Skript mit einer verständlichen Meldung ab (Exit-Code 2) statt mit einem
 Traceback.
 
-Kostenlos anlegen unter <https://next-gen.materialsproject.org/api>, dann:
+Kostenlos anlegen unter <https://next-gen.materialsproject.org/api>, dann in
+die gitignorierte `.env` im Repo-Wurzelverzeichnis eintragen:
 
 ```bash
-export MP_API_KEY="..."
+cp ../.env.beispiel ../.env && chmod 600 ../.env
+# darin: MP_API_KEY=...
 ```
 
-Bewusst als Umgebungsvariable und **nicht** im Quelltext: ein Schlüssel im
-Repo wäre ein Leck, sobald das Repo geteilt wird.
+Details siehe [../README.md](../README.md#zugangsdaten-env). Für einen
+einzelnen Lauf lässt sich der Schlüssel auch über die Umgebung setzen, sie hat
+Vorrang vor der Datei:
+
+```bash
+MP_API_KEY=zweitschluessel python -m materialswiki --periodic-table
+```
+
+Bewusst **nicht** im Quelltext: ein Schlüssel im Repo wäre ein Leck, sobald
+das Repo geteilt wird.
 
 ## Die Werte sind gerechnet, nicht gemessen
 
@@ -76,6 +86,42 @@ Eisen ist magnetisch, und das ist für DFT ein bekannt schwieriger Fall.
 bedenkenlos übernehmen. Bei den elastischen Moduln und der Poissonzahl ist
 jede Zeile gegen Literatur zu prüfen — sonst steht am Wikidata-Item eines
 Werkstoffs ein Wert, der 40 % neben dem liegt, was ein Ingenieur erwartet.
+
+### Physikalisch Unmögliches wird abgefangen
+
+Die API-Filter sagen etwas über das **Material** aus, nichts über die einzelne
+Rechnung. Am Bestand gefunden (2026-08-15) — Zink, `mp-aaaaaadb`, laut MP
+experimentell nachgewiesen **und** stabil:
+
+```
+shear_modulus: {voigt: 44.248, reuss: -5606.668, vrh: -2781.21}
+homogeneous_poisson: -1.153
+```
+
+Die Reuss-Schranke ist havariert und reißt das VRH-Mittel mit. Ein negativer
+Schubmodul bedeutet mechanische Instabilität — Zink ist aber schlicht stabil,
+der Wert ist Rechenmüll. Ohne Prüfung stünde an Wikidatas Zink-Item ein
+Schubmodul von **−2781 GPa** (Literaturwert: 43 GPa).
+
+Geprüft wird deshalb gegen physikalische Schranken, in Wikidata-Einheiten:
+
+| Größe | Schranke | Begründung |
+|---|---|---|
+| Kompressions-/Schubmodul | 0,001 … 1000 GPa | müssen positiv sein; Diamant liegt bei 443 bzw. 535 GPa |
+| Poissonzahl | −1 … 0,5 | thermodynamische Grenze für isotrope lineare Elastizität |
+| Dichte | 10 … 30 000 kg/m³ | Lithium 534, Osmium 22 590 |
+
+Unplausible Werte werden **nicht still verworfen**, sondern als
+`MANUELLE_KLAERUNG_NOETIG` ausgewiesen — sonst fiele nie auf, dass die
+Datenbank an dieser Stelle kaputt ist:
+
+```
+# Q758 Zink: unplausibler Wert -2.78121e+12, erwartet 1e+06..1e+12
+#            - Rechnung in mp-aaaaaadb vermutlich fehlgeschlagen
+```
+
+Die gesunden Größen desselben Materials bleiben davon unberührt: Dichte,
+Kristallsystem und Kompressionsmodul von Zink gehen normal durch.
 
 ### Die Kennzeichnung steht im Statement selbst
 
@@ -113,9 +159,177 @@ Verifiziert am 2026-08-15:
   `Q1209474`, ein labelloser Stub gleichen Namens (die klassische DFT der
   statistischen Mechanik).
 
+### Kristallsystem: fcc und bcc statt bloß „kubisch"
+
+Der `one-of`-Constraint von `P556` lässt inzwischen elf Werte zu — die sieben
+Kristallsysteme plus:
+
+| QID | Wert | genutzt |
+|---|---|---|
+| `Q3006714` | face-centered cubic (fcc) | ja |
+| `Q851536` | body-centered cubic (bcc) | ja |
+| `Q103382` | amorphes Material | nein — keine Quelle liefert es |
+| `Q263214` | Quasikristall | nein — dito |
+
+fcc und bcc sind streng genommen Bravais-Gitter und keine Kristallsysteme;
+Wikidata lässt sie auf `P556` dennoch zu, und sie sind die aussagekräftigeren
+Werte: „kubisch" allein unterschlägt den Unterschied zwischen Kupfer und
+Wolfram. Wo die Quelle die Zentrierung hergibt, wird deshalb der spezifischere
+Wert genommen.
+
+**Woher die Zentrierung kommt:** MPs Feld `crystal_system` sagt nur `Cubic`.
+Der **erste Buchstabe des Hermann-Mauguin-Symbols** (`symmetry.symbol`) nennt
+sie aber genau:
+
+```
+P  primitiv          →  bleibt „kubisch"
+F  flächenzentriert  →  fcc      Cu, Al  (Fm-3m)
+I  raumzentriert     →  bcc      Fe, W   (Im-3m)
+```
+
+Angewandt nur auf kubische Systeme — ein `I4/mmm` ist tetragonal und bleibt
+es. Fehlt das Symbol oder ist der Anfangsbuchstabe unbekannt, wird nichts
+behauptet.
+
+Die Wikipedia-Infoboxen schreiben es ohnehin aus (`kubisch flächenzentriert`,
+`body-centered cubic`) — das wurde bisher zu bloßem „kubisch" eingedampft.
+Aluminium schreibt es hinter einem Wikilink (`[[Kubisches
+Kristallsystem|kubisch]] flächenzentriert`); die Verweise werden deshalb
+aufgelöst, bevor nach Stichworten gesucht wird, sonst zerreißt die Klammer die
+gesuchte Phrase.
+
+Ergebnis eines Laufs:
+
+```
+Aluminium  Q3006714  kubisch flaechenzentriert
+Kupfer     Q3006714  kubisch flaechenzentriert
+Eisen      Q851536   kubisch raumzentriert
+Wolfram    Q851536   kubisch raumzentriert
+Titan      Q663314   hexagonales Kristallsystem
+```
+
+**Grenze:** Trägt ein Item bereits ein grobes `P556` = „kubisch", gilt die
+Aussage als vorhanden (`BEREITS_VORHANDEN`) und die Verfeinerung auf fcc/bcc
+wird nicht vorgeschlagen. Das Werkzeug ergänzt Fehlendes, es überschreibt
+nichts.
+
+### Das Kristallsystem wird mit Literatur belegt, nicht mit der Rechnung
+
+Für eine Größe ist die DFT-Rechnung der **schlechtere** Beleg, obwohl der Wert
+unstrittig ist: Dass Kupfer kubisch und Titan hexagonal kristallisiert, ist
+seit Jahrzehnten etablierte Kristallographie. Eine Symmetrieanalyse einer
+DFT-Zelle dafür zu zitieren, belegt die Rechnung — nicht den Stoff.
+
+`P556` trägt deshalb einen Literaturbeleg:
+
+```
+Greenwood/Earnshaw, Chemistry of the Elements, 2. Aufl. 1997
+ISBN 0-08-037941-9   → QuickStatements S957 (ISBN-10)
+```
+
+Prüfsumme validiert und über OpenLibrary als dieses Werk bestätigt
+(2026-08-15). In der Zeile sieht das so aus — **ohne** `P459`, denn ein
+Literaturwert mit dem Vermerk „berechnet" wäre schlicht falsch:
+
+```
+Q753	P556	Q473227	S957	"0-08-037941-9"
+Q753	P5668	151394000000.0U44395	P459	Q1048589	S356	"10.1063/1.4812323"
+```
+
+**Der Wert stammt weiterhin aus der MP-Symmetrieanalyse** — das steht in der
+Notiz, und genau deshalb ist die Zeile zu prüfen:
+
+```
+Greenwood/Earnshaw, Chemistry of the Elements, 2. Aufl. 1997;
+Wert aus der Symmetrieanalyse von Materials Project mp-aaaaaabe -
+Modifikation gegen das Werk pruefen
+```
+
+Das ist kein Formalismus: Elemente und Verbindungen haben je nach Modifikation
+verschiedene Kristallsysteme (Graphit/Diamant, α-/β-Titan). Welche Modifikation
+MP gerechnet hat, entscheidet die Zeile nicht — das Buch schon.
+
+Weitere Größen lassen sich genauso umstellen; die Zuordnung steht in
+`LITERATUR_BELEG` in [cli.py](cli.py).
+
 **Wikipedia-Werte bekommen bewusst keinen Qualifikator.** Das sind
 Literaturwerte, und mit welcher Methode sie bestimmt wurden, steht in der
 Infobox nicht — eine Methode zu behaupten wäre geraten.
+
+### Die Dichte trägt ihre Messbedingungen
+
+Die Nutzungsanweisung von `P2054` verlangt zwei Qualifikatoren, und beide sind
+nötig: Stoffe dehnen sich aus, und 13,5 g/cm³ für Quecksilber meint die
+*Flüssigkeit*.
+
+| Qualifikator | Woher |
+|---|---|
+| `P2076` Temperatur | aus der Infobox, falls angegeben; sonst 20 °C |
+| `P515` Aggregatzustand | aus Schmelz- und Siedepunkt desselben Artikels abgeleitet |
+
+**20 °C blind anzunehmen wäre falsch gewesen.** Die Elementinfoboxen sind
+uneinheitlich — am Bestand geprüft (2026-08-15):
+
+```
+Kupfer, Silber, Aluminium, Blei   (20 °C)
+Titan, Zink                       (25 °C)
+Eisen, Quecksilber                keine Angabe  → Vorgabe 20 °C
+```
+
+**„Fest" wäre ebenso falsch gewesen.** Der Zustand wird deshalb aus dem
+Schmelzpunkt abgeleitet; fehlt er, wird gar nichts behauptet — lieber kein
+Qualifikator als ein falscher:
+
+```
+Titan    4500 kg/m³   P2076=25 °C   P515=Q11438 (fest)
+Eisen    7874 kg/m³   P2076=20 °C   P515=Q11438 (fest)
+Brom     3120 kg/m³   P2076=20 °C   P515=Q11435 (flüssig)
+Quecks. 13546 kg/m³   P2076=20 °C   P515=Q11435 (flüssig)
+```
+
+#### MP-Dichten stehen bei 0 K, nicht bei 20 °C
+
+Für Materials-Project-Werte greift die 20-°C-Vorgabe **nicht**: Eine
+DFT-Rechnung liefert das Volumen des relaxierten Grundzustands, also 0 K. Das
+ist „anders angegeben" im Wortsinn, und es ist zugleich die Erklärung für die
+systematische Abweichung von den Handbuchwerten — bei Raumtemperatur ist die
+Zelle thermisch geweitet.
+
+```
+Q716	P2054	4670.17U844211	P459	Q1048589	P2076	0U11579	P515	Q11438	S356	"10.1063/1.4812323"
+```
+
+Ein angenehmer Nebeneffekt: Kupfer bekommt aus MP 9219 kg/m³, die Literatur
+nennt 8960. Mit den Qualifikatoren widersprechen sich beide Werte am Item
+nicht mehr — der eine gilt bei 0 K, der andere bei 20 °C.
+
+Verifiziert am 2026-08-15: `P2076` ist mengenwertig, `P515` itemwertig, beide
+laut Property-Scope-Constraint als Qualifikator zugelassen (`P515` sogar
+ausschließlich). Die drei Zustands-QIDs (`Q11438` fest, `Q11435` flüssig,
+`Q11432` Gas) sind die tatsächlich als `P515`-Qualifikator verwendeten, per
+SPARQL nach Häufigkeit ermittelt.
+
+### Identifikatoren bekommen gar keinen Beleg
+
+Die CAS-Nummer belegt sich selbst: `7440-50-8` **ist** der Verweis auf den
+Eintrag im CAS-Register — man schlägt sie dort nach und hat damit die Prüfung.
+Ein zusätzliches „importiert aus Wikipedia" sagt darüber nichts aus; es belegt
+nur, wo die Zeichenkette abgeschrieben wurde, nicht dass sie stimmt.
+
+`P231` geht deshalb **ohne** `S`-Angabe in den Entwurf:
+
+```
+Q753	P231	"7440-50-8"
+```
+
+Entschieden über den Datentyp statt über einzelne P-Nummern: was Wikidata als
+`external-id` führt, ist per Definition ein Identifikator. Zurzeit betrifft
+das nur die CAS-Nummer.
+
+Die **Herkunft** bleibt in der CSV-Spalte `ref_note` und im Kommentar des
+Entwurfs stehen (`ohne Beleg, Identifikator - Infobox-Feld 'CAS'`), damit die
+Zeile beim Durchsehen prüfbar ist. Die Belegspalten der CSV bleiben leer — ein
+gefülltes `ref_url` würde suggerieren, dass ein Beleg mitgeschrieben wird.
 
 Zusätzlich trägt jede MP-Zeile den Vermerk `berechnet (DFT)` an erster Stelle
 der Belegnotiz, damit es auch beim Überfliegen des Entwurfs auffällt.
@@ -240,6 +454,33 @@ genau eines übrig, gilt der Treffer als eindeutig. Ein einzelner artikelloser
 Treffer bleibt unangetastet — gefiltert wird nur, wo ohnehin ausgewählt
 werden müsste.
 
+## Periodensystem-Modus: 118, nicht 174
+
+Die Abfrage nach `P31=Q11344` („chemisches Element") mit Symbol `P246` liefert
+**174** Wikidata-Items. Davon sind 56 gar keine Elemente, sondern
+systematische IUPAC-Platzhalter für **unentdeckte** Elemente — `Ubb`
+(Unbibium, Z=122), `Uue` (Ununennium, Z=119) und so fort. Wikidata führt sie
+völlig korrekt so; es gibt sie nur nicht.
+
+Das Materials Project beantwortet eine Abfrage danach mit HTTP 400
+(`Please provide a comma-seperated list of elements`). Aussortiert werden sie
+an der Symbollänge: echte Elementsymbole haben ein oder zwei Zeichen, die
+Platzhalter immer drei. Am Bestand geprüft trennt das exakt — 118 echte
+Elemente, genau die Zahl der bekannten.
+
+**Ein einzelnes Element reißt den Lauf nicht mehr ab.** Über 118 Elemente mal
+drei Quellen dauert ein Durchlauf Stunden; fällt eines aus (API-Fehler,
+Netzaussetzer), wird es gemeldet, übersprungen und am Ende gesammelt
+ausgewiesen — mit dem fertigen Befehl zum Nachholen:
+
+```
+3 Element(e) uebersprungen: Am, Cm, Np
+Gezielt nachholen mit: --periodic-table --elements Am Cm Np
+```
+
+Ein fehlender API-Schlüssel bricht dagegen weiterhin sofort ab — der träfe
+jedes Element, da wäre Weitermachen sinnlos.
+
 ## Quellenkaskade
 
 In **beiden Modi dieselbe**; jede Stufe liefert nur, was die vorherige nicht
@@ -281,8 +522,6 @@ Periodensystem-Lauf dauert wegen der Drosselung viele Minuten; bei Abbruch
 Aus dem Repo-Wurzelverzeichnis (Installation siehe [../README.md](../README.md)):
 
 ```bash
-export MP_API_KEY="..."                          # einmal pro Sitzung
-
 python -m materialswiki --elements Ti O --max 50   # Verbindungen, über die Formel
 python -m materialswiki --periodic-table           # alle Elemente
 python -m materialswiki --elements Ti O --no-wikipedia   # nur MP-Werte
@@ -295,7 +534,7 @@ python -m materialswiki --elements Ti O --no-experimentell  # auch Gerechnetes
 |---|---|
 | `--elements` | Elementfilter, z.B. `--elements Ti O` (alle genannten müssen enthalten sein). Im Periodensystem-Modus beschränkt es den Lauf auf diese Elemente. |
 | `--max` | maximale Anzahl MP-Materialien (Standard: 50) |
-| `--periodic-table` | Vorschläge für **alle** Elemente des Periodensystems; Abgleich über das Elementsymbol `P246` statt über die Summenformel |
+| `--periodic-table` | Vorschläge für **alle** 118 Elemente; Abgleich über das Elementsymbol `P246` statt über die Summenformel |
 | `--per-element` | MP-Materialien je Element im Periodensystem-Modus (Standard: 1) |
 | `--no-experimentell` | auch rein gerechnete Materialien zulassen (`theoretical=true`); mehr Ausbeute, weniger Verlässlichkeit |
 | `--no-stabil` | auch thermodynamisch instabile Phasen zulassen (`is_stable=false`) |
@@ -390,8 +629,8 @@ Vorschläge.** Aus dem Materials Project kommen nur Größen, die auch in
 
 | Wikidata | MP-Feld | Umrechnung |
 |---|---|---|
-| Dichte `P2054` | `density` | g/cm³ → kg/m³ (×1000) |
-| Kristallsystem `P556` | `symmetry.crystal_system` | Groß-/Kleinschreibung, dann `value_map` |
+| Dichte `P2054` | `density` | g/cm³ → kg/m³ (×1000); **mit Messbedingungen**, siehe unten |
+| Kristallsystem `P556` | `symmetry.crystal_system` + `symmetry.symbol` | Groß-/Kleinschreibung, dann `value_map`; Zentrierung → fcc/bcc; **Beleg aus Literatur** |
 | Kompressionsmodul `P5668` | `bulk_modulus.vrh` | GPa → Pa (×10⁹) |
 | Schubmodul `P5673` | `shear_modulus.vrh` | GPa → Pa (×10⁹) |
 | Poissonzahl `P5593` | `homogeneous_poisson` | keine |
