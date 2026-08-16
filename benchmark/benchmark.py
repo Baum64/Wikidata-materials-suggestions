@@ -441,15 +441,31 @@ def main(argv: Optional[list] = None) -> int:
 
     sections = fetch_project_properties(args.sections, args.offline)
     aus_projekt = sum(len(v) for v in sections.values())
-    # nach dem Snapshot-Schreiben ergaenzen, damit der Snapshot die
-    # Projektseite unvermischt abbildet
+
+    # Nach dem Snapshot-Schreiben ergaenzen, damit der Snapshot die
+    # Projektseite unvermischt abbildet - und NUR, was dort noch fehlt.
+    # Die Ergaenzung loest sich damit von selbst auf, sobald die Projektseite
+    # eine Property uebernimmt: P231 stand am 2026-08-16 noch nicht auf der
+    # Seite und steht seit demselben Tag unter "Chemical". Ohne diese Pruefung
+    # erschiene sie in zwei Abschnitten und die Zusammenfassung zaehlte 62
+    # statt 61 Properties.
+    uebernommen = []
     if not args.no_extra:
-        sections.update(EXTRA_SECTIONS)
+        schon_da = {p for v in sections.values() for p in v}
+        for abschnitt, extra_pids in EXTRA_SECTIONS.items():
+            fehlend = [p for p in extra_pids if p not in schon_da]
+            uebernommen += [p for p in extra_pids if p in schon_da]
+            if fehlend:
+                sections[abschnitt] = fehlend
+
     pids = list(dict.fromkeys(p for v in sections.values() for p in v))
     print(f"{aus_projekt} Properties aus {len(args.sections)} Abschnitten von "
           f"[[{PROJECT_PAGE}]]"
           + (f" + {len(pids) - aus_projekt} fest ergaenzt"
-             if len(pids) > aus_projekt else ""), file=sys.stderr)
+             if len(pids) > aus_projekt else "")
+          + (f"; {', '.join(uebernommen)} steht inzwischen selbst auf der "
+             f"Projektseite und wird nicht mehr ergaenzt" if uebernommen else ""),
+          file=sys.stderr)
 
     population_pattern, teilmengen = build_population(args)
     titel = {
