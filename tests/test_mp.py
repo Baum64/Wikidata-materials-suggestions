@@ -384,7 +384,10 @@ def test_ein_gescheitertes_element_beendet_den_lauf_nicht(monkeypatch):
     monkeypatch.setattr(cli, "fetch_mp_materials", fake_fetch)
     monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
 
-    zeilen = list(cli.build_periodic_table_proposals(1, None, wikipedia=False))
+    # cod=False: hier wird die MP-Stufe geprueft, und die COD-Stufe wuerde
+    # sonst wirklich ins Netz gehen - die Tests laufen offline.
+    zeilen = list(cli.build_periodic_table_proposals(1, None, wikipedia=False,
+                                                     cod=False))
     geliefert = {z["label"] for z in zeilen}
 
     assert geliefert == {"Ti", "V"}      # U faellt aus, V kommt trotzdem

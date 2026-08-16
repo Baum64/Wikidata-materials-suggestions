@@ -41,7 +41,14 @@ brauchte je Eintrag einen zweiten Archiv-Abruf, hier genügt eine Anfrage.
 Quellenkaskade (in beiden Modi dieselbe, jede Stufe nur für das, was die
 vorherige nicht geliefert hat):
 
-    Materials Project (DOI)  ->  de.wikipedia (Import)  ->  en.wikipedia
+    COD  ->  Materials Project (DOI)  ->  de.wikipedia (Import)  ->  en.wikipedia
+
+Die Crystallography Open Database steht vorn und ist für Raumgruppe (P690),
+Kristallsystem (P556) und COD-ID (P9824) die PRIMÄRE Quelle; das Materials
+Project liefert diese Größen nur noch, wo COD nichts hat. Gründe: CC0 statt
+CC BY 4.0 (kein Lizenzkonflikt mit Wikidatas CC0), gemessene Struktur statt
+DFT-Rechnung, und die DOI der Originalarbeit statt der Sammel-DOI einer
+Datenbank. Abschaltbar mit --no-cod, dann übernimmt wieder MP.
 
 Die Wikipedia-Stufen sind standardmäßig AN und lassen sich mit
 --no-wikipedia abschalten. Welche Infobox gelesen wird, entscheidet sich am
@@ -138,6 +145,24 @@ MP_API_KEY = konfig.wert("MP_API_KEY")
 # Referenzpublikation der Datenbank; welches Material gemeint ist, steht als
 # mp-ID in der Notiz und in der Belegspalte der CSV.
 MP_DOI = "10.1063/1.4812323"  # Jain et al. 2013, APL Materials 1, 011002
+
+# Die Nutzungsbedingungen verlangen fuer einzelne Datensaetze eine EIGENE
+# Zitierung zusaetzlich zur Hauptpublikation
+# (https://legacy.materialsproject.org/citing, geprueft am 2026-08-16).
+# Betroffen ist hier der Elastizitaets-Datensatz: Kompressionsmodul,
+# Schubmodul und Poissonzahl stammen samt und sonders daraus. Ohne diesen
+# Eintrag wuerde nur Jain et al. zitiert - die Zitierpflicht waere verletzt.
+MP_DATASET_DOI = {
+    "bulk_modulus": "10.1038/sdata.2015.9",
+    "shear_modulus": "10.1038/sdata.2015.9",
+    "poisson_ratio": "10.1038/sdata.2015.9",
+}
+MP_DATASET_WERK = {
+    "10.1038/sdata.2015.9": (
+        "de Jong et al., Charting the complete elastic properties of "
+        "inorganic crystalline compounds, Sci Data 2:150009 (2015)"
+    ),
+}
 
 # Groesste Seite, die die API ausliefert (Feld meta.max_limit in jeder
 # Antwort, geprueft am 2026-08-15). Groessere Mengen kommen ueber _skip.
@@ -483,6 +508,22 @@ PROPERTY_MAP = {
         "unit_qid": "",
         "label": "CAS-Nummer",
     },
+    # Raumgruppe. Itemwertig, aber OHNE value_map: die Zielitems sind die 230
+    # Raumgruppen, die per P9733 (Raumgruppennummer) aus Wikidata selbst
+    # aufgeloest werden - siehe fetch_space_group_qids. Eine handgepflegte
+    # Tabelle mit 230 Eintraegen waere sofort veraltet.
+    "space_group": {
+        "pid": "P690",
+        "datatype": "item",
+        "unit_qid": "",
+        "label": "Raumgruppe",
+    },
+    "cod_id": {
+        "pid": "P9824",
+        "datatype": "external-id",
+        "unit_qid": "",
+        "label": "COD-ID",
+    },
 }
 
 
@@ -508,16 +549,24 @@ class Reference:
     """
 
     def __init__(self, doi=None, isbn=None, url=None, imported_from=None,
-                 import_url=None, retrieved=None, note=""):
+                 import_url=None, retrieved=None, note="", dataset_doi=None):
         if not any((doi, isbn, url, import_url)):
             raise ValueError("Reference braucht doi, isbn, url oder import_url")
         self.doi = doi
+        # Zweite DOI fuer den konkreten Datensatz, wo die Quelle das verlangt
+        # (siehe MP_DATASET_DOI). Beide landen als eigener S356-Snak im
+        # SELBEN Referenzblock - die Aussage ist mit beiden Arbeiten belegt.
+        self.dataset_doi = dataset_doi
         self.isbn = isbn
         self.url = url
         self.imported_from = imported_from
         self.import_url = import_url
         self.retrieved = retrieved or dt.date.today().isoformat()
         self.note = note
+
+    @property
+    def dois(self) -> list:
+        return [d for d in (self.doi, self.dataset_doi) if d]
 
     @property
     def isbn_pid(self) -> str:
@@ -538,7 +587,7 @@ class Reference:
     def as_csv_fields(self) -> dict:
         return {
             "ref_mode": self.mode,
-            "ref_doi": self.doi or "",
+            "ref_doi": "; ".join(self.dois),
             "ref_isbn": self.isbn or "",
             "ref_url": (
                 self.url
@@ -552,7 +601,7 @@ class Reference:
 
     def as_quickstatements(self) -> str:
         if self.doi:
-            return f'\tS356\t"{self.doi}"'
+            return "".join(f'\tS356\t"{d}"' for d in self.dois)
         if self.isbn:
             return f'\t{self.isbn_pid.replace("P", "S")}\t"{self.isbn}"'
         if self.import_url:
@@ -725,6 +774,335 @@ def get_with_retry(url: str, params: dict, attempts: int = 4):
     resp = request_with_retry("GET", url, attempts, params=params)
     resp.raise_for_status()
     return resp
+
+
+# ---------------------------------------------------------------------------
+# Crystallography Open Database (COD) - primaere Strukturquelle
+# ---------------------------------------------------------------------------
+#
+# Warum COD hier VOR dem Materials Project steht:
+#
+#   Lizenz     COD ist CC0 (public domain), MP ist CC BY 4.0. Wikidata
+#              veroeffentlicht unter CC0, traegt eine Attributionspflicht
+#              also nicht weiter - bei COD entfaellt dieser Konflikt ganz.
+#   Beleg      COD nennt je Struktur die DOI der ORIGINALPUBLIKATION. MP hat
+#              fuer einzelne Materialien keine DOI; dort muss die Sammel-DOI
+#              der Datenbank herhalten.
+#   Messung    COD-Eintraege sind gemessene Strukturen (Feld "method", z. B.
+#              "powder diffraction") mit Messtemperatur ("celltemp"). MP
+#              liefert DFT bei 0 K - fuer eine Raumgruppe die schwaechere
+#              Aussage.
+#
+# MP bleibt Fallback: wo COD nichts hat, liefert es weiterhin.
+#
+# Kein API-Schluessel noetig. Die Nutzungsbedingungen verlangen keine
+# Registrierung; die Abfrage laeuft ueber die dokumentierte RESTful-API
+# (https://wiki.crystallography.net/RESTful_API/, geprueft am 2026-08-16).
+COD_API = "https://www.crystallography.net/cod/result"
+COD_ENTRY_URL = "https://www.crystallography.net/cod/{cod_id}.html"
+
+# Zuordnung Raumgruppennummer -> Kristallsystem, normativ aus den
+# International Tables for Crystallography (Bd. A). KEINE Heuristik: die
+# Bereiche sind so definiert. Dient nur als Rueckfall - primaer wird das
+# Kristallsystem am Raumgruppen-Item selbst abgelesen (P556), und das deckt
+# 229 der 230 Raumgruppen ab.
+KRISTALLSYSTEM_BEREICHE = [
+    (1, 2, "triclinic"), (3, 15, "monoclinic"), (16, 74, "orthorhombic"),
+    (75, 142, "tetragonal"), (143, 167, "trigonal"), (168, 194, "hexagonal"),
+    (195, 230, "cubic"),
+]
+
+
+def kristallsystem_aus_nummer(nummer: int) -> Optional[str]:
+    for von, bis, name in KRISTALLSYSTEM_BEREICHE:
+        if von <= nummer <= bis:
+            return name
+    return None
+
+
+_SPACE_GROUP_CACHE = None
+
+
+def fetch_space_group_qids() -> dict:
+    """{Raumgruppennummer: {qid, label, cs_qid, cs_label}} aus Wikidata.
+
+    Aufgeloest ueber P9733 (Raumgruppennummer) statt ueber Labels - die
+    Raumgruppen-Items sind uneinheitlich benannt ("Raumgruppe 227" neben
+    "space group C2/m"), die Nummer ist der einzige verlaessliche Schluessel.
+
+    Das Kristallsystem kommt vom Raumgruppen-Item selbst (P556): Wikidata
+    weiss dort bereits, dass Raumgruppe 227 kubisch ist. Das erspart eine
+    zweite gepflegte Tabelle.
+
+    Sechs Nummern haben mehr als ein Item (Dubletten in Wikidata, am
+    2026-08-16: 40, 122, 146, 147, 148, 160). Gewaehlt wird deterministisch
+    das Item MIT Kristallsystem, bei Gleichstand die kleinere Q-Nummer.
+    """
+    global _SPACE_GROUP_CACHE
+    if _SPACE_GROUP_CACHE is not None:
+        return _SPACE_GROUP_CACHE
+
+    query = """
+    SELECT ?nummer ?sg ?sgLabel ?cs ?csLabel WHERE {
+      ?sg wdt:P9733 ?nummer .
+      OPTIONAL { ?sg wdt:P556 ?cs . }
+      SERVICE wikibase:label { bd:serviceParam wikibase:language "de,en". }
+    }
+    """
+    resp = get_with_retry(WIKIDATA_SPARQL, {"query": query, "format": "json"})
+    gefunden = {}
+    for b in resp.json()["results"]["bindings"]:
+        nummer = int(float(b["nummer"]["value"]))
+        qid = b["sg"]["value"].rsplit("/", 1)[-1]
+        eintrag = {
+            "qid": qid,
+            "label": b.get("sgLabel", {}).get("value", qid),
+            "cs_qid": (b["cs"]["value"].rsplit("/", 1)[-1] if "cs" in b else ""),
+            "cs_label": b.get("csLabel", {}).get("value", ""),
+        }
+        bisher = gefunden.get(nummer)
+        if bisher is None or _sg_besser(eintrag, bisher):
+            gefunden[nummer] = eintrag
+    _SPACE_GROUP_CACHE = gefunden
+    return gefunden
+
+
+def _sg_besser(neu: dict, alt: dict) -> bool:
+    """Dubletten aufloesen: Kristallsystem schlaegt kein Kristallsystem,
+    danach die kleinere Q-Nummer."""
+    if bool(neu["cs_qid"]) != bool(alt["cs_qid"]):
+        return bool(neu["cs_qid"])
+    return int(neu["qid"][1:]) < int(alt["qid"][1:])
+
+
+def cod_hill_formula(formula: str) -> Optional[str]:
+    """Summenformel -> Hill-Notation, wie die COD-Suche sie verlangt.
+
+    COD sortiert STRIKT nach Hill: Kohlenstoff zuerst, dann Wasserstoff,
+    dann alle uebrigen alphabetisch; ohne Kohlenstoff rein alphabetisch.
+    Elemente durch Leerzeichen getrennt, die Anzahl direkt am Symbol.
+    Die Reihenfolge ist nicht kosmetisch - "Ti O2" liefert NULL Treffer,
+    "O2 Ti" deren 39 (am 2026-08-16 geprueft).
+    """
+    zusammensetzung = parse_formula(formula)
+    if not zusammensetzung:
+        return None
+    rest = sorted(el for el in zusammensetzung if el not in ("C", "H"))
+    reihenfolge = ([el for el in ("C", "H") if el in zusammensetzung] + rest
+                   if "C" in zusammensetzung else
+                   sorted(zusammensetzung))
+    return " ".join(
+        el + ("" if zusammensetzung[el] == 1 else str(zusammensetzung[el]))
+        for el in reihenfolge
+    )
+
+
+def fetch_cod_entries(element_symbol: Optional[str] = None,
+                      formula: Optional[str] = None,
+                      max_entries: int = 20) -> list:
+    """Strukturen aus der COD holen.
+
+    Bei element_symbol wird auf den REINEN Stoff eingegrenzt (strictmin=
+    strictmax=1, also genau ein Element) - sonst liefert el1=Cu auch jede
+    kupferhaltige Organometallverbindung.
+
+    include_duplicates/include_errors werden NICHT gesetzt; COD liefert dann
+    nur die bereinigten Eintraege.
+    """
+    params = {"format": "json"}
+    if element_symbol:
+        params.update({"el1": element_symbol, "strictmin": 1, "strictmax": 1})
+    elif formula:
+        hill = cod_hill_formula(formula)
+        if not hill:
+            return []  # nicht deutbare Formel - lieber nichts als Falsches
+        params["formula"] = hill
+    else:
+        raise ValueError("fetch_cod_entries braucht element_symbol oder formula")
+
+    resp = get_with_retry(COD_API, params)
+    try:
+        daten = resp.json()
+    except ValueError:
+        # COD antwortet bei leerer Treffermenge mit einem leeren Rumpf
+        return []
+    if not isinstance(daten, list):
+        return []
+    return daten[:max_entries]
+
+
+def cod_dominante_raumgruppe(entries: list) -> Optional[tuple]:
+    """(Raumgruppennummer, Treffer, ausgewertet, eindeutig) ueber alle Eintraege.
+
+    Der juengste Eintrag ist NICHT die uebliche Modifikation. Am Bestand
+    geprueft (2026-08-16): fuer Fe2O3 liefert die Wahl nach Jahrgang
+    Raumgruppe 15 (monoklin, 2 von 25 Eintraegen), waehrend 13 Eintraege
+    Haematit zeigen (167, trigonal). Entschieden wird deshalb nach
+    HAEUFIGKEIT - das trifft die Standardmodifikation.
+
+    "eindeutig" ist False, wenn die haeufigste Raumgruppe nicht mindestens
+    doppelt so oft vorkommt wie die zweithaeufigste. Dann GIBT es keine
+    uebliche Modifikation: TiO2 steht 12:11 zwischen Rutil (136) und Anatas
+    (141), und ein Vorschlag waere schlicht geraten.
+    """
+    zaehler = collections.Counter(
+        int(e["sgNumber"]) for e in entries
+        if str(e.get("sgNumber") or "").isdigit()
+    )
+    if not zaehler:
+        return None
+    haeufigste = zaehler.most_common(2)
+    nummer, anzahl = haeufigste[0]
+    zweite = haeufigste[1][1] if len(haeufigste) > 1 else 0
+    return (nummer, anzahl, sum(zaehler.values()), anzahl >= 2 * zweite)
+
+
+def cod_best_entry(entries: list, sg_number: Optional[int] = None) -> Optional[dict]:
+    """Der belastbarste Eintrag einer Trefferliste.
+
+    Rangfolge: Eintrag mit DOI schlaegt Eintrag ohne (nur mit DOI laesst sich
+    die Originalarbeit als Beleg setzen), danach der juengere Jahrgang,
+    zuletzt die kleinere COD-ID. Das letzte Kriterium ist kein Geschmack,
+    sondern Reproduzierbarkeit: ohne es haengt bei Gleichstand davon ab, in
+    welcher Reihenfolge die API antwortet, und zwei Laeufe schlagen
+    verschiedene Strukturen fuer denselben Stoff vor.
+
+    Mit `sg_number` wird auf eine Raumgruppe eingeschraenkt - so gehoeren
+    die vorgeschlagene COD-ID und die vorgeschlagene Raumgruppe zur selben
+    Struktur und nicht zu zwei verschiedenen Modifikationen.
+
+    Duplikate und als fehlerhaft markierte Eintraege fliegen vorher raus.
+    """
+    brauchbar = [
+        e for e in entries
+        if not e.get("duplicateof") and (e.get("status") or "").lower() not in
+        {"retracted", "errors"}
+    ]
+    if sg_number is not None:
+        brauchbar = [e for e in brauchbar
+                     if str(e.get("sgNumber") or "") == str(sg_number)]
+    if not brauchbar:
+        return None
+
+    def rang(e):
+        jahr = int(e["year"]) if str(e.get("year") or "").isdigit() else 0
+        cod_id = int(e["file"]) if str(e.get("file") or "").isdigit() else 0
+        return (1 if e.get("doi") else 0, jahr, -cod_id)
+
+    return max(brauchbar, key=rang)
+
+
+def cod_proposals_for_item(wd_match: dict, entries: list,
+                           skip_pids: Optional[set] = None) -> list:
+    """Vorschlagszeilen aus den COD-Treffern: COD-ID, Raumgruppe,
+    Kristallsystem.
+
+    Bekommt bewusst die GANZE Trefferliste, nicht einen Eintrag: welche
+    Raumgruppe die uebliche ist, entscheidet die Haeufigkeit ueber alle
+    Treffer (siehe cod_dominante_raumgruppe). Ein einzelner Eintrag waere
+    eine beliebige Modifikation.
+
+    Gitterparameter (a, b, c und die Winkel) liefert COD zwar mit, aber
+    Wikidata hat dafuer keine Property - am 2026-08-16 gesucht, es gibt
+    weder "lattice constant" noch "unit cell". Sie bleiben deshalb aussen
+    vor; der eigentliche Strukturinhalt laesst sich nicht eintragen.
+    """
+    skip_pids = skip_pids or set()
+    if not entries:
+        return []
+
+    mehrheit = cod_dominante_raumgruppe(entries)
+    nummer = mehrheit[0] if mehrheit else None
+    eindeutig = mehrheit[3] if mehrheit else False
+    # Eintrag aus der dominanten Raumgruppe, damit COD-ID und Raumgruppe
+    # dieselbe Struktur meinen.
+    entry = cod_best_entry(entries, sg_number=nummer if eindeutig else None)
+    if entry is None:
+        entry = cod_best_entry(entries)
+    if entry is None:
+        return []
+    cod_id = str(entry.get("file") or "").strip()
+    if not cod_id:
+        return []
+
+    # Beleg: die Originalarbeit, nicht die Datenbank. Genau das ist der
+    # Grund, COD dem Materials Project vorzuziehen.
+    quelle_text = ", ".join(
+        t for t in (
+            entry.get("journal"), str(entry.get("year") or "") or None,
+            f"Methode: {entry['method']}" if entry.get("method") else None,
+            f"T = {entry['celltemp']} K" if entry.get("celltemp") else None,
+        ) if t
+    )
+    note = f"COD {cod_id}" + (f"; {quelle_text}" if quelle_text else "")
+    if entry.get("doi"):
+        reference = Reference(doi=entry["doi"], note=note)
+    else:
+        reference = Reference(url=COD_ENTRY_URL.format(cod_id=cod_id), note=note)
+
+    # Gemessen, nicht gerechnet - der P459-Qualifikator der MP-Zeilen
+    # ("berechnet (DFT)") waere hier schlicht falsch und entfaellt.
+    proposals = []
+
+    def anfuegen(internal_key, value, value_label="", status=None):
+        prop_info = PROPERTY_MAP[internal_key]
+        if prop_info["pid"] in skip_pids:
+            return
+        if status is None:
+            status = ("BEREITS_VORHANDEN"
+                      if item_has_statement(wd_match["qid"], prop_info["pid"])
+                      else "VORSCHLAG")
+        proposals.append(make_row(
+            status, "COD", wd_match, prop_info, value, value_label,
+            reference, formula=(entry.get("formula") or "").strip("- ").strip(),
+            entry_id=f"cod-{cod_id}", qualifiers=[],
+        ))
+
+    anfuegen("cod_id", cod_id)
+
+    if nummer is None:
+        return proposals
+
+    raumgruppen = fetch_space_group_qids()
+    sg = raumgruppen.get(nummer)
+    if sg is None:
+        return proposals
+
+    # Keine deutliche Mehrheit heisst: der Stoff hat mehrere gaengige
+    # Modifikationen (TiO2 = Rutil ODER Anatas). Dann wird nichts
+    # vorgeschlagen, sondern zur Klaerung markiert - raten waere schlimmer.
+    _, anzahl, gesamt, _ = mehrheit
+    klaerung = None if eindeutig else (
+        f"MANUELLE_KLAERUNG_NOETIG (keine eindeutige Modifikation: "
+        f"Raumgruppe {nummer} nur in {anzahl} von {gesamt} COD-Eintraegen)"
+    )
+    anfuegen("space_group", sg["qid"], sg["label"], status=klaerung)
+
+    # Kristallsystem: bevorzugt am Raumgruppen-Item abgelesen, sonst ueber
+    # die normativen Nummernbereiche. Anschliessend wie bei MP auf fcc/bcc
+    # verfeinert, wo das Hermann-Mauguin-Symbol die Zentrierung hergibt.
+    cs_qid, cs_label = sg["cs_qid"], sg["cs_label"]
+    if not cs_qid:
+        name = kristallsystem_aus_nummer(nummer)
+        mapped = PROPERTY_MAP["crystal_system"]["value_map"].get(name)
+        if mapped:
+            cs_qid, cs_label = mapped
+    if cs_qid:
+        verfeinert = verfeinere_zentrierung(
+            _cs_name_aus_qid(cs_qid), entry.get("sg"))
+        mapped = PROPERTY_MAP["crystal_system"]["value_map"].get(verfeinert)
+        if mapped:
+            cs_qid, cs_label = mapped
+        anfuegen("crystal_system", cs_qid, cs_label, status=klaerung)
+    return proposals
+
+
+def _cs_name_aus_qid(qid: str) -> str:
+    """QID eines Kristallsystems -> interner Name der value_map."""
+    for name, (q, _) in PROPERTY_MAP["crystal_system"]["value_map"].items():
+        if q == qid:
+            return name
+    return ""
 
 
 # ---------------------------------------------------------------------------
@@ -1899,12 +2277,12 @@ def mp_value(raw, faktor):
 
 def build_proposals(elements: Optional[list], max_entries: int,
                     wikipedia: bool = True, nur_experimentell: bool = True,
-                    nur_stabil: bool = True):
+                    nur_stabil: bool = True, cod: bool = True):
     """Liefert Vorschlagszeilen ueber die Summenformel.
 
     Dieselbe Quellenkaskade wie im Periodensystem-Modus, jede Stufe nur fuer
     das, was die vorherige nicht geliefert hat:
-        Materials Project (DOI)  ->  de.wikipedia  ->  en.wikipedia
+        COD  ->  Materials Project (DOI)  ->  de.wikipedia  ->  en.wikipedia
     Bei Verbindungen greifen dabei {{Infobox Chemikalie}} bzw. {{Chembox}}
     statt der Elementinfoboxen.
 
@@ -1956,9 +2334,25 @@ def build_proposals(elements: Optional[list], max_entries: int,
 
     for i, (qid, (wd_match, gruppe)) in enumerate(gruppen.items(), 1):
         pids_belegt = set()
+        n_cod = 0
+        if cod:
+            # COD zuerst - siehe build_periodic_table_proposals.
+            formel = next((m.get("formula") for m in gruppe if m.get("formula")), "")
+            try:
+                treffer = fetch_cod_entries(formula=formel)
+                if treffer:
+                    for proposal in cod_proposals_for_item(wd_match, treffer):
+                        pids_belegt.add(proposal["_pid"])
+                        n_cod += 1
+                        yield proposal
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {formel}: COD-Stufe uebersprungen - {fehler}",
+                      file=sys.stderr)
+
         n_mp = 0
         for material in gruppe:
-            for proposal in proposals_for_material(material, wd_match):
+            for proposal in proposals_for_material(material, wd_match,
+                                                   skip_pids=pids_belegt):
                 pids_belegt.add(proposal["_pid"])
                 n_mp += 1
                 yield proposal
@@ -1981,10 +2375,15 @@ def build_proposals(elements: Optional[list], max_entries: int,
         )
 
 
-def proposals_for_material(material: dict, wd_match: dict) -> list:
+def proposals_for_material(material: dict, wd_match: dict,
+                           skip_pids: Optional[set] = None) -> list:
     """Erzeugt die Vorschlagszeilen fuer EIN MP-Material gegen EIN
     bestehendes Wikidata-Item. Gemeinsam genutzt von Formel- und
     Periodensystem-Modus.
+
+    `skip_pids` sind Properties, die eine bessere Quelle schon geliefert hat
+    - in der Praxis die COD-Stufe fuer Raumgruppe und Kristallsystem. MP ist
+    dort nur noch Rueckfall.
 
     Belegt wird mit der Referenzpublikation der Datenbank plus der mp-ID -
     einzelne MP-Materialien haben keine eigene DOI. Die Notiz nennt
@@ -2012,10 +2411,11 @@ def proposals_for_material(material: dict, wd_match: dict) -> list:
     # Gerechnete Aussagen tragen P459 - siehe "Bestimmungsmethode".
     mp_qualifiers = [(DETERMINATION_PID, DFT_QID, DFT_LABEL)]
 
+    skip_pids = skip_pids or set()
     proposals = []
     for mp_field, (internal_key, faktor) in MP_FIELD_MAP.items():
         prop_info = PROPERTY_MAP.get(internal_key)
-        if prop_info is None:
+        if prop_info is None or prop_info["pid"] in skip_pids:
             continue
         value = mp_value(_dig(material, mp_field), faktor)
         if value is None:
@@ -2036,6 +2436,14 @@ def proposals_for_material(material: dict, wd_match: dict) -> list:
                      f"Werk pruefen",
             )
             qualifiers = []  # kein "berechnet (DFT)" auf einem Literaturwert
+        elif internal_key in MP_DATASET_DOI:
+            # Datensatz mit eigener Zitierpflicht - siehe MP_DATASET_DOI.
+            zusatz = MP_DATASET_DOI[internal_key]
+            reference = Reference(
+                doi=MP_DOI, dataset_doi=zusatz,
+                note="; ".join(belege + [MP_DATASET_WERK[zusatz]]),
+            )
+            qualifiers = list(mp_qualifiers)
         else:
             reference = mp_reference
             qualifiers = list(mp_qualifiers)
@@ -2165,7 +2573,7 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
 def build_periodic_table_proposals(
     max_per_element: int = 1, only: Optional[list] = None,
     wikipedia: bool = True, nur_experimentell: bool = True,
-    nur_stabil: bool = True,
+    nur_stabil: bool = True, cod: bool = True,
 ):
     """Vorschlaege fuer ALLE Elemente des Periodensystems (Generator).
 
@@ -2185,10 +2593,14 @@ def build_periodic_table_proposals(
 
     Quellen greifen in absteigender Belastbarkeit des Belegs, jede nur fuer
     das, was die vorherige nicht geliefert hat:
-        Materials Project (DOI)  ->  de.wikipedia  ->  en.wikipedia
-    Die deutsche Infobox steht vor der englischen, weil sie mehr Groessen
-    fuehrt (u. a. spezifische Waermekapazitaet, elektrische Leitfaehigkeit,
-    Schallgeschwindigkeit, CAS-Nummer).
+        COD  ->  Materials Project (DOI)  ->  de.wikipedia  ->  en.wikipedia
+    COD steht vorn, weil es fuer Raumgruppe und Kristallsystem die bessere
+    Quelle ist: CC0 statt CC BY, gemessene Struktur statt DFT-Rechnung, und
+    die DOI der Originalarbeit statt der Sammel-DOI einer Datenbank (siehe
+    den COD-Abschnitt). MP liefert diese beiden Groessen nur noch, wo COD
+    nichts hat. Die deutsche Infobox steht vor der englischen, weil sie mehr
+    Groessen fuehrt (u. a. spezifische Waermekapazitaet, elektrische
+    Leitfaehigkeit, Schallgeschwindigkeit, CAS-Nummer).
     """
     symbols = fetch_element_qids()
     print(f"{len(symbols)} chemische Elemente in Wikidata gefunden.", file=sys.stderr)
@@ -2230,9 +2642,25 @@ def build_periodic_table_proposals(
             continue
 
         pids_belegt = set()
+        n_cod = 0
+        if cod:
+            # COD zuerst - siehe Docstring. Faellt die Stufe aus, laeuft der
+            # Rest unveraendert weiter; MP springt dann wieder ein.
+            try:
+                treffer = fetch_cod_entries(element_symbol=sym)
+                if treffer:
+                    for proposal in cod_proposals_for_item(wd_match, treffer):
+                        pids_belegt.add(proposal["_pid"])
+                        n_cod += 1
+                        yield proposal
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {sym}: COD-Stufe uebersprungen - {fehler}",
+                      file=sys.stderr)
+
         n_mp = 0
         for material in materials:
-            for proposal in proposals_for_material(material, wd_match):
+            for proposal in proposals_for_material(material, wd_match,
+                                                   skip_pids=pids_belegt):
                 pids_belegt.add(proposal["_pid"])
                 n_mp += 1
                 yield proposal
@@ -2254,7 +2682,8 @@ def build_periodic_table_proposals(
 
         print(
             f"  [{i}/{len(todo)}] {sym} ({info['qid']} {info['label']}): "
-            f"MP {n_mp}"
+            + (f"COD {n_cod}, " if cod else "")
+            + f"MP {n_mp}"
             + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
                if wikipedia else ""),
             file=sys.stderr,
@@ -2619,6 +3048,16 @@ def main():
         "Wikimedia-Import (P143 + P4656 mit Permalink auf die Version). "
         "Default: an, abschaltbar mit --no-wikipedia",
     )
+    parser.add_argument(
+        "--cod",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Raumgruppe (P690), Kristallsystem (P556) und COD-ID (P9824) "
+        "aus der Crystallography Open Database holen, BEVOR das Materials "
+        "Project drankommt: CC0 statt CC BY, gemessene Struktur statt "
+        "DFT-Rechnung, DOI der Originalarbeit statt Sammel-DOI. Default: an. "
+        "Mit --no-cod liefert wieder MP diese Groessen",
+    )
     parser.add_argument("--out", default=None,
                         help="CSV-Ausgabe (Default: "
                              "vorschlaege_<Zeitstempel>.csv im aktuellen "
@@ -2637,12 +3076,12 @@ def main():
     if args.periodic_table:
         proposals = build_periodic_table_proposals(
             args.per_element, args.elements, args.wikipedia,
-            args.experimentell, args.stabil,
+            args.experimentell, args.stabil, args.cod,
         )
     else:
         proposals = build_proposals(
             args.elements, args.max, args.wikipedia,
-            args.experimentell, args.stabil,
+            args.experimentell, args.stabil, args.cod,
         )
 
     # Bei selbst gesetzten Pfaden kann eine Datei aus einem frueheren Lauf

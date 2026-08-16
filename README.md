@@ -8,7 +8,7 @@ Wikidata geschrieben.
 | Anwendung | Verzeichnis | Was sie macht |
 |---|---|---|
 | **Wikidata Knowledge Graph** | [wikikg/](wikikg/) | Vergleicht die ausgehenden Links eines Wikipedia-Artikels mit den Statements des zugehörigen Wikidata-Items und zeigt fehlende Beziehungen. Enthält zusätzlich den browserbasierten *Wortfeld-Explorer*. |
-| **Materials Wiki** | [materialswiki/](materialswiki/) | Holt kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel.** |
+| **Materials Wiki** | [materialswiki/](materialswiki/) | Holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
 | **Benchmark** | [benchmark/](benchmark/) | Misst, wie gut metallische Werkstoffe in Wikidata belegt sind — je Property aus dem WikiProject Materials. Zeigt, wo Vorschläge sich überhaupt lohnen. |
 | **Kategorie-Hierarchie** | [Kategorie Hirachie/](Kategorie%20Hirachie/) | Prüft und zeichnet, wie Werkstoffe in der Wikidata-Klassenhierarchie unter `material` (Q214609) hängen — und welche über einen parallelen Zweig laufen. |
 
@@ -141,6 +141,61 @@ Getestet wird die netzwerkfreie Logik:
 
 Alle Tests laufen offline und brauchen **keinen** API-Schlüssel.
 
+## Datenquellen und deren Lizenzen
+
+Die Vorschlagslisten (`vorschlaege*.csv`, `quickstatements_entwurf*.txt`)
+enthalten abgeleitete Daten aus fremden Datenbanken. Wer sie weitergibt, gibt
+diese Daten mit weiter — deshalb hier die Herkunft und die jeweiligen
+Bedingungen:
+
+| Quelle | Lizenz | Was daraus stammt | Pflichten |
+|---|---|---|---|
+| [Materials Project](https://next-gen.materialsproject.org/) | CC BY 4.0 | Dichte, elastische Moduln, Poissonzahl; Kristallsystem nur als Rückfall | Namensnennung + Zitierung, siehe unten |
+| [Crystallography Open Database](https://www.crystallography.net/cod/) | CC0 (Public Domain) | Raumgruppe, Kristallsystem, COD-ID | keine; Nennung der Originalautoren erbeten |
+| Wikipedia (de/en) | CC BY-SA 4.0 | Infobox-Werte als Rückfall | Namensnennung, Weitergabe unter gleichen Bedingungen |
+
+### Materials Project: Zitierpflicht
+
+Die [Nutzungsbedingungen](https://next-gen.materialsproject.org/about/terms)
+stellen die Daten unter **CC BY 4.0** und verlangen die Zitierung der
+Hauptpublikation:
+
+> A. Jain, S.P. Ong, G. Hautier, W. Chen, W.D. Richards, S. Dacek, S. Cholia,
+> D. Gunter, D. Skinner, G. Ceder, K.A. Persson: *The Materials Project: A
+> materials genome approach to accelerating materials innovation.*
+> APL Materials 1(1), 011002 (2013). [doi:10.1063/1.4812323](https://doi.org/10.1063/1.4812323)
+
+Für einzelne Datensätze kommt eine **eigene Zitierung hinzu**. Betroffen sind
+hier Kompressionsmodul, Schubmodul und Poissonzahl:
+
+> M. de Jong et al.: *Charting the complete elastic properties of inorganic
+> crystalline compounds.* Scientific Data 2:150009 (2015).
+> [doi:10.1038/sdata.2015.9](https://doi.org/10.1038/sdata.2015.9)
+
+Beide DOIs schreibt `materialswiki` automatisch in den Referenzblock jeder
+betroffenen Aussage (`MP_DATASET_DOI` in [materialswiki/cli.py](materialswiki/cli.py)).
+
+Weiter gilt laut Nutzungsbedingungen: Die Website darf **nicht gescrapt**
+werden — der Zugriff läuft ausschließlich über die offizielle API. Größere
+Abrufe sollen vorab beim MP-Support angekündigt werden. Und: die Daten sind
+**berechnet** (DFT bei 0 K), nicht gemessen; jede erzeugte Aussage trägt
+deshalb den Qualifikator P459 „berechnet (Dichtefunktionaltheorie)".
+
+### Hinweis zum Import nach Wikidata
+
+Wikidata veröffentlicht alle Inhalte unter **CC0** — eine Lizenz, die eine
+Attributionspflicht *nicht* weiterträgt. Der Import von CC-BY-Daten (Materials
+Project) und CC-BY-SA-Daten (Wikipedia) stützt sich darauf, dass einzelne
+Faktenaussagen nicht urheberrechtlich schutzfähig sind und die Attribution
+über die mitgeschriebene Referenz faktisch geleistet wird. Bei einem
+systematischen Massenimport kann zusätzlich das Datenbankherstellerrecht
+berührt sein. Das ist der Grund, warum die Werkzeuge hier ausschließlich
+Vorschlagslisten erzeugen und **nie automatisch nach Wikidata schreiben** —
+und warum COD (CC0) für Struktur­angaben die bevorzugte Quelle ist, wo es
+etwas liefert.
+
 ## Lizenz
 
-Siehe [LICENSE](LICENSE).
+Der **Code** steht unter der Lizenz in [LICENSE](LICENSE). Für die **Daten**
+in den erzeugten Ausgabedateien gelten die Lizenzen der jeweiligen Quelle
+(siehe oben).

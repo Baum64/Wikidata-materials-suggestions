@@ -487,8 +487,54 @@ In **beiden Modi dieselbe**; jede Stufe liefert nur, was die vorherige nicht
 schon belegt hat:
 
 ```
-Materials Project (DOI)  →  de.wikipedia (Import)  →  en.wikipedia (Import)
+COD (DOI der Originalarbeit)  →  Materials Project (DOI)
+                              →  de.wikipedia (Import)  →  en.wikipedia (Import)
 ```
+
+Die **[Crystallography Open Database](https://www.crystallography.net/cod/)**
+steht vorn und ist die primäre Quelle für Raumgruppe (P690), Kristallsystem
+(P556) und COD-ID (P9824). Drei Gründe:
+
+| | COD | Materials Project |
+|---|---|---|
+| Lizenz | **CC0** — kein Konflikt mit Wikidatas CC0 | CC BY 4.0 |
+| Beleg | DOI der **Originalarbeit** je Struktur | Sammel-DOI der Datenbank |
+| Herkunft des Werts | **gemessen** (`method`, `celltemp`) | DFT-Rechnung bei 0 K |
+
+Das Materials Project liefert diese drei Größen nur noch, wo COD nichts hat.
+Abschaltbar mit `--no-cod`.
+
+**Was COD *nicht* beisteuert:** Die Gitterparameter (a, b, c und die Winkel)
+kommen zwar mit, aber Wikidata hat dafür keine Property — am 2026-08-16
+gesucht, es gibt weder „lattice constant" noch „unit cell". Der eigentliche
+Strukturinhalt lässt sich also nicht eintragen.
+
+**Welche Modifikation?** Ein Stoff hat mehrere Kristallstrukturen, COD führt
+sie alle. Entschieden wird nach **Häufigkeit über alle Treffer**, nicht nach
+Jahrgang — der jüngste Eintrag ist oft eine Hochdruck- oder Dünnschichtphase.
+Real gemessen (2026-08-16):
+
+| Stoff | Treffer | Ergebnis |
+|---|---|---|
+| Fe₂O₃ | 13× Rg. 167, 2× Rg. 15 | Hämatit, trigonal ✔ (nach Jahrgang wäre es monoklin geworden) |
+| Cu | 22× Rg. 225 | kubisch flächenzentriert ✔ |
+| Ti | 5× Rg. 194, 2× Rg. 229 | α-Titan, hexagonal ✔ |
+| TiO₂ | 12× Rg. 136, 11× Rg. 141 | **zur Klärung markiert** — Rutil und Anatas sind beide gängig |
+
+Ist die häufigste Raumgruppe nicht mindestens doppelt so häufig wie die
+zweithäufigste, wird nichts vorgeschlagen, sondern
+`MANUELLE_KLAERUNG_NOETIG` gesetzt. Die COD-ID stammt immer aus der
+gewählten Modifikation, zeigt also nicht auf eine andere Struktur als die
+vorgeschlagene Raumgruppe.
+
+Zwei weitere Eigenheiten der COD-Abfrage, beide im Code behandelt:
+
+- Die Formelsuche verlangt **strikte Hill-Notation** (alphabetisch sortiert,
+  Elemente durch Leerzeichen getrennt). `Ti O2` liefert null Treffer, `O2 Ti`
+  deren 39.
+- Ein COD-Eintrag beschreibt eine Struktur *innerhalb* einer Publikation. Der
+  Publikationstitel sagt daher nichts über den Stoff — der beste Kupfertreffer
+  steht in einer Arbeit über Ammoniak-Monohydrat.
 
 Deutsch steht vor Englisch, weil die deutsche Infobox mehr Größen führt (u.a.
 spezifische Wärmekapazität, elektrische Leitfähigkeit, Schallgeschwindigkeit,
