@@ -1963,19 +1963,22 @@ def ist_metall_oder_halbmetall(symbol: str) -> bool:
 # gediegenem Kupfer (geprueft 2026-08-16, Pfad: Selen-78 -> Selen ->
 # Halbmetalle -> Metalle -> Legierung).
 #
-# Der Metalle-Zweig wird deshalb ausgeschlossen. Uebrig bleiben 568 echte
-# Legierungen statt 3718.
+# Ausgeschlossen wird deshalb, was eine ORDNUNGSZAHL traegt: Elemente und
+# ihre Isotope. Das ist der praezise Schnitt - 3718 Items werden zu 1081.
+#
+# Ein frueherer Versuch schnitt stattdessen den ganzen Metalle-Zweig weg
+# (FILTER NOT EXISTS ?i wdt:P279* wd:Q11426). Das war zu grob und hat 17
+# echte Legierungen mitgerissen, darunter STAHL, Gusseisen und Ti-6Al-4V -
+# die haengen naemlich voellig zu Recht auch unter "Metalle". Gemessen an
+# den 94 klassifizierten Legierungen aus [[List of named alloys]]: der alte
+# Filter liess 77 durch, der neue alle 94.
 LEGIERUNG_QID = "Q37756"
-METALLE_QID = "Q11426"
 
 # Ohne diesen Filter ist die Grundgesamtheit Muell - siehe oben.
-LEGIERUNG_OHNE_METALLZWEIG = (
-    f"FILTER NOT EXISTS {{ ?i wdt:P279* wd:{METALLE_QID} }} "
-    f"FILTER NOT EXISTS {{ ?i wdt:P31/wdt:P279* wd:{METALLE_QID} }}"
-)
+LEGIERUNG_OHNE_ELEMENTE = "FILTER NOT EXISTS { ?i wdt:P1086 ?ordnungszahl }"
 LEGIERUNG_PATTERN = (
     f"{{ ?i wdt:P31/wdt:P279* wd:{LEGIERUNG_QID} }} UNION "
-    f"{{ ?i wdt:P279* wd:{LEGIERUNG_QID} }} {LEGIERUNG_OHNE_METALLZWEIG}"
+    f"{{ ?i wdt:P279* wd:{LEGIERUNG_QID} }} {LEGIERUNG_OHNE_ELEMENTE}"
 )
 
 # Mineralarten: Instanzen von Q12089225, also die von der IMA gefuehrten
@@ -1995,10 +1998,112 @@ OXID_PATTERN = (
     "?i wdt:P274 ?pflichtformel ."
 )
 
+# ---------------------------------------------------------------------------
+# Benannte Legierungen aus der Wikipedia-Liste
+# ---------------------------------------------------------------------------
+#
+# [[en:List of named alloys]] fuehrt die Legierungen, die einen EIGENEN NAMEN
+# tragen (Duralumin, Hastelloy, Nitinol ...), gruppiert nach Basismetall.
+# Genau diese Gruppierung fehlt in Wikidata weitgehend - und es ist die
+# Klassifikation, die [[Wikidata:WikiProject Materials/Materials]] sich
+# wuenscht (dort als Beispiel: Material -> Metallic material -> Alloy ->
+# Ferrous alloy -> Steel -> Alloy steel -> ...).
+#
+# Die Liste ist als PRUEFLISTE wertvoller denn als Datenquelle. Gemessen
+# 2026-08-16: 140 benannte Legierungen, davon 104 mit Wikidata-Item, davon 94
+# als Legierung klassifiziert. Die Kennwerte sind praktisch leer -
+# Zugfestigkeit 0 von 104, Elastizitaetsmodul 2, Dichte 6.
+NAMED_ALLOYS_SEITE = "List_of_named_alloys"
+NAMED_ALLOYS_API = "https://en.wikipedia.org/w/api.php"
+
+# Der einleitende Abschnitt listet nur die Basismetalle selbst, keine
+# Legierungen - er wird uebersprungen.
+NAMED_ALLOYS_KEIN_ABSCHNITT = "Alloys by base metal"
+
+
+def fetch_named_alloys() -> list:
+    """[{titel, basis}] aus [[en:List of named alloys]].
+
+    `basis` ist das Basismetall aus der Abschnittsueberschrift (Aluminum,
+    Copper, Iron ...) - die Information, aus der sich eine sinnvolle
+    P279-Einordnung ableiten liesse.
+    """
+    resp = request_with_retry("GET", NAMED_ALLOYS_API, params={
+        "action": "parse", "page": NAMED_ALLOYS_SEITE, "prop": "wikitext",
+        "format": "json", "formatversion": "2",
+    })
+    daten = resp.json()
+    if "error" in daten:
+        raise RuntimeError(daten["error"].get("info", "Seite nicht lesbar"))
+    wikitext = daten["parse"]["wikitext"]
+
+    eintraege = []
+    abschnitt = ""
+    for zeile in wikitext.splitlines():
+        ueberschrift = re.match(r"^(={2,3})\s*(.+?)\s*\1\s*$", zeile)
+        if ueberschrift:
+            abschnitt = ueberschrift.group(2)
+            continue
+        treffer = re.match(r"^\*\s*\[\[([^\]|#]+)", zeile)
+        if treffer and abschnitt and abschnitt != NAMED_ALLOYS_KEIN_ABSCHNITT:
+            eintraege.append({"titel": treffer.group(1).strip(),
+                              "basis": abschnitt})
+    return eintraege
+
+
+def named_alloys_als_items() -> tuple:
+    """(Items im Format von fetch_group_items, Liste der Namen OHNE Item).
+
+    Die Zuordnung laeuft ueber den enwiki-Sitelink, nicht ueber die
+    Bezeichnung - ein Labelabgleich wuerde bei "Mulberry" oder "Elektron"
+    munter danebengreifen.
+    """
+    eintraege = fetch_named_alloys()
+    nach_titel = {e["titel"]: e for e in eintraege}
+    items, ohne_item = [], []
+
+    titel = list(nach_titel)
+    gefunden_titel = set()
+    for start in range(0, len(titel), 50):
+        resp = request_with_retry("GET", WIKIDATA_API, params={
+            "action": "wbgetentities", "sites": "enwiki",
+            "titles": "|".join(titel[start:start + 50]),
+            "props": "labels|claims|sitelinks", "languages": "de|en",
+            "format": "json", "formatversion": "2",
+        })
+        for qid, eintrag in resp.json().get("entities", {}).items():
+            if not qid.startswith("Q") or "missing" in eintrag:
+                continue
+            sitelinks = eintrag.get("sitelinks", {})
+            en_titel = sitelinks.get("enwiki", {}).get("title", "")
+            gefunden_titel.add(en_titel)
+            labels = eintrag.get("labels", {})
+            claims = eintrag.get("claims", {})
+            formeln = claims.get("P274", [])
+            items.append({
+                "qid": qid,
+                "label": (labels.get("de") or labels.get("en")
+                          or {"value": qid})["value"],
+                "formula": (formeln[0]["mainsnak"].get("datavalue", {})
+                            .get("value", "") if formeln else ""),
+                "title_de": sitelinks.get("dewiki", {}).get("title", ""),
+                "title_en": en_titel,
+                "basis": nach_titel.get(en_titel, {}).get("basis", ""),
+            })
+    ohne_item = sorted(t for t in titel if t not in gefunden_titel)
+    items.sort(key=lambda e: int(e["qid"][1:]))
+    return items, ohne_item
+
+
 WERKSTOFFGRUPPEN = {
     "legierungen": {
         "pattern": LEGIERUNG_PATTERN,
-        "beschreibung": "Legierungen (Q37756, ohne den Metalle-Zweig)",
+        "beschreibung": "Legierungen (Q37756, ohne Elemente und Isotope)",
+    },
+    "benannte-legierungen": {
+        "pattern": None,   # kommt aus der Wikipedia-Liste, nicht aus SPARQL
+        "beschreibung": "benannte Legierungen aus [[en:List of named alloys]]",
+        "items": named_alloys_als_items,
     },
     "minerale": {
         "pattern": MINERAL_PATTERN,
@@ -2058,6 +2163,68 @@ def fetch_group_items(pattern: str, limit: Optional[int] = None) -> list:
     return alle[:limit] if limit else alle
 
 
+def items_der_gruppe(gruppe: str, limit: Optional[int] = None) -> list:
+    """Itemliste einer Gruppe - aus SPARQL oder aus einer Wikipedia-Liste."""
+    info = WERKSTOFFGRUPPEN[gruppe]
+    if info.get("items"):
+        items, ohne_item = info["items"]()
+        if ohne_item:
+            # Das ist der eigentliche Ertrag der Prueflisten-Gruppe: Namen,
+            # fuer die es in Wikidata noch gar kein Item gibt. Anlegen kann
+            # dieses Werkzeug sie nicht - es arbeitet nur an bestehenden
+            # Items -, aber sie gehoeren ins Protokoll.
+            print(f"  {len(ohne_item)} Eintraege der Liste haben KEIN "
+                  f"Wikidata-Item: {', '.join(ohne_item)}", file=sys.stderr)
+        items = items[:limit] if limit else items
+    else:
+        items = fetch_group_items(info["pattern"], limit)
+
+    mit_formel = sum(1 for e in items if e["formula"])
+    mit_artikel = sum(1 for e in items if e["title_de"] or e["title_en"])
+    print(f"{len(items)} Items in Gruppe '{gruppe}' - {info['beschreibung']} "
+          f"({mit_formel} mit Summenformel, {mit_artikel} mit Wikipedia-Artikel).",
+          file=sys.stderr)
+    return items
+
+
+def pruefe_legierungsklasse(gruppe: str, items: list) -> list:
+    """Meldet Items, die nicht als Legierung klassifiziert sind.
+
+    Nur fuer die Prueflisten-Gruppe sinnvoll: dort steht durch die Herkunft
+    fest, dass es sich um Legierungen HANDELN SOLL. In den SPARQL-Gruppen ist
+    die Klassifikation per Definition schon erfuellt.
+
+    Vorgeschlagen wird NICHTS - die Einordnung eines Werkstoffs in die
+    Klassenhierarchie ist eine fachliche Entscheidung, und
+    [[Wikidata:WikiProject Materials/Materials]] verlangt dafuer eine
+    differenzierte Einhaengung (Ferrous alloy, Alloy steel, ...), die sich
+    aus dem Basismetall allein nicht ableiten laesst. Gemeldet wird nur.
+    """
+    if not WERKSTOFFGRUPPEN[gruppe].get("items") or not items:
+        return []
+
+    werte = " ".join(f"wd:{e['qid']}" for e in items)
+    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT DISTINCT ?i WHERE {{
+      VALUES ?i {{ {werte} }}
+      {{ ?i wdt:P31/wdt:P279* wd:{LEGIERUNG_QID} }} UNION
+      {{ ?i wdt:P279* wd:{LEGIERUNG_QID} }}
+    }}
+    """})
+    klassifiziert = {b["i"]["value"].rsplit("/", 1)[-1]
+                     for b in resp.json()["results"]["bindings"]}
+    fehlend = [e for e in items if e["qid"] not in klassifiziert]
+    if fehlend:
+        print(f"  {len(fehlend)} Items sind NICHT als Legierung (Q{LEGIERUNG_QID[1:]}) "
+              f"klassifiziert - bitte fachlich pruefen, hier wird nichts "
+              f"vorgeschlagen:", file=sys.stderr)
+        for e in fehlend:
+            basis = f" [Basis: {e['basis']}]" if e.get("basis") else ""
+            print(f"    {e['qid']:<12}{e['label'][:34]:<36}{basis}",
+                  file=sys.stderr)
+    return []
+
+
 def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           wikipedia: bool = True, cod: bool = True,
                           nur_experimentell: bool = True,
@@ -2069,13 +2236,8 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
     die Summenformel; bei Legierungen tragen beide kaum etwas bei, weil dort
     nur 10 von 568 Items eine Formel haben - siehe fetch_group_items.
     """
-    info = WERKSTOFFGRUPPEN[gruppe]
-    items = fetch_group_items(info["pattern"], limit)
-    mit_formel = sum(1 for e in items if e["formula"])
-    mit_artikel = sum(1 for e in items if e["title_de"] or e["title_en"])
-    print(f"{len(items)} Items in Gruppe '{gruppe}' - {info['beschreibung']} "
-          f"({mit_formel} mit Summenformel, {mit_artikel} mit Wikipedia-Artikel).",
-          file=sys.stderr)
+    items = items_der_gruppe(gruppe, limit)
+    yield from pruefe_legierungsklasse(gruppe, items)
     yield from build_proposals_for_items(
         items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries)
 
@@ -3418,7 +3580,6 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
     zerlegt (siehe fetch_group_items). Nur so meint "Charge 3" beim
     Fortsetzen dieselben Items wie im ersten Lauf.
     """
-    info = WERKSTOFFGRUPPEN[args.group]
     fortschritt_datei = os.path.splitext(qs_out)[0] + ".fortschritt.json"
 
     offset = args.offset
@@ -3432,7 +3593,7 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
         offset = stand.get("erledigt", 0)
         print(f"Setze fort bei Item {offset + 1}.", file=sys.stderr)
 
-    items = fetch_group_items(info["pattern"], args.limit)
+    items = items_der_gruppe(args.group, args.limit)
     gesamt = len(items)
     offen = items[offset:]
     if not offen:
@@ -3441,9 +3602,10 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
         return 0
 
     anzahl_chargen = (len(offen) + args.batch_size - 1) // args.batch_size
-    print(f"{gesamt} Items in Gruppe '{args.group}' - {info['beschreibung']}. "
-          f"Noch offen: {len(offen)}, in {anzahl_chargen} Charge(n) zu je "
-          f"{args.batch_size}.", file=sys.stderr)
+    print(f"Noch offen: {len(offen)} von {gesamt}, in {anzahl_chargen} "
+          f"Charge(n) zu je {args.batch_size}.", file=sys.stderr)
+    for zeile in pruefe_legierungsklasse(args.group, offen):
+        pass
 
     erste_nummer = offset // args.batch_size + 1
     gesamt_neu = gesamt_vorhanden = gesamt_klaerung = 0

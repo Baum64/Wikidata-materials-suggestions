@@ -66,6 +66,11 @@ GRUPPEN = {
         "cli": ["--group", "legierungen"],
         "beschreibung": "Legierungen (Q37756, ohne Metalle-Zweig)",
     },
+    "benannte-legierungen": {
+        "population": "legierungen",
+        "cli": ["--group", "benannte-legierungen"],
+        "beschreibung": "benannte Legierungen aus [[en:List of named alloys]]",
+    },
     "minerale": {
         "population": "minerale",
         "cli": ["--group", "minerale"],
