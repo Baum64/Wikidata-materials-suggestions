@@ -24,21 +24,34 @@ venv/
 # wikikg (--output, per Konvention nach output/)
 output/
 
-# nomadwiki/cli.py (--out / --qs-out; Default traegt einen Zeitstempel)
+# ---------------------------------------------------------------------------
+# materialswiki (--out / --qs-out) und lauf.py
+#
+# Die Dateinamen tragen Gruppe und Zeitstempel und im Chargenbetrieb zusaetzlich
+# eine Chargennummer, z. B.
+#     vorschlaege_minerale_2026-08-16_1844_charge04.csv
+#     quickstatements_minerale_2026-08-16_1844_charge04.txt
+#     quickstatements_minerale_2026-08-16_1844.fortschritt.json
+# Die Muster sind deshalb bewusst weit gefasst - ein enges Muster wie
+# "quickstatements_entwurf*.txt" hat die Chargendateien nicht mehr erfasst.
+# ---------------------------------------------------------------------------
 vorschlaege*.csv
-quickstatements_entwurf*.txt
+vorschlaege*.log
+quickstatements*.txt
+quickstatements*.fortschritt.json
 
-# nomadwiki/Werkstoff wikidata vorschlaege.py (--out / --qs-out)
+# aeltere Multi-Source-Variante (--out / --qs-out)
 werkstoffe_vorschlaege.csv
 werkstoffe_quickstatements_entwurf.txt
 
-# benchmark/benchmark.py (--csv; properties_snapshot.json ist bewusst
-# versioniert, damit --offline reproduzierbar bleibt)
-abdeckung.csv
+# benchmark/benchmark.py (--csv) und die Protokolle aus lauf.py.
+# benchmark/properties_snapshot.json ist bewusst versioniert, damit --offline
+# reproduzierbar bleibt - kein Muster hier darf es treffen.
+abdeckung*.csv
+benchmark_*.log
 
 # Kategorie Hirachie/material_hierarchy_check.py (CSV + Graphen)
 werkstoff_check.csv
 werkstoff_graph.png
 subclass_tree_material.png
-trace_graph.png
 trace_*.png

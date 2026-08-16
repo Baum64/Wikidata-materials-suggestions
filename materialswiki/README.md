@@ -536,57 +536,79 @@ Zwei weitere Eigenheiten der COD-Abfrage, beide im Code behandelt:
   Publikationstitel sagt daher nichts über den Stoff — der beste Kupfertreffer
   steht in einer Arbeit über Ammoniak-Monohydrat.
 
-Deutsch steht vor Englisch, weil die deutsche Infobox mehr Größen führt (u.a.
-spezifische Wärmekapazität, elektrische Leitfähigkeit, Schallgeschwindigkeit,
-CAS-Nummer). Welche Infobox gelesen wird, hängt am Artikel:
+### Auswahl im Periodensystem-Modus: Metalle und Halbmetalle
 
-| | Elemente | Verbindungen |
+Standardmäßig werden nur **Metalle und Halbmetalle** durchgegangen — 98 der
+118 Elemente. Nichtmetalle tragen zu einem Werkstoffprojekt nichts bei, und
+ihre Festkörper-Kennwerte wären ohnehin größtenteils gesperrt (siehe unten:
+die Hälfte von ihnen ist bei 20 °C ein Gas). `--no-nur-metalle` nimmt sie
+wieder dazu.
+
+Die Einteilung steht als **feste Liste** im Code, nicht als Wikidata-Abfrage.
+Gemessen (2026-08-16):
+
+| Abfrage | gefundene Metalle | fehlt |
 |---|---|---|
-| **de** | `{{Infobox Chemisches Element}}` im Artikel | `{{Infobox Chemikalie}}` im Artikel |
-| **en** | `Template:Infobox <element>` | `{{Chembox}}` im Artikel |
+| `P31/P279*` → Metalle (Q11426) | 55 von ~90 | Cr, Mn, Co, Ni, Re, Sr, Ba, alle Lanthanoide und Actinoide |
+| `Q19588` Übergangsmetalle | 17 statt ~38 | |
+| `Q11426` direkt | 7 | |
 
-Die Artikeltitel kommen aus den Wikidata-Sitelinks, werden also nicht geraten
-(Titan liegt unter „Titan (Element)").
+Chrom, Mangan, Cobalt und Nickel sind zentrale technische Werkstoffe — eine
+Auswahl, die sie verliert, ist unbrauchbar. Die Lehrbuch-Einteilung des
+Periodensystems ist dagegen vollständig und unstrittig; definiert wird über
+die **Nichtmetalle** (die kürzere, stabilere Liste), alles andere ist Metall
+oder Halbmetall. Grenzfälle bewusst gesetzt: Po als Halbmetall, At als
+Nichtmetall, Ts und Og als Nichtmetalle (rein theoretische Zuordnung).
 
-Die Wikipedia-Stufen sind **standardmäßig an** und lassen sich mit
-`--no-wikipedia` abschalten.
+### Keine Festkörper-Kennwerte an Gasen
 
-**Temperaturen:** Die deutsche Verbindungsinfobox führt Schmelz- und
-Siedepunkt in Grad Celsius, Wikidata erwartet Kelvin. Umgerechnet wird nur,
-wenn die Einheit im Feld tatsächlich dasteht — „1843" allein ließe offen, ob
-°C oder K gemeint ist, und der Unterschied wäre ein um 273,15 danebenliegender
-Wert. Stehen beide da („1855 °C (2128 K)"), gewinnt der Kelvin-Wert. In der
-englischen Chembox steckt die Einheit ohnehin im Feldnamen (`MeltingPtC` vs.
-`MeltingPtK`).
+Das Materials Project rechnet ausschließlich kristalline Festkörper — für
+Stickstoff oder Neon also die Tieftemperaturphase. Ohne Filter landen deren
+Werte an einem Item, das den Stoff bei Normalbedingungen beschreibt. Das ist
+real passiert: **Neon trägt in Wikidata bereits Kompressionsmodul, Schubmodul
+und Poissonzahl.**
 
-Die CSV wird **zeilenweise mit `flush()`** geschrieben. Ein
-Periodensystem-Lauf dauert wegen der Drosselung viele Minuten; bei Abbruch
-(Strg-C) bleibt alles bis zur letzten verarbeiteten Zeile erhalten.
+Ist der Siedepunkt ≤ 293,15 K, werden deshalb **weder aus MP noch aus COD noch
+aus den Infoboxen** vorgeschlagen:
 
-## Nutzung
-
-Aus dem Repo-Wurzelverzeichnis (Installation siehe [../README.md](../README.md)):
-
-```bash
-python -m materialswiki --elements Ti O --max 50   # Verbindungen, über die Formel
-python -m materialswiki --periodic-table           # alle Elemente
-python -m materialswiki --elements Ti O --no-wikipedia   # nur MP-Werte
-python -m materialswiki --elements Ti O --no-experimentell  # auch Gerechnetes
-```
-
-`python -m materialswiki.cli ...` funktioniert gleichwertig.
-
-| Option | Bedeutung |
+| Größe | Warum nicht |
 |---|---|
-| `--elements` | Elementfilter, z.B. `--elements Ti O` (alle genannten müssen enthalten sein). Im Periodensystem-Modus beschränkt es den Lauf auf diese Elemente. |
-| `--max` | maximale Anzahl MP-Materialien (Standard: 50) |
-| `--periodic-table` | Vorschläge für **alle** 118 Elemente; Abgleich über das Elementsymbol `P246` statt über die Summenformel |
-| `--per-element` | MP-Materialien je Element im Periodensystem-Modus (Standard: 1) |
-| `--no-experimentell` | auch rein gerechnete Materialien zulassen (`theoretical=true`); mehr Ausbeute, weniger Verlässlichkeit |
-| `--no-stabil` | auch thermodynamisch instabile Phasen zulassen (`is_stable=false`) |
-| `--no-wikipedia` | die Wikipedia-Stufen abschalten, nur MP-Werte vorschlagen (Standard: Wikipedia an) |
-| `--out` | Ziel der CSV-Vorschlagsliste (Standard: `vorschlaege_<Zeitstempel>.csv`) |
-| `--qs-out` | Ziel des QuickStatements-Entwurfs (Standard: `quickstatements_entwurf_<Zeitstempel>.txt`) |
+| Kompressionsmodul, Schubmodul, Poissonzahl | am Gas nicht definiert |
+| Dichte (P2054) | die des Festkörpers — für Neon 1815 kg/m³ statt 0,9 kg/m³ |
+| Kristallsystem (P556), Raumgruppe (P690) | ein Gas hat bei Raumtemperatur keine Kristallstruktur |
+
+Nicht gesperrt sind die **Schallgeschwindigkeit** (in Gasen sauber definiert und
+gemessen, Luft rund 343 m/s) und die **COD-ID** — sie ist ein Verweis auf einen
+Datenbankeintrag, keine Aussage über den Stoff bei Raumtemperatur.
+
+Zwei Fallstricke, beide im Code behandelt:
+
+- **P2102 steht in gemischten Einheiten** — am Bestand 32× Grad Celsius, 27×
+  Grad Fahrenheit, 11× Kelvin. Wikidatas normalisierte Werte (`psn:`) helfen
+  nicht, weil Celsius→Kelvin eine Verschiebung ist und nur multiplikativ
+  normalisiert wird. Ohne eigene Umrechnung gilt Fluor mit „−307" (Fahrenheit)
+  als absurd kalt und Iod mit „184,4" (Celsius) als Gas.
+- **Nur 70 der 118 Elemente führen überhaupt einen Siedepunkt.** Erkannt werden
+  damit H, He, Ne, Ar, N und F; für O, Cl, Kr, Xe und Rn fehlt die Angabe. Dort
+  wird nichts unterdrückt — lieber ein Vorschlag zu viel, der beim Durchsehen
+  auffällt, als eine still verschluckte Zeile. P515 (Aggregatzustand) taugt als
+  Ersatzsignal nicht: es ist bei **keinem** Element gesetzt.
+
+### Bewusst nicht umgesetzt: die chemische Metaklasse (P31)
+
+[[Wikidata:WikiProject Chemistry]] bittet darum, jedem reinen Stoff
+`P31 = type of chemical entity (Q113145171)` zu geben. Eine Umsetzung lag hier
+schon vor und wurde wieder **entfernt**: die Definition ist derzeit zu vage,
+und ein automatisierter Massenvorschlag braucht erst eine Abstimmung mit der
+Community.
+
+Der Widerspruch, an dem es hängt (gemessen 2026-08-16): Die Projektseite sagt
+„each pure chemical substance", die verbindliche Guideline dagegen nur
+„stereochemically or isotopically defined chemical entities". In der Praxis
+tragen 1.280.233 Items die Metaklasse — aber **keines der 118 Elemente**, und
+387 Gemische tragen sie regelwidrig, darunter Messing.
+
+Wer das wieder aufgreift, fängt bei dieser Klärung an, nicht beim Code.
 
 ### Ausgabedateien
 

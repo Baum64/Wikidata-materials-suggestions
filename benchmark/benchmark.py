@@ -35,7 +35,21 @@ Werkstoff, keine Instanz). Ausgewertet wird deshalb die Vereinigung aus
   - Unterklassen:  ?i wdt:P279*         wd:Q1924900
 Beide Teilmengen werden zusaetzlich einzeln ausgewiesen.
 
-'periodensystem': die chemischen Elemente, also Instanzen von Q11344 mit
+'legierungen': die Legierungen unter Q37756 - aber OHNE den Metalle-Zweig.
+Wikidata modelliert Q11426 "Metalle" als Unterklasse von Q37756 "Legierung",
+also fachlich verkehrt herum; dadurch haengt jedes Metall samt Isotopen unter
+"Legierung" und die naive Abfrage liefert 3718 statt 568 Items (Selen-78,
+Rubidium-87, gediegen Kupfer ...). Das Muster wird aus materialswiki
+importiert, damit Benchmark und Vorschlagslauf dasselbe meinen.
+
+'metalle': die metallischen und halbmetallischen Elemente - genau die
+Auswahl, die materialswiki im Periodensystem-Modus bearbeitet (98 der 118).
+Ausgewaehlt wird ueber das Elementsymbol gegen die Nichtmetall-Liste aus
+materialswiki, NICHT ueber Wikidatas Metall-Klassen: die finden nur 55 der
+rund 90 Metalle und verlieren dabei Cr, Mn, Co, Ni, Re und saemtliche
+Lanthanoide und Actinoide.
+
+'periodensystem': alle chemischen Elemente, also Instanzen von Q11344 mit
 Ordnungszahl (P1086) bis --max-z. Hier taugt der Subtree-Ansatz NICHT: unter
 Q11344 haengen 1706 Items, weil Elementgruppen (Halbmetalle, Uebergangs-
 metalle, ...) als Unterklassen modelliert sind. Die Z-Grenze ist noetig, weil
@@ -45,6 +59,8 @@ Aufruf
 ------
   python -m benchmark.benchmark
   python -m benchmark.benchmark --root Q11426 --csv abdeckung.csv
+  python -m benchmark.benchmark --population legierungen
+  python -m benchmark.benchmark --population metalle
   python -m benchmark.benchmark --population periodensystem
   python -m benchmark.benchmark --offline          # ohne Wiki-Abruf
 """
@@ -65,7 +81,9 @@ import requests
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import konfig  # noqa: E402
-from materialswiki.cli import MP_FIELD_MAP, PROPERTY_MAP  # noqa: E402
+from materialswiki.cli import (  # noqa: E402
+    HALBMETALLE, MP_FIELD_MAP, NICHTMETALLE, PROPERTY_MAP, WERKSTOFFGRUPPEN,
+)
 
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
@@ -100,6 +118,20 @@ POPULATION_PATTERN = (
 # Periodensystem.
 PERIODENSYSTEM_PATTERN = "?i wdt:P31 wd:Q11344 ; wdt:P1086 ?z . FILTER(?z <= {max_z})"
 DEFAULT_MAX_Z = 118
+
+# "metalle": dieselbe Grundgesamtheit, die materialswiki im
+# Periodensystem-Modus bearbeitet - Metalle und Halbmetalle, also alle
+# Elemente ausser den Nichtmetallen. Sonst misst der Benchmark etwas anderes,
+# als das Werkzeug beackert.
+#
+# Die Auswahl laeuft ueber das Elementsymbol (P246) und die fest gepflegte
+# Nichtmetall-Liste aus materialswiki, NICHT ueber Wikidatas Metall-Klassen:
+# die finden nur 55 der rund 90 Metalle und verlieren dabei Cr, Mn, Co, Ni,
+# Re und saemtliche Lanthanoide und Actinoide (gemessen 2026-08-16).
+METALLE_PATTERN = (
+    "?i wdt:P31 wd:Q11344 ; wdt:P1086 ?z ; wdt:P246 ?sym . "
+    "FILTER(?z <= {max_z}) FILTER(?sym NOT IN ({nichtmetalle}))"
+)
 
 HEADING_RE = re.compile(r"^(={2,})\s*(.+?)\s*\1\s*$", re.M)
 ROW_ID_RE = re.compile(r"/Row\|id=(\d+)")  # nur echte Zahlen, "new" faellt raus
@@ -230,6 +262,16 @@ def build_population(args) -> tuple:
     Periodensystem. Beim Periodensystem ist die Aufteilung in Instanzen und
     Unterklassen sinnlos - die Elemente sind ausnahmslos Instanzen.
     """
+    if args.population in WERKSTOFFGRUPPEN:
+        # Muster kommt aus materialswiki, damit Benchmark und Vorschlags-
+        # lauf garantiert dieselbe Grundgesamtheit meinen.
+        pattern = WERKSTOFFGRUPPEN[args.population]["pattern"]
+        return pattern, {"gesamt": pattern}
+    if args.population == "metalle":
+        nichtmetalle = ", ".join(f'"{s}"' for s in sorted(NICHTMETALLE))
+        pattern = METALLE_PATTERN.format(max_z=args.max_z,
+                                         nichtmetalle=nichtmetalle)
+        return pattern, {"gesamt": pattern}
     if args.population == "periodensystem":
         pattern = PERIODENSYSTEM_PATTERN.format(max_z=args.max_z)
         return pattern, {"gesamt": pattern}
@@ -269,7 +311,7 @@ def count_filled(population: str, pids: list, chunk: int = 60) -> dict:
     return filled
 
 
-def best_covered(population: str, pids: list, limit: int = 20) -> list:
+def best_covered(population: str, pids: list, limit: int = 10) -> list:
     values = " ".join(f"wdt:{p}" for p in pids)
     return sparql(f"""SELECT ?i ?iLabel (COUNT(DISTINCT ?p) AS ?n) WHERE {{
   {population}
@@ -374,12 +416,20 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--csv", default=None, help="Ergebnis zusaetzlich als CSV")
     parser.add_argument("--top", type=int, default=10,
                         help="Anzahl der am besten belegten Items (0 = aus)")
-    parser.add_argument("--population", choices=["subtree", "periodensystem"],
+    parser.add_argument("--population",
+                        choices=(["subtree", "metalle", "periodensystem"]
+                                 + sorted(WERKSTOFFGRUPPEN)),
                         default="subtree",
                         help="Grundgesamtheit: 'subtree' = Instanzen und "
                              "Unterklassen unter --root (Default), "
-                             "'periodensystem' = die chemischen Elemente "
-                             "(--root wird dann nicht verwendet)")
+                             "'legierungen' = die Legierungen unter Q37756 "
+                             "ohne den falsch modellierten Metalle-Zweig, "
+                             "'metalle' = die metallischen und halbmetallischen "
+                             "Elemente, also genau die Auswahl, die "
+                             "materialswiki bearbeitet, "
+                             "'periodensystem' = alle chemischen Elemente "
+                             "(bei den letzten beiden wird --root nicht "
+                             "verwendet)")
     parser.add_argument("--max-z", type=int, default=DEFAULT_MAX_Z,
                         help=f"nur mit --population periodensystem: hoechste "
                              f"Ordnungszahl (Default {DEFAULT_MAX_Z}; darueber "
@@ -402,9 +452,12 @@ def main(argv: Optional[list] = None) -> int:
              if len(pids) > aus_projekt else ""), file=sys.stderr)
 
     population_pattern, teilmengen = build_population(args)
-    titel = (f"Periodensystem (chemische Elemente, Z <= {args.max_z})"
-             if args.population == "periodensystem"
-             else f"unterhalb von {args.root}")
+    titel = {
+        **{g: i["beschreibung"] for g, i in WERKSTOFFGRUPPEN.items()},
+        "metalle": (f"Metalle und Halbmetalle (Elemente ausser Nichtmetallen, "
+                    f"Z <= {args.max_z})"),
+        "periodensystem": f"Periodensystem (chemische Elemente, Z <= {args.max_z})",
+    }.get(args.population, f"unterhalb von {args.root}")
 
     meta = fetch_property_meta(pids)
     population = count_population(teilmengen)

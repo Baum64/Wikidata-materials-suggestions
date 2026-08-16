@@ -13,6 +13,9 @@ from materialswiki.cli import (
     cod_hill_formula,
     cod_proposals_for_item,
     kristallsystem_aus_nummer,
+    # Beim Import gesichert: conftest ersetzt das Modulattribut, nicht
+    # diese Referenz. Nur so laesst sich die Funktion selbst pruefen.
+    siedepunkt_kelvin as echter_siedepunkt,
     proposals_for_material,
 )
 

@@ -92,6 +92,7 @@ import argparse
 import collections
 import csv
 import datetime as dt
+import json
 import os
 import re
 import sys
@@ -1044,9 +1045,15 @@ def cod_proposals_for_item(wd_match: dict, entries: list,
     # ("berechnet (DFT)") waere hier schlicht falsch und entfaellt.
     proposals = []
 
+    # Ist der Stoff bei 20 C ein Gas, hat er keine Kristallstruktur - die
+    # COD-Eintraege beschreiben dann die Tieftemperaturphase.
+    gasfoermig = ist_bei_raumtemperatur_gas(wd_match["qid"])
+
     def anfuegen(internal_key, value, value_label="", status=None):
         prop_info = PROPERTY_MAP[internal_key]
         if prop_info["pid"] in skip_pids:
+            return
+        if gasfoermig and internal_key in NUR_FESTKOERPER:
             return
         if status is None:
             status = ("BEREITS_VORHANDEN"
@@ -1574,12 +1581,17 @@ def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
     "importiert aus Wikipedia"; der Permalink bleibt in der Notiz erhalten,
     damit nachvollziehbar ist, woher der Wert stammt.
     """
+    # Auch die Infoboxen fuehren Moduln, die aus der Festkoerperphase
+    # stammen - siehe NUR_FESTKOERPER.
+    gasfoermig = ist_bei_raumtemperatur_gas(wd_match["qid"])
     proposals = []
     for key, (value, note, ids) in werte.items():
         if key in skip_keys:
             continue
         prop_info = PROPERTY_MAP.get(key)
         if prop_info is None:
+            continue
+        if gasfoermig and key in NUR_FESTKOERPER:
             continue
         if ids.get("doi"):
             reference = Reference(
@@ -1893,6 +1905,255 @@ def wikipedia_fallback_proposals(wd_match: dict, pids_belegt: set,
 # Echte Elementsymbole haben ein oder zwei Zeichen; die systematischen
 # IUPAC-Platzhalter fuer unentdeckte Elemente immer drei (siehe unten).
 _ECHTES_ELEMENTSYMBOL = re.compile(r"[A-Z][a-z]?")
+
+
+# ---------------------------------------------------------------------------
+# Metalle und Halbmetalle
+# ---------------------------------------------------------------------------
+#
+# Die Einteilung steht hier als feste Liste, NICHT als Wikidata-Abfrage. Der
+# Grund ist gemessen (2026-08-16): Wikidatas Klassifikation ist dafuer zu
+# lueckenhaft.
+#
+#   ueber Q11426 "Metalle" (P31/P279*)   nur 55 der rund 90 Metalle; es
+#                                        fehlen Cr, Mn, Co, Ni, Re, Sr, Ba
+#                                        und saemtliche Lanthanoide und
+#                                        Actinoide
+#   ueber Q19588 "Uebergangsmetalle"     17 statt rund 38
+#   ueber Q11426 direkt                  7 Elemente
+#
+# Chrom, Mangan, Cobalt und Nickel sind zentrale technische Werkstoffe - eine
+# Auswahl, die sie verliert, ist fuer dieses Projekt unbrauchbar.
+#
+# Die Einteilung des Periodensystems in Metalle, Halbmetalle und Nichtmetalle
+# ist dagegen etablierte Lehrbuchsystematik und vollstaendig. Sie wird hier
+# ueber die NICHT-Metalle definiert - das ist die kuerzere und stabilere
+# Liste; alles andere ist Metall.
+#
+# Grenzfaelle, bewusst so entschieden:
+#   Po, At   werden je nach Quelle als Halbmetall oder Nichtmetall gefuehrt;
+#            hier Halbmetall (Po) bzw. Nichtmetall (At), wie im gaengigen
+#            Periodensystem farblich dargestellt
+#   Ts, Og   Zuordnung ist rein theoretisch (nie in Substanzmenge erzeugt);
+#            als Nichtmetalle gefuehrt, praktisch ohnehin ohne Datenlage
+HALBMETALLE = frozenset({"B", "Si", "Ge", "As", "Sb", "Te", "Po"})
+NICHTMETALLE = frozenset({
+    "H", "He", "C", "N", "O", "F", "Ne", "P", "S", "Cl", "Ar",
+    "Se", "Br", "Kr", "I", "Xe", "At", "Rn", "Ts", "Og",
+})
+
+
+def ist_metall_oder_halbmetall(symbol: str) -> bool:
+    """True fuer Metalle und Halbmetalle, False fuer Nichtmetalle."""
+    return symbol not in NICHTMETALLE
+
+
+# ---------------------------------------------------------------------------
+# Legierungen
+# ---------------------------------------------------------------------------
+#
+# Die naheliegende Abfrage - alles unter Legierung (Q37756) - liefert 3718
+# Items und ist unbrauchbar. Grund ist ein Modellierungsfehler in Wikidata:
+#
+#     Q11426 "Metalle"  wdt:P279  Q37756 "Legierung"
+#
+# Metalle sind dort also eine UNTERKLASSE von Legierung, fachlich genau
+# verkehrt herum. Dadurch haengt jedes Metall und jedes Metallisotop unter
+# "Legierung"; die Trefferliste fuellt sich mit Selen-78, Rubidium-87 und
+# gediegenem Kupfer (geprueft 2026-08-16, Pfad: Selen-78 -> Selen ->
+# Halbmetalle -> Metalle -> Legierung).
+#
+# Der Metalle-Zweig wird deshalb ausgeschlossen. Uebrig bleiben 568 echte
+# Legierungen statt 3718.
+LEGIERUNG_QID = "Q37756"
+METALLE_QID = "Q11426"
+
+# Ohne diesen Filter ist die Grundgesamtheit Muell - siehe oben.
+LEGIERUNG_OHNE_METALLZWEIG = (
+    f"FILTER NOT EXISTS {{ ?i wdt:P279* wd:{METALLE_QID} }} "
+    f"FILTER NOT EXISTS {{ ?i wdt:P31/wdt:P279* wd:{METALLE_QID} }}"
+)
+LEGIERUNG_PATTERN = (
+    f"{{ ?i wdt:P31/wdt:P279* wd:{LEGIERUNG_QID} }} UNION "
+    f"{{ ?i wdt:P279* wd:{LEGIERUNG_QID} }} {LEGIERUNG_OHNE_METALLZWEIG}"
+)
+
+# Mineralarten: Instanzen von Q12089225, also die von der IMA gefuehrten
+# Arten - NICHT der Subtree unter Q7946 "Mineral", der auch Gruppen und
+# Sammelbegriffe enthaelt. Mit Abstand die ergiebigste Gruppe fuer COD:
+# 5694 der 6301 Arten tragen eine Summenformel, aber KEINE EINZIGE eine
+# COD-ID, und 3916 fehlt die Raumgruppe (gemessen 2026-08-16).
+MINERAL_PATTERN = "?i wdt:P31 wd:Q12089225 ."
+
+# Oxide: der Subtree unter Q50690 umfasst 27670 Items, davon sind die
+# allermeisten labellose Massenimporte ohne jede Angabe (Q37807585 ff.).
+# Brauchbar sind die mit Summenformel - 154 Stueck, davon 151 ohne
+# Raumgruppe. Die Formel ist hier also Teil der DEFINITION, nicht bloss ein
+# Filter: ohne sie ist ein Item fuer diesen Zweck wertlos.
+OXID_PATTERN = (
+    "{ ?i wdt:P31/wdt:P279* wd:Q50690 } UNION { ?i wdt:P279* wd:Q50690 } "
+    "?i wdt:P274 ?pflichtformel ."
+)
+
+WERKSTOFFGRUPPEN = {
+    "legierungen": {
+        "pattern": LEGIERUNG_PATTERN,
+        "beschreibung": "Legierungen (Q37756, ohne den Metalle-Zweig)",
+    },
+    "minerale": {
+        "pattern": MINERAL_PATTERN,
+        "beschreibung": "Mineralarten (Q12089225, IMA-gefuehrt)",
+    },
+    "oxide": {
+        "pattern": OXID_PATTERN,
+        "beschreibung": "Oxide mit Summenformel (Q50690)",
+    },
+}
+
+
+def fetch_group_items(pattern: str, limit: Optional[int] = None) -> list:
+    """Items einer Werkstoffgruppe, mit Formel und Artikeltiteln.
+
+    Wie ergiebig das ist, haengt stark an der Gruppe (gemessen 2026-08-16):
+
+        Gruppe        Items   mit Formel   mit de-Artikel
+        Legierungen     568        10           178
+        Mineralarten   6301      5694          1806
+        Oxide           154       154           108
+
+    Bei den Legierungen ist die Summenformel die Ausnahme - Stahl hat keine
+    -, weshalb COD und Materials Project dort kaum etwas beitragen koennen.
+    Bei Mineralen und Oxiden ist sie die Regel.
+    """
+    query = f"""
+    SELECT ?i ?iLabel ?formel ?deTitle ?enTitle WHERE {{
+      {pattern}
+      OPTIONAL {{ ?i wdt:P274 ?formel . }}
+      OPTIONAL {{ ?ade schema:about ?i ; schema:isPartOf <https://de.wikipedia.org/> ;
+                       schema:name ?deTitle . }}
+      OPTIONAL {{ ?aen schema:about ?i ; schema:isPartOf <https://en.wikipedia.org/> ;
+                       schema:name ?enTitle . }}
+      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
+    }}
+    """
+    resp = get_with_retry(WIKIDATA_SPARQL, {"query": query, "format": "json"})
+    gefunden = {}
+    for b in resp.json()["results"]["bindings"]:
+        qid = b["i"]["value"].rsplit("/", 1)[-1]
+        eintrag = gefunden.setdefault(qid, {
+            "qid": qid,
+            "label": b.get("iLabel", {}).get("value", qid),
+            "formula": "",
+            "title_de": "",
+            "title_en": "",
+        })
+        for feld, schluessel in (("formel", "formula"), ("deTitle", "title_de"),
+                                 ("enTitle", "title_en")):
+            if feld in b and not eintrag[schluessel]:
+                eintrag[schluessel] = b[feld]["value"]
+    # Stabile Reihenfolge: erst die mit Artikel (dort ist etwas zu holen),
+    # dann nach QID - so ist ein abgebrochener Lauf reproduzierbar.
+    alle = sorted(gefunden.values(),
+                  key=lambda e: (not e["title_de"], int(e["qid"][1:])))
+    return alle[:limit] if limit else alle
+
+
+def build_group_proposals(gruppe: str, limit: Optional[int] = None,
+                          wikipedia: bool = True, cod: bool = True,
+                          nur_experimentell: bool = True,
+                          nur_stabil: bool = True, max_entries: int = 1):
+    """Vorschlaege fuer eine Werkstoffgruppe (Generator).
+
+    Dieselbe Quellenkaskade wie sonst; welche Stufe traegt, haengt an der
+    Gruppe. Bei Mineralen und Oxiden greifen COD und Materials Project ueber
+    die Summenformel; bei Legierungen tragen beide kaum etwas bei, weil dort
+    nur 10 von 568 Items eine Formel haben - siehe fetch_group_items.
+    """
+    info = WERKSTOFFGRUPPEN[gruppe]
+    items = fetch_group_items(info["pattern"], limit)
+    mit_formel = sum(1 for e in items if e["formula"])
+    mit_artikel = sum(1 for e in items if e["title_de"] or e["title_en"])
+    print(f"{len(items)} Items in Gruppe '{gruppe}' - {info['beschreibung']} "
+          f"({mit_formel} mit Summenformel, {mit_artikel} mit Wikipedia-Artikel).",
+          file=sys.stderr)
+    yield from build_proposals_for_items(
+        items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries)
+
+
+def build_proposals_for_items(items: list, wikipedia: bool = True,
+                              cod: bool = True,
+                              nur_experimentell: bool = True,
+                              nur_stabil: bool = True, max_entries: int = 1,
+                              nummer_ab: int = 1, gesamt: Optional[int] = None):
+    """Vorschlaege fuer eine fertige Itemliste (Generator).
+
+    Von build_group_proposals abgetrennt, damit der Chargenbetrieb dieselbe
+    Logik nutzt: bei 6301 Mineralen laeuft ein Durchgang stundenlang, und
+    ohne Zwischenstaende gaebe es bis zum Schluss keine einspielbaren
+    QuickStatements. `nummer_ab` und `gesamt` sorgen dafuer, dass der
+    Fortschritt ueber Chargen hinweg fortlaufend gezaehlt wird.
+    """
+    gesamt = gesamt if gesamt is not None else len(items)
+    for i, eintrag in enumerate(items, nummer_ab):
+        wd_match = {"qid": eintrag["qid"], "label": eintrag["label"],
+                    "ambiguous": False, "title_de": eintrag["title_de"],
+                    "title_en": eintrag["title_en"]}
+        pids_belegt = set()
+        zaehler = collections.Counter()
+        n_cod = n_mp = 0
+
+        if cod and eintrag["formula"]:
+            try:
+                treffer = fetch_cod_entries(formula=eintrag["formula"])
+                if treffer:
+                    for zeile in cod_proposals_for_item(wd_match, treffer):
+                        pids_belegt.add(zeile["_pid"])
+                        n_cod += 1
+                        yield zeile
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {eintrag['qid']}: COD uebersprungen - {fehler}",
+                      file=sys.stderr)
+
+        zusammensetzung = parse_formula(eintrag["formula"])
+        if zusammensetzung:
+            # MP filtert ueber die enthaltenen Elemente, nicht ueber die
+            # Formel. Zurueck kommen also auch andere Phasen desselben
+            # Systems - uebernommen wird nur, was in der Zusammensetzung
+            # wirklich uebereinstimmt.
+            try:
+                for material in fetch_mp_materials(
+                        sorted(zusammensetzung), max_entries,
+                        nur_experimentell=nur_experimentell,
+                        nur_stabil=nur_stabil):
+                    if parse_formula(material.get("formula", "")) != zusammensetzung:
+                        continue
+                    for zeile in proposals_for_material(material, wd_match,
+                                                        skip_pids=pids_belegt):
+                        pids_belegt.add(zeile["_pid"])
+                        n_mp += 1
+                        yield zeile
+            except MissingApiKey:
+                raise
+            except (RuntimeError, requests.RequestException) as fehler:
+                print(f"  {eintrag['qid']}: MP uebersprungen - {fehler}",
+                      file=sys.stderr)
+
+        if wikipedia and (eintrag["title_de"] or eintrag["title_en"]):
+            try:
+                zeilen, zaehler = wikipedia_fallback_proposals(
+                    wd_match, pids_belegt,
+                    de_title=eintrag["title_de"], en_title=eintrag["title_en"],
+                )
+                yield from zeilen
+            except (RuntimeError, requests.RequestException) as fehler:
+                print(f"  {eintrag['qid']}: Wikipedia uebersprungen - {fehler}",
+                      file=sys.stderr)
+
+        print(f"  [{i}/{gesamt}] {eintrag['qid']} "
+              f"{eintrag['label'][:28]}: COD {n_cod}, MP {n_mp}"
+              + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
+                 if wikipedia else ""),
+              file=sys.stderr)
 
 
 def fetch_element_qids() -> dict:
@@ -2236,6 +2497,109 @@ def item_has_statement(qid: str, pid: str) -> bool:
     return pid in fetch_item_pids(qid)
 
 
+# ---------------------------------------------------------------------------
+# Keine Festkoerper-Kennwerte an Stoffen, die bei Raumtemperatur Gas sind
+# ---------------------------------------------------------------------------
+#
+# Diese Groessen beschreiben den FESTKOERPER und gehoeren nicht an ein Item,
+# das den Stoff bei Normalbedingungen beschreibt, wenn der dann ein Gas ist:
+#
+#   Moduln, Poissonzahl   am Gas nicht definiert - ein Gas hat keinen
+#                         Schubmodul
+#   Dichte                die des Festkoerpers, nicht die des Gases; MP
+#                         liefert sie fuer die relaxierte Zelle bei 0 K
+#                         (Neon: 1815 kg/m^3 gegen 0,9 kg/m^3 als Gas)
+#   Kristallsystem,       ein Gas hat bei Raumtemperatur keine Kristall-
+#   Raumgruppe            struktur
+#
+# Das Materials Project rechnet ausschliesslich kristalline Festkoerper, fuer
+# Stickstoff, Neon oder Argon also die TIEFTEMPERATURPHASE. Kein
+# hypothetischer Fall: Neon traegt in Wikidata bereits Kompressionsmodul,
+# Schubmodul UND Poissonzahl (geprueft 2026-08-16).
+#
+# Die Schallgeschwindigkeit (P2075) steht BEWUSST nicht in dieser Liste - in
+# Gasen ist sie sauber definiert und gemessen (Luft rund 343 m/s), die
+# Infobox-Werte fuer Gase sind also richtig. Die COD-ID bleibt ebenfalls: sie
+# ist ein Verweis auf einen Datenbankeintrag, keine Aussage ueber den Stoff
+# bei Raumtemperatur.
+NUR_FESTKOERPER = ("bulk_modulus", "shear_modulus", "poisson_ratio",
+                   "density", "crystal_system", "space_group")
+RAUMTEMPERATUR_K = 293.15
+
+# P2102 wird in Wikidata in drei Einheiten gefuehrt (am Bestand: 32x Celsius,
+# 27x Fahrenheit, 11x Kelvin). Wikidatas normalisierte Werte (psn:) helfen
+# nicht: Celsius -> Kelvin ist eine Verschiebung, und normalisiert wird nur
+# multiplikativ. Deshalb hier selbst umrechnen - sonst gilt Fluor mit "-307"
+# (Fahrenheit) als absurd kalt und Iod mit "184,4" (Celsius) als Gas.
+TEMPERATUR_NACH_KELVIN = {
+    "Q11579": lambda x: x,                      # Kelvin
+    "Q25267": lambda x: x + 273.15,             # Grad Celsius
+    "Q42289": lambda x: (x - 32) * 5 / 9 + 273.15,   # Grad Fahrenheit
+}
+
+_SIEDEPUNKT_CACHE = {}
+
+
+def siedepunkt_kelvin(qid: str) -> Optional[float]:
+    """Siedepunkt des Items in Kelvin, oder None wenn nicht ermittelbar.
+
+    Gibt es mehrere Angaben (verschiedene Quellen oder Druecke), gilt die
+    niedrigste - fuer die Frage "bei Raumtemperatur schon gasfoermig?" ist
+    das die vorsichtige Richtung.
+    """
+    if qid in _SIEDEPUNKT_CACHE:
+        return _SIEDEPUNKT_CACHE[qid]
+    if "P2102" not in fetch_item_pids(qid):
+        _SIEDEPUNKT_CACHE[qid] = None
+        return None
+
+    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT ?wert ?einheit WHERE {{
+      wd:{qid} p:P2102/psv:P2102 [ wikibase:quantityAmount ?wert ;
+                                   wikibase:quantityUnit ?einheit ] .
+    }}
+    """})
+    kelvin = []
+    for b in resp.json()["results"]["bindings"]:
+        umrechnen = TEMPERATUR_NACH_KELVIN.get(
+            b["einheit"]["value"].rsplit("/", 1)[-1])
+        if umrechnen:
+            kelvin.append(umrechnen(float(b["wert"]["value"])))
+    _SIEDEPUNKT_CACHE[qid] = min(kelvin) if kelvin else None
+    return _SIEDEPUNKT_CACHE[qid]
+
+
+def ist_bei_raumtemperatur_gas(qid: str) -> bool:
+    """True, wenn der Stoff bei 20 C sicher gasfoermig ist.
+
+    Ohne Siedepunkt wird NICHTS behauptet und damit auch nichts unterdrueckt:
+    nur 70 der 118 Elemente fuehren P2102, unter den fehlenden sind Sauerstoff
+    und die schweren Edelgase. Lieber ein Vorschlag zu viel, der beim
+    Durchsehen auffaellt, als eine still verschluckte Zeile.
+    """
+    siede = siedepunkt_kelvin(qid)
+    return siede is not None and siede <= RAUMTEMPERATUR_K
+
+
+# ---------------------------------------------------------------------------
+# Bewusst NICHT umgesetzt: die chemische Metaklasse (P31)
+# ---------------------------------------------------------------------------
+#
+# [[Wikidata:WikiProject Chemistry]] bittet unter "How to contribute" darum,
+# jedem reinen Stoff P31 = "type of chemical entity" (Q113145171) zu geben.
+# Eine Umsetzung lag hier schon vor und wurde wieder entfernt: die Definition
+# ist derzeit zu vage, und ein automatisierter Massenvorschlag braucht erst
+# eine Abstimmung mit der Community.
+#
+# Der Widerspruch, an dem es haengt (gemessen 2026-08-16): Die Projektseite
+# sagt "each pure chemical substance", die verbindliche Guideline dagegen nur
+# "stereochemically or isotopically defined chemical entities". In der Praxis
+# tragen 1.280.233 Items die Metaklasse, aber KEINES der 118 Elemente - und
+# 387 Gemische tragen sie regelwidrig, darunter Messing.
+#
+# Wer das wieder aufgreift, faengt bei dieser Klaerung an, nicht beim Code.
+
+
 def verfeinere_zentrierung(system, hm_symbol) -> str:
     """'cubic' -> 'fcc'/'bcc' anhand des Hermann-Mauguin-Symbols.
 
@@ -2412,10 +2776,15 @@ def proposals_for_material(material: dict, wd_match: dict,
     mp_qualifiers = [(DETERMINATION_PID, DFT_QID, DFT_LABEL)]
 
     skip_pids = skip_pids or set()
+    # MP rechnet nur Festkoerper. Ist der Stoff bei 20 C ein Gas, beschreiben
+    # die elastischen Moduln die Tieftemperaturphase - siehe NUR_FESTKOERPER.
+    gasfoermig = ist_bei_raumtemperatur_gas(wd_match["qid"])
     proposals = []
     for mp_field, (internal_key, faktor) in MP_FIELD_MAP.items():
         prop_info = PROPERTY_MAP.get(internal_key)
         if prop_info is None or prop_info["pid"] in skip_pids:
+            continue
+        if gasfoermig and internal_key in NUR_FESTKOERPER:
             continue
         value = mp_value(_dig(material, mp_field), faktor)
         if value is None:
@@ -2573,9 +2942,13 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
 def build_periodic_table_proposals(
     max_per_element: int = 1, only: Optional[list] = None,
     wikipedia: bool = True, nur_experimentell: bool = True,
-    nur_stabil: bool = True, cod: bool = True,
+    nur_stabil: bool = True, cod: bool = True, nur_metalle: bool = True,
 ):
-    """Vorschlaege fuer ALLE Elemente des Periodensystems (Generator).
+    """Vorschlaege fuer die metallischen Elemente (Generator).
+
+    Standardmaessig nur Metalle und Halbmetalle - Nichtmetalle tragen zu
+    einem Werkstoffprojekt nichts bei. Mit nur_metalle=False laeuft wieder
+    das ganze Periodensystem.
 
     Fuer jedes Element wird im Materials Project nach dem REINEN Stoff
     (nelements == 1) gesucht und gegen das bestehende Wikidata-Item des
@@ -2606,6 +2979,17 @@ def build_periodic_table_proposals(
     print(f"{len(symbols)} chemische Elemente in Wikidata gefunden.", file=sys.stderr)
 
     todo = sorted(only) if only else sorted(symbols)
+    if nur_metalle:
+        # Nichtmetalle tragen zu einem Werkstoffprojekt nichts bei, und ihre
+        # Kennwerte waeren ohnehin ueberwiegend gesperrt (siehe
+        # NUR_FESTKOERPER - die Haelfte von ihnen ist bei 20 C ein Gas).
+        vorher = len(todo)
+        todo = [s for s in todo if ist_metall_oder_halbmetall(s)]
+        weg = vorher - len(todo)
+        halb = sorted(s for s in todo if s in HALBMETALLE)
+        print(f"Auswahl: {len(todo)} Metalle und Halbmetalle "
+              f"(davon {len(halb)} Halbmetalle: {', '.join(halb)}); "
+              f"{weg} Nichtmetalle uebersprungen.", file=sys.stderr)
     gescheitert = []
     for i, sym in enumerate(todo, 1):
         if sym not in symbols:
@@ -3005,6 +3389,119 @@ def write_quickstatements_draft(proposals: list, path: str = "quickstatements_en
 # CLI
 # ---------------------------------------------------------------------------
 
+def _chargen_pfad(basis: str, nummer: int, endung: str) -> str:
+    """vorschlaege.csv -> vorschlaege_charge03.csv"""
+    stamm, alt = os.path.splitext(basis)
+    return f"{stamm}_charge{nummer:02d}{endung or alt}"
+
+
+def fortschritt_lesen(pfad: str) -> dict:
+    if not os.path.exists(pfad):
+        return {}
+    try:
+        with open(pfad, encoding="utf-8") as f:
+            return json.load(f)
+    except (ValueError, OSError):
+        return {}
+
+
+def chargenlauf(args, out: str, qs_out: str) -> int:
+    """Eine Gruppe in Chargen abarbeiten, nach jeder Charge schreiben.
+
+    Warum ueberhaupt: 6301 Minerale mal mehrere Abfragen je Item sind
+    Stunden. In einem Durchgang gaebe es bis zum Ende keine einspielbaren
+    QuickStatements, und ein Abbruch kurz vor Schluss waere besonders
+    aergerlich. Chargenweise ist nach jeweils --batch-size Items ein
+    vollstaendiger, einspielbarer Satz fertig.
+
+    Die Itemliste wird EINMAL geholt und in derselben stabilen Reihenfolge
+    zerlegt (siehe fetch_group_items). Nur so meint "Charge 3" beim
+    Fortsetzen dieselben Items wie im ersten Lauf.
+    """
+    info = WERKSTOFFGRUPPEN[args.group]
+    fortschritt_datei = os.path.splitext(qs_out)[0] + ".fortschritt.json"
+
+    offset = args.offset
+    if args.weiter:
+        stand = fortschritt_lesen(fortschritt_datei)
+        if stand.get("gruppe") != args.group:
+            print(f"FEHLER: {fortschritt_datei} gehoert zur Gruppe "
+                  f"'{stand.get('gruppe', '?')}', nicht zu '{args.group}'.",
+                  file=sys.stderr)
+            return 2
+        offset = stand.get("erledigt", 0)
+        print(f"Setze fort bei Item {offset + 1}.", file=sys.stderr)
+
+    items = fetch_group_items(info["pattern"], args.limit)
+    gesamt = len(items)
+    offen = items[offset:]
+    if not offen:
+        print(f"Nichts zu tun: alle {gesamt} Items der Gruppe "
+              f"'{args.group}' sind bereits abgearbeitet.", file=sys.stderr)
+        return 0
+
+    anzahl_chargen = (len(offen) + args.batch_size - 1) // args.batch_size
+    print(f"{gesamt} Items in Gruppe '{args.group}' - {info['beschreibung']}. "
+          f"Noch offen: {len(offen)}, in {anzahl_chargen} Charge(n) zu je "
+          f"{args.batch_size}.", file=sys.stderr)
+
+    erste_nummer = offset // args.batch_size + 1
+    gesamt_neu = gesamt_vorhanden = gesamt_klaerung = 0
+
+    for versatz in range(0, len(offen), args.batch_size):
+        charge = offen[versatz:versatz + args.batch_size]
+        nummer = erste_nummer + versatz // args.batch_size
+        erstes = offset + versatz + 1
+        csv_pfad = _chargen_pfad(out, nummer, ".csv")
+        qs_pfad = _chargen_pfad(qs_out, nummer, ".txt")
+
+        print(f"\n--- Charge {nummer}: Items {erstes} bis "
+              f"{erstes + len(charge) - 1} von {gesamt} ---", file=sys.stderr)
+        clear_quickstatements_draft(qs_pfad)
+        zeilen_gen = build_proposals_for_items(
+            charge, args.wikipedia, args.cod,
+            args.experimentell, args.stabil, args.max,
+            nummer_ab=erstes, gesamt=gesamt,
+        )
+        try:
+            zeilen = write_csv_streaming(zeilen_gen, csv_pfad)
+        except MissingApiKey as fehler:
+            print(f"\nFEHLER: {fehler}", file=sys.stderr)
+            return 2
+        except KeyboardInterrupt:
+            # Der Fortschritt steht auf der letzten VOLLSTAENDIGEN Charge -
+            # die angefangene wird beim naechsten Lauf wiederholt. Lieber
+            # doppelt gepruefte Items als uebersprungene.
+            print(f"\nAbgebrochen in Charge {nummer}. Vollstaendige Chargen "
+                  f"davor sind geschrieben; mit --weiter geht es bei Item "
+                  f"{offset + versatz + 1} weiter.", file=sys.stderr)
+            return 1
+
+        write_quickstatements_draft(zeilen, qs_pfad)
+        neu = sum(1 for z in zeilen if z.get("status") == "VORSCHLAG")
+        vorhanden = sum(1 for z in zeilen if z.get("status") == "BEREITS_VORHANDEN")
+        klaerung = sum(1 for z in zeilen if "KLAERUNG" in z.get("status", ""))
+        gesamt_neu += neu
+        gesamt_vorhanden += vorhanden
+        gesamt_klaerung += klaerung
+
+        erledigt = offset + versatz + len(charge)
+        with open(fortschritt_datei, "w", encoding="utf-8") as f:
+            json.dump({"gruppe": args.group, "erledigt": erledigt,
+                       "gesamt": gesamt, "batch_size": args.batch_size,
+                       "letzte_charge": nummer,
+                       "zeitpunkt": dt.datetime.now().isoformat(timespec="seconds")},
+                      f, indent=1)
+        print(f"Charge {nummer} fertig: {neu} neu, {vorhanden} vorhanden, "
+              f"{klaerung} zur Klaerung. Stand: {erledigt}/{gesamt}.",
+              file=sys.stderr)
+
+    print(f"\nAlle Chargen fertig. Insgesamt {gesamt_neu} neue Vorschlaege, "
+          f"{gesamt_vorhanden} bereits vorhanden, {gesamt_klaerung} zur "
+          f"Klaerung.\nFortschritt: {fortschritt_datei}", file=sys.stderr)
+    return 0
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--elements", nargs="*", default=None, help="z. B. --elements Ti O")
@@ -3013,8 +3510,40 @@ def main():
     parser.add_argument(
         "--periodic-table",
         action="store_true",
-        help="Vorschlaege fuer ALLE Elemente des Periodensystems erzeugen "
-        "(Abgleich ueber das Elementsymbol P246 statt ueber die Summenformel)",
+        help="Vorschlaege fuer die Elemente erzeugen (Abgleich ueber das "
+        "Elementsymbol P246 statt ueber die Summenformel); "
+        "standardmaessig nur Metalle und Halbmetalle, siehe --nur-metalle",
+    )
+    parser.add_argument(
+        "--group", choices=sorted(WERKSTOFFGRUPPEN), default=None,
+        help="Vorschlaege fuer eine ganze Werkstoffgruppe erzeugen. "
+        "'minerale' ist mit Abstand die ergiebigste (6301 Arten, 5694 mit "
+        "Summenformel, KEINE EINZIGE mit COD-ID); 'oxide' umfasst die 154 "
+        "Oxide mit Summenformel; 'legierungen' liefert kaum etwas, weil nur "
+        "10 von 568 eine Formel tragen und Legierungsartikel in der "
+        "Wikipedia keine Infobox haben",
+    )
+    parser.add_argument(
+        "--limit", type=int, default=None,
+        help="mit --group: nur die ersten N Items bearbeiten. Bei 6301 "
+        "Mineralen dauert ein voller Lauf Stunden",
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=None, metavar="N",
+        help="mit --group: in Chargen zu je N Items arbeiten. Nach JEDER "
+        "Charge werden CSV und QuickStatements geschrieben - man kann also "
+        "einspielen, waehrend der Rest noch laeuft, und ein Abbruch kostet "
+        "hoechstens die angefangene Charge. Der Stand landet in einer "
+        "Fortschrittsdatei, --weiter macht dort weiter",
+    )
+    parser.add_argument(
+        "--offset", type=int, default=0, metavar="N",
+        help="mit --group: die ersten N Items ueberspringen",
+    )
+    parser.add_argument(
+        "--weiter", action="store_true",
+        help="die naechste Charge aus der Fortschrittsdatei fortsetzen "
+        "(setzt --offset auf den gespeicherten Stand)",
     )
     parser.add_argument(
         "--per-element",
@@ -3058,6 +3587,16 @@ def main():
         "DFT-Rechnung, DOI der Originalarbeit statt Sammel-DOI. Default: an. "
         "Mit --no-cod liefert wieder MP diese Groessen",
     )
+    parser.add_argument(
+        "--nur-metalle",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="im Periodensystem-Modus nur Metalle und Halbmetalle "
+        "durchgehen (Default: an, das sind 98 der 118 Elemente). "
+        "--no-nur-metalle nimmt auch die Nichtmetalle dazu - deren "
+        "Festkoerper-Kennwerte werden allerdings ohnehin groesstenteils "
+        "gesperrt, weil die Haelfte von ihnen bei 20 C ein Gas ist",
+    )
     parser.add_argument("--out", default=None,
                         help="CSV-Ausgabe (Default: "
                              "vorschlaege_<Zeitstempel>.csv im aktuellen "
@@ -3073,10 +3612,18 @@ def main():
     out = args.out or f"vorschlaege_{stempel}.csv"
     qs_out = args.qs_out or f"quickstatements_entwurf_{stempel}.txt"
 
-    if args.periodic_table:
+    if args.group and args.batch_size:
+        return chargenlauf(args, out, qs_out)
+
+    if args.group:
+        proposals = build_group_proposals(
+            args.group, args.limit, args.wikipedia, args.cod,
+            args.experimentell, args.stabil, args.max,
+        )
+    elif args.periodic_table:
         proposals = build_periodic_table_proposals(
             args.per_element, args.elements, args.wikipedia,
-            args.experimentell, args.stabil, args.cod,
+            args.experimentell, args.stabil, args.cod, args.nur_metalle,
         )
     else:
         proposals = build_proposals(
