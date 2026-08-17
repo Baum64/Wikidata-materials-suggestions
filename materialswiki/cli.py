@@ -2,90 +2,39 @@
 Materials Project -> Wikidata: Vorschlagsgenerator (nur bestehende Items)
 =========================================================================
 
-Zweck
------
-Dieses Skript erstellt KEINE neuen Wikidata-Items und schreibt auch nichts
-automatisch in Wikidata. Es:
+Erstellt KEINE neuen Wikidata-Items und schreibt nichts automatisch nach
+Wikidata. Es entstehen eine CSV-Vorschlagsliste zur manuellen Pruefung und
+ein QuickStatements-Entwurf, in dem nur Zeilen mit Status "VORSCHLAG"
+ausfuehrbar sind.
 
-  1. holt Materialdaten aus dem Materials Project (next-gen API),
-  2. gleicht die Materialformel gegen bestehende Wikidata-Items ab
-     (Property P274 "chemical formula") - nicht als Stringvergleich, sondern
-     über die Zusammensetzung, siehe Abschnitt "Formel-Normalisierung",
-  3. prüft, ob das jeweilige Statement dort schon existiert,
-  4. schreibt alle Kandidaten als CSV-"Vorschlagsliste" zur manuellen Prüfung,
-     plus einen QuickStatements-Entwurf. Dort steht nur der Status
-     "VORSCHLAG" als ausführbare Zeile; "BEREITS_VORHANDEN" und
-     "MANUELLE_KLAERUNG_NOETIG" stehen in eigenen, durchgehend
-     auskommentierten Abschnitten - sichtbar, aber nicht einspielbar.
+Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
 
-Warum Materials Project und nicht mehr NOMAD
----------------------------------------------
-NOMAD lieferte wenige und in der Einzelprüfung nicht belastbare Werte. Der
-Grund ist strukturell: NOMAD sammelt EINZELNE Rechnungen, ohne Aussage
-darüber, ob das gerechnete Material real existiert oder überhaupt stabil ist.
-Das Materials Project pflegt dagegen kuratierte Materialdokumente und macht
-genau diese Einordnung über die API abfragbar:
+    Formel  ->  COD  ->  Materials Project  ->  de.wikipedia  ->  en.wikipedia
 
-    theoretical=false     nur Materialien mit experimentellem Nachweis
-                          (in aller Regel ICSD-hinterlegt)
-    is_stable=true        auf der konvexen Hülle, also thermodynamisch stabil
-    deprecated=false      keine zurückgezogenen Dokumente
+Abschaltbar mit --no-formel, --no-cod, --no-wikipedia.
 
-Alle drei Filter sind hier standardmäßig aktiv (abschaltbar, siehe --help).
-Damit fällt genau das weg, was die NOMAD-Ausbeute unbrauchbar machte:
-hypothetische Strukturen, instabile Phasen und Rechenartefakte.
+    python -m materialswiki --elements Ti O --max 50
+    python -m materialswiki --group minerale --batch-size 150 --weiter
 
-Dazu kommt: Ein Material-Dokument enthält alle Größen auf einmal. NOMAD
-brauchte je Eintrag einen zweiten Archiv-Abruf, hier genügt eine Anfrage.
+BEGRUENDUNGEN STEHEN IM README, NICHT HIER.
+--------------------------------------------
+materialswiki/README.md erklaert, warum die Kaskade so geordnet ist, warum
+Werte gekennzeichnet, gefiltert oder bewusst weggelassen werden, und mit
+welchen Messungen das jeweils belegt ist. Kommentare im Code verweisen
+darauf, statt es zu wiederholen - sonst driften beide auseinander.
 
-Quellenkaskade (in beiden Modi dieselbe, jede Stufe nur für das, was die
-vorherige nicht geliefert hat):
-
-    COD  ->  Materials Project (DOI)  ->  de.wikipedia (Import)  ->  en.wikipedia
-
-Die Crystallography Open Database steht vorn und ist für Raumgruppe (P690),
-Kristallsystem (P556) und COD-ID (P9824) die PRIMÄRE Quelle; das Materials
-Project liefert diese Größen nur noch, wo COD nichts hat. Gründe: CC0 statt
-CC BY 4.0 (kein Lizenzkonflikt mit Wikidatas CC0), gemessene Struktur statt
-DFT-Rechnung, und die DOI der Originalarbeit statt der Sammel-DOI einer
-Datenbank. Abschaltbar mit --no-cod, dann übernimmt wieder MP.
-
-Die Wikipedia-Stufen sind standardmäßig AN und lassen sich mit
---no-wikipedia abschalten. Welche Infobox gelesen wird, entscheidet sich am
-Artikel: {{Infobox Chemisches Element}} bzw. {{Infobox Chemikalie}} im
-Deutschen, Template:Infobox <element> bzw. {{Chembox}} im Englischen.
-
-WICHTIG - vor dem Einsatz
---------------------------
-- MP_API_KEY: die Materials-Project-API verlangt einen Schlüssel, ohne ihn
-  antwortet jeder Endpunkt mit HTTP 401. Kostenlos unter
-  https://next-gen.materialsproject.org/api - dann in die gitignorierte .env
-  im Repo-Wurzelverzeichnis eintragen (Vorlage: .env.beispiel).
-  Bewusst NICHT im Quelltext hinterlegen; ein Schlüssel im Repo wäre ein
-  Leck, sobald das Repo geteilt wird.
-- CONTACT_EMAIL: steht ebenfalls in .env und landet im User-Agent - so
-  verlangt es die Wikimedia-Richtlinie
-  (https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy)
-- MP_FIELD_MAP: Feldnamen und Einheiten stammen aus dem öffentlichen
-  OpenAPI-Schema (https://api.materialsproject.org/openapi.json, ausgewertet
-  am 2026-08-15). Ändert sich das Schema, hier nachziehen.
-- PROPERTY_MAP: nur Properties eintragen, deren P-Nummer auf
-  https://www.wikidata.org/wiki/Property:Pxxxx tatsächlich existiert und zum
-  Datentyp passt.
-
-  Achtung: Ein Eintrag in PROPERTY_MAP allein erzeugt noch keine Vorschläge.
-  Vorschläge entstehen nur für Schlüssel, die auch in MP_FIELD_MAP einen
-  Pfad haben - alles Übrige muss aus der Wikipedia kommen.
-
-Ablauf in der Praxis
----------------------
-  python -m materialswiki --elements Ti O --max 50
-  -> erzeugt vorschlaege_<Zeitstempel>.csv zur manuellen Durchsicht
-  -> NICHTS wird automatisch nach Wikidata geschrieben
-
-Der Zeitstempel steckt im Dateinamen, damit kein Lauf den vorherigen
-überschreibt. Wer feste Namen will, setzt --out/--qs-out; dann wird der alte
-QuickStatements-Entwurf vor dem Lauf geleert.
+Vor dem Einsatz
+---------------
+- MP_API_KEY und CONTACT_EMAIL gehoeren in die gitignorierte .env im
+  Repo-Wurzelverzeichnis (Vorlage: .env.beispiel), nicht in den Quelltext.
+  Ohne Schluessel antwortet die MP-API mit HTTP 401.
+- MP_FIELD_MAP: Feldnamen und Einheiten stammen aus dem OpenAPI-Schema
+  (https://api.materialsproject.org/openapi.json, ausgewertet 2026-08-15).
+  Aendert sich das Schema, hier nachziehen.
+- PROPERTY_MAP: nur Properties eintragen, die es auf wikidata.org gibt und
+  deren Datentyp passt. Ein Eintrag allein erzeugt noch keine Vorschlaege -
+  dafuer braucht der Schluessel auch einen Pfad in MP_FIELD_MAP oder eine
+  andere Quelle.
 """
 
 import argparse
@@ -175,48 +124,17 @@ WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 REQUEST_DELAY_SEC = 1.0  # höflich sein, Rate Limits respektieren
 
 # MP-Feldpfad -> (interner Schluessel, Faktor auf die Wikidata-Einheit).
-# Feldnamen und Einheiten aus dem oeffentlichen OpenAPI-Schema
-# (https://api.materialsproject.org/openapi.json, SummaryDoc, 69 Felder,
-# ausgewertet am 2026-08-15). Die Faktoren sind der eigentliche Knackpunkt:
-# MP liefert die Dichte in g/cm^3 und die Moduln in GPa, Wikidata erwartet
-# kg/m^3 und Pascal.
+# Der Faktor ist der Knackpunkt: MP liefert die Dichte in g/cm^3 und die
+# Moduln in GPa, Wikidata erwartet kg/m^3 und Pascal.
+#
+# Welche MP-Felder bewusst NICHT uebernommen sind (band_gap und weitere) und
+# warum: README, "Abgedeckte Properties".
 MP_FIELD_MAP = {
     "density": ("density", 1000.0),                    # g/cm^3  -> kg/m^3
     "symmetry.crystal_system": ("crystal_system", None),  # itemwertig
     "bulk_modulus.vrh": ("bulk_modulus", 1e9),         # GPa     -> Pa
     "shear_modulus.vrh": ("shear_modulus", 1e9),       # GPa     -> Pa
     "homogeneous_poisson": ("poisson_ratio", 1.0),     # dimensionslos
-    #
-    # ABGLEICH gegen benchmark/properties_snapshot.json (58 Properties aus den
-    # Abschnitten Physics/Mechanical/Thermal/Chemical/Electric and Magnetic der
-    # Seite [[Wikidata:WikiProject Materials/Properties]]):
-    # Materials Project deckt FUENF davon ab - eine mehr als NOMAD, das die
-    # Poissonzahl nicht als Skalar fuehrte. Die Moduln kommen hier ausserdem
-    # direkt als Voigt-Reuss-Hill-Mittel (Feld "vrh"), waehrend NOMAD eine
-    # Liste von Mittelungsverfahren lieferte, aus der erst ausgewaehlt werden
-    # musste.
-    #
-    # Bewusst NICHT uebernommen, obwohl MP es fuehrt:
-    #
-    #   band_gap (eV)  Wikidata hat KEINE Property dafuer. Es gibt zwei
-    #     passende Items, beide als Praedikat unbrauchbar - an der mittleren
-    #     Stelle einer Aussage steht zwingend eine P-Nummer:
-    #       Q806352     "Bandluecke"          - Konzept (Energiebereich)
-    #       Q103982939  "Bandlueckenenergie"  - physikalische Groesse
-    #     Geprueft am 2026-08-13: keines der beiden hat P1687, keine Property
-    #     traegt P1629 darauf, ein Sweep ueber alle quantity-Properties auf
-    #     band/gap/semiconduct liefert nur P2911 "time gap" und P9279
-    #     "Egapro", und auch Silizium (Q670) und Galliumarsenid (Q147395)
-    #     fuehren keine solche Aussage. Der saubere Weg waere ein
-    #     Property-Proposal mit P1629 -> Q103982939.
-    #
-    #   e_total, n, e_ij_max, weighted_work_function, total_magnetization:
-    #     rechnerische Groessen ohne etablierte Wikidata-Property bzw. ohne
-    #     eindeutigen Bezug zum Stoff statt zur gerechneten Zelle.
-    #
-    # Waerme- und elektrische Leitfaehigkeit (P2068 / P2055) stehen in
-    # PROPERTY_MAP, haben hier aber keinen Pfad: MP fuehrt beide nicht. Sie
-    # koennen nur aus der Wikipedia-Infobox kommen.
 }
 
 # Groessen, die MP zwar liefert, die aber nur der Qualitaetsbewertung dienen
@@ -228,32 +146,11 @@ MP_META_FIELDS = ("material_id", "formula_pretty", "theoretical", "is_stable",
 # Bestimmungsmethode: gerechnete Werte als solche kennzeichnen
 # ---------------------------------------------------------------------------
 #
-# MP-Werte sind DFT-Rechnungen bei 0 K am idealen Einkristall, keine
-# Messungen. Am Bestand geprueft (2026-08-15, Cu/Fe/Ti): Kristallsystem
-# exakt, Dichte 0,4-3,6 % daneben, aber Schubmodul bis +41 % (Titan 62 statt
-# 44 GPa) und Poissonzahl bis 22 % (Eisen 0,353 statt 0,29 - magnetisch, fuer
-# DFT ein bekannt schwieriger Fall).
-#
-# Eine solche Zahl ohne Kennzeichnung ans Wikidata-Item eines Werkstoffs zu
-# haengen, waere irrefuehrend: Leser erwarten dort den gemessenen Wert.
-# Deshalb traegt jede gerechnete Aussage den Qualifikator
-#
-#     P459 "Bestimmungsmethode oder -standard"  ->  Q1048589
-#
-# Verifiziert am 2026-08-15:
-#   - P459 ist itemwertig (WikibaseItem)
-#   - der Property-Scope-Constraint von P459 nennt ausdruecklich
-#     "als Qualifikator" (Q54828449) - die Verwendung ist also vorgesehen
-#   - Q1048589 = "density functional theory", laut Beschreibung
-#     "computational quantum mechanical modelling method to investigate the
-#     electronic structure", P31/P279: algorithm, computational chemistry,
-#     computational physics. Das ist die Elektronenstruktur-DFT, die MP
-#     rechnet - NICHT Q1209474, ein labelloser Stub gleichen Namens
-#     (klassische DFT der statistischen Mechanik).
-#
-# Werte aus den Wikipedia-Infoboxen bekommen bewusst KEINEN Qualifikator:
-# das sind Literaturwerte, und mit welcher Methode sie bestimmt wurden,
-# steht dort nicht - eine Methode zu behaupten waere geraten.
+# Jede MP-Aussage traegt P459 -> Q1048589 ("berechnet, DFT"). Warum das noetig
+# ist, wie weit die Rechnung vom Messwert abweicht und warum es Q1048589 sein
+# muss und nicht der gleichnamige Stub Q1209474: README, "Die Werte sind
+# gerechnet, nicht gemessen". Infobox-Werte bekommen bewusst KEINEN
+# Qualifikator - dort steht die Methode nicht dabei.
 DETERMINATION_PID = "P459"
 DFT_QID = "Q1048589"
 DFT_LABEL = "Dichtefunktionaltheorie"
@@ -262,16 +159,9 @@ DFT_LABEL = "Dichtefunktionaltheorie"
 # Messbedingungen der Dichte (P2054)
 # ---------------------------------------------------------------------------
 #
-# Die Nutzungsanweisung von P2054 verlangt zwei Qualifikatoren:
-#     P2076 "Temperatur"        - eine Dichte ohne Temperatur ist unvollstaendig,
-#                                 Stoffe dehnen sich aus
-#     P515  "Aggregatzustand"   - 13,5 g/cm^3 fuer Quecksilber meint die
-#                                 FLUESSIGKEIT, nicht den Festkoerper
-#
-# Verifiziert am 2026-08-15: beide sind laut Property-Scope-Constraint als
-# Qualifikator zugelassen (P515 sogar ausschliesslich). P2076 ist mengenwertig,
-# P515 itemwertig. Die drei Zustands-QIDs sind nicht geraten, sondern die
-# tatsaechlich als P515-Qualifikator verwendeten (per SPARQL nach Haeufigkeit).
+# P2054 verlangt laut Nutzungsanweisung Temperatur (P2076) und
+# Aggregatzustand (P515) als Qualifikatoren. Begruendung und Belege:
+# README, "Die Dichte traegt ihre Messbedingungen".
 TEMPERATUR_PID = "P2076"
 AGGREGAT_PID = "P515"
 CELSIUS_QID = "Q25267"
@@ -288,40 +178,19 @@ STANDARD_TEMPERATUR_C = 20.0
 # Groessen, die NICHT mit der Rechnung belegt werden
 # ---------------------------------------------------------------------------
 #
-# Fuer manche Groessen ist die DFT-Rechnung ein schwacher Beleg, obwohl der
-# Wert selbst unstrittig ist. Das Kristallsystem ist der Musterfall: dass
-# Kupfer kubisch und Titan hexagonal kristallisiert, ist seit Jahrzehnten
-# etablierte Kristallographie und steht in jedem Standardwerk. Eine
-# Symmetrieanalyse einer DFT-Zelle dafuer zu zitieren, waere die schlechtere
-# Quelle - sie belegt die Rechnung, nicht den Stoff.
-#
-# Solche Groessen bekommen deshalb einen LITERATURBELEG statt der Datenbank-
-# DOI, und folgerichtig auch KEINEN P459-Qualifikator "berechnet (DFT)":
-# als Literaturwert ausgewiesen, waere er falsch.
-#
-# Der Wert selbst stammt weiterhin aus der Symmetrieanalyse des Materials
-# Project - das steht in der Notiz, und genau deshalb muss die Zeile vor der
-# Uebernahme gegen das Werk geprueft werden. Elemente und Verbindungen haben
-# je nach Modifikation verschiedene Kristallsysteme (Graphit/Diamant,
-# alpha-/beta-Titan); welche Modifikation MP gerechnet hat, entscheidet die
-# Zeile nicht.
+# Fuer das Kristallsystem ist die DFT-Rechnung der schwaechere Beleg als jedes
+# Standardwerk. Solche Groessen bekommen deshalb einen LITERATURBELEG und
+# folgerichtig KEINEN P459-Qualifikator. Warum, und was das fuer die Pruefung
+# der Zeile bedeutet: README, "Das Kristallsystem wird mit Literatur belegt".
 # ---------------------------------------------------------------------------
 # Physikalische Plausibilitaet
 # ---------------------------------------------------------------------------
 #
-# Die Qualitaetsfilter der API (theoretical/is_stable/deprecated) sagen etwas
-# ueber das MATERIAL aus, nichts ueber die einzelne Rechnung. Am Bestand
-# gefunden (2026-08-15), Zink mp-aaaaaadb, theoretical=false UND is_stable:
+# Die API-Filter sagen etwas ueber das MATERIAL aus, nichts ueber die einzelne
+# Rechnung - MP liefert vereinzelt Rechenmuell (Zink: Schubmodul -2781 GPa).
+# Der Fall im Detail: README, "Physikalisch Unmoegliches wird abgefangen".
 #
-#     shear_modulus: {voigt: 44.248, reuss: -5606.668, vrh: -2781.21}
-#     homogeneous_poisson: -1.153
-#
-# Die Reuss-Schranke ist hier havariert und reisst das VRH-Mittel mit. Ein
-# negativer Schubmodul bedeutet mechanische Instabilitaet - Zink ist aber
-# schlicht stabil, der Wert ist Rechenmuell. Ohne Pruefung stuende an
-# Wikidatas Zink-Item ein Schubmodul von -2781 GPa (Literaturwert: 43 GPa).
-#
-# Geprueft wird deshalb gegen physikalische Schranken, in Wikidata-Einheiten:
+# Geprueft wird gegen physikalische Schranken, in Wikidata-Einheiten:
 #   Moduln       muessen positiv sein; die Obergrenze liegt weit ueber
 #                Diamant (Kompressionsmodul ~443 GPa, Schubmodul ~535 GPa)
 #   Poissonzahl  ist fuer isotrope lineare Elastizitaet thermodynamisch auf
@@ -352,19 +221,10 @@ def ist_plausibel(internal_key: str, wert) -> bool:
 # Groessen, die gar keinen Beleg bekommen
 # ---------------------------------------------------------------------------
 #
-# Externe Identifikatoren belegen sich selbst: Die CAS-Nummer 7440-50-8 IST
-# der Verweis auf den Eintrag im CAS-Register - man schlaegt sie dort nach
-# und hat damit die Pruefung. Ein zusaetzliches "importiert aus Wikipedia"
-# sagt darueber nichts aus; es belegt nur, wo die Zeichenkette abgeschrieben
-# wurde, nicht dass sie stimmt.
-#
-# Solche Aussagen gehen deshalb OHNE S-Angabe in den QuickStatements-Entwurf.
-# Die Herkunft bleibt in der CSV-Spalte ref_note stehen, damit die Zeile beim
-# Durchsehen pruefbar ist - sie ist nur kein Beleg im Sinne von Wikidata.
-#
-# Entschieden ueber den Datentyp statt ueber einzelne P-Nummern: was als
-# external-id gefuehrt wird, ist per Definition ein Identifikator. Zurzeit
-# betrifft das nur P231 (CAS-Nummer).
+# Externe Identifikatoren belegen sich selbst; sie gehen ohne S-Angabe raus,
+# die Herkunft bleibt in ref_note. Warum: README, "Identifikatoren bekommen
+# gar keinen Beleg". Entschieden ueber den DATENTYP statt ueber einzelne
+# P-Nummern - was external-id ist, ist per Definition ein Identifikator.
 OHNE_BELEG_DATENTYPEN = {"external-id"}
 
 LITERATUR_BELEG = {
@@ -386,7 +246,7 @@ LITERATUR_BELEG = {
 #
 # "datatype" muss zum Wikidata-Datentyp der Property passen:
 #   "quantity" -> Zahlwert + unit_qid
-#   "item"     -> QID-Wert; "value_map" uebersetzt den NOMAD-String in ein QID.
+#   "item"     -> QID-Wert; "value_map" uebersetzt den Quellstring in ein QID.
 #                 Werte ausserhalb der value_map werden NICHT geraten, sondern
 #                 zur manuellen Klaerung markiert.
 PROPERTY_MAP = {
@@ -481,8 +341,8 @@ PROPERTY_MAP = {
         "unit_qid": "Q1441459",  # Ohm-Meter, Ohm*m
         "label": "Spezifischer Widerstand",
     },
-    # Spezifische Waermekapazitaet - kein NOMAD-Pfad (dort nur eine Kurve),
-    # aber die deutsche Wikipedia fuehrt sie als Skalar in J/(kg*K).
+    # Spezifische Waermekapazitaet - MP fuehrt sie nicht, aber die deutsche
+    # Wikipedia fuehrt sie als Skalar in J/(kg*K).
     "specific_heat_capacity": {
         "pid": "P2056",
         "datatype": "quantity",
@@ -524,6 +384,20 @@ PROPERTY_MAP = {
         "datatype": "external-id",
         "unit_qid": "",
         "label": "COD-ID",
+    },
+    # "besteht aus": die chemischen Elemente der Summenformel, je Element
+    # eine Aussage. Itemwertig, aufgeloest ueber fetch_element_qids - eine
+    # value_map waere hier eine zweite Elementtabelle.
+    #
+    # Das Vorbild ist Wasser (Q283), am 2026-08-17 abgefragt: P527 -> Q556
+    # (Wasserstoff) mit P1114 = 2 und P527 -> Q629 (Sauerstoff) mit P1114 = 1,
+    # also Element plus stoechiometrischer Anzahl. Genau diese Form wird hier
+    # erzeugt.
+    "has_part": {
+        "pid": "P527",
+        "datatype": "item",
+        "unit_qid": "",
+        "label": "besteht aus",
     },
 }
 
@@ -642,11 +516,11 @@ def fetch_mp_materials(
 ) -> list:
     """Fragt den summary-Endpunkt des Materials Project ab.
 
-    Anders als bei NOMAD genuegt EIN Aufruf: das Material-Dokument enthaelt
-    Formel, Symmetrie und alle Kennwerte zugleich. Zurueck kommt eine Liste
-    von dicts mit formula, material_id, den Metafeldern und den Rohwerten.
+    EIN Aufruf genuegt: das Material-Dokument enthaelt Formel, Symmetrie und
+    alle Kennwerte zugleich. Zurueck kommt eine Liste von dicts mit formula,
+    material_id, den Metafeldern und den Rohwerten.
 
-    Die drei Qualitaetsfilter sind der eigentliche Gewinn gegenueber NOMAD:
+    Die drei Qualitaetsfilter entscheiden ueber die Brauchbarkeit:
 
       nur_experimentell  theoretical=false - das Material ist experimentell
                          nachgewiesen (in aller Regel ICSD-hinterlegt) und
@@ -736,8 +610,8 @@ def request_with_retry(method: str, url: str, attempts: int = 4, **kwargs):
     gewartet, wenn wirklich eine Anfrage rausgeht (Cache-Treffer bremsen
     nichts mehr), und keine Stelle kann das Rate-Limit versehentlich umgehen.
 
-    Ohne Retry reisst ein einzelner 502 den kompletten Lauf ab; sowohl der
-    Wikidata-Query-Service als auch NOMAD liefern die unter Last sporadisch.
+    Ohne Retry reisst ein einzelner 502 den kompletten Lauf ab; der
+    Wikidata-Query-Service liefert die unter Last sporadisch.
     """
     global _LAST_REQUEST
     delay = 2.0
@@ -781,23 +655,11 @@ def get_with_retry(url: str, params: dict, attempts: int = 4):
 # Crystallography Open Database (COD) - primaere Strukturquelle
 # ---------------------------------------------------------------------------
 #
-# Warum COD hier VOR dem Materials Project steht:
+# Warum COD vor dem Materials Project steht (CC0 statt CC BY, DOI der
+# Originalarbeit statt Sammel-DOI, gemessen statt gerechnet) und wie die
+# Modifikation gewaehlt wird: README, "Quellenkaskade". MP bleibt Fallback.
 #
-#   Lizenz     COD ist CC0 (public domain), MP ist CC BY 4.0. Wikidata
-#              veroeffentlicht unter CC0, traegt eine Attributionspflicht
-#              also nicht weiter - bei COD entfaellt dieser Konflikt ganz.
-#   Beleg      COD nennt je Struktur die DOI der ORIGINALPUBLIKATION. MP hat
-#              fuer einzelne Materialien keine DOI; dort muss die Sammel-DOI
-#              der Datenbank herhalten.
-#   Messung    COD-Eintraege sind gemessene Strukturen (Feld "method", z. B.
-#              "powder diffraction") mit Messtemperatur ("celltemp"). MP
-#              liefert DFT bei 0 K - fuer eine Raumgruppe die schwaechere
-#              Aussage.
-#
-# MP bleibt Fallback: wo COD nichts hat, liefert es weiterhin.
-#
-# Kein API-Schluessel noetig. Die Nutzungsbedingungen verlangen keine
-# Registrierung; die Abfrage laeuft ueber die dokumentierte RESTful-API
+# Kein API-Schluessel noetig; dokumentierte RESTful-API
 # (https://wiki.crystallography.net/RESTful_API/, geprueft am 2026-08-16).
 COD_API = "https://www.crystallography.net/cod/result"
 COD_ENTRY_URL = "https://www.crystallography.net/cod/{cod_id}.html"
@@ -1116,19 +978,11 @@ def _cs_name_aus_qid(qid: str) -> str:
 # Belege aus den Wikipedia-Einzelnachweisen ziehen
 # ---------------------------------------------------------------------------
 #
-# Viele Infobox-Werte tragen einen eigenen <ref>-Beleg. Steht darin eine DOI
-# oder ISBN, ist das ein echter Literaturbeleg und damit deutlich besser als
-# "importiert aus Wikipedia" - dann wird er statt des Imports gesetzt.
-#
-# Reale Formen (alle im Kupfer-Artikel):
-#   <ref name="Zhang">... [[doi:10.1021/je1011086]].</ref>
-#   <ref name="Speight">... ISBN 978-1-259-58610-1, S. 41.</ref>
-#   <ref>{{Literatur |Autor=... |ISBN=978-3-642-45427-1 |Seiten=380}}</ref>
-#   {{DOI|10.1002/14356007.a07_471}}
-#   <ref name="Harry H. Binder" />        <- reine WIEDERVERWENDUNG
-# Die letzte Form ist wichtig: der Inhalt steht dann an anderer Stelle im
-# Artikel und muss ueber den Namen aufgeloest werden, sonst geht bei der
-# spezifischen Waermekapazitaet der Beleg verloren.
+# Traegt ein Infobox-Wert einen eigenen <ref> mit DOI oder ISBN, wird der
+# statt des Wikimedia-Imports gesetzt. Die zu behandelnden Schreibweisen -
+# darunter die reine Wiederverwendung <ref name="..." />, deren Inhalt
+# anderswo im Artikel steht - listet das README auf:
+# "Die drei Wikipedia-Stufen und ihre Fallstricke".
 
 _REF_TAG = re.compile(r"<ref([^>]*?)(?:/>|>(.*?)</ref>)", re.S | re.I)
 _REF_NAME_ATTR = re.compile(r'name\s*=\s*"([^"]+)"|name\s*=\s*([^\s/>]+)', re.I)
@@ -1204,30 +1058,15 @@ def extract_ref_ids(raw: str, article_wikitext: str) -> dict:
 # Fallback-Quelle 1: Deutsche Wikipedia, {{Infobox Chemisches Element}}
 # ---------------------------------------------------------------------------
 #
-# Die deutsche Elementinfobox steht im ARTIKEL (nicht in einer eigenen
-# Vorlagenseite wie im Englischen) und ist fuer diesen Zweck die ergiebigste
-# Quelle ueberhaupt - sie fuehrt als einzige:
-#   SpezifischeWaermekapazitaet  -> P2056, in J/(kg*K) als Skalar
-#                                   (NOMAD hat dort nur eine C_v-Kurve)
-#   ElektrischeLeitfaehigkeit    -> P2055, in S/m
-#   Schallgeschwindigkeit        -> P2075, Poissonzahl -> P5593
-#   CAS                          -> P231
+# Die ergiebigste Quelle ueberhaupt: sie fuehrt als einzige P2056, P2055,
+# P2075, P5593 und P231. Der Artikeltitel kommt aus dem Wikidata-Sitelink,
+# NICHT aus dem Elementnamen geraten (Titan -> "Titan (Element)").
 #
-# Der Artikeltitel wird ueber den Wikidata-Sitelink aufgeloest, NICHT aus dem
-# Elementnamen geraten: Titan liegt unter "Titan (Element)", weil "Titan" der
-# Mond bzw. die Mythologie ist.
-#
-# Deutsche Zahl- und Markup-Eigenheiten, alle real im Bestand:
-#   Dichte = 8,96&nbsp;g/cm³ (20 [[Grad Celsius|°C]])<ref .../>  Dezimalkomma
-#   ElektrischeLeitfaehigkeit = 58,1 · 10<sup>6</sup>            Zehnerpotenz
-#   Schmelzpunkt_K = 1812 ± 1 [[Kelvin|K]]                       Toleranz
-#   ElektrischeLeitfaehigkeit = etwa 7,14 · 10<sup>6</sup>       Unschaerfewort
-#   Kristallstruktur = α-Eisen: kubisch raumzentriert<br />γ-...  MEHRDEUTIG
-#   Dichte = Graphit: 2,26 g/cm<sup>3</sup><br />Diamant: 3,51    MEHRDEUTIG
-#   Waermeleitfaehigkeit = <!--G: 119–165 W/(m·K)-->             auskommentiert
-# Werte mit "<br" oder ":" bezeichnen mehrere Modifikationen und werden
-# VERWORFEN - sonst landete willkuerlich Graphit oder Diamant als "der" Wert
-# des Elements in Wikidata.
+# Werte mit "<br" oder ":" nennen mehrere Modifikationen und werden VERWORFEN,
+# sonst landete willkuerlich Graphit oder Diamant als "der" Wert des Elements.
+# Die vollstaendige Liste der Zahl- und Markup-Eigenheiten, an denen sich die
+# Parser unten abarbeiten, steht im README:
+# "Die drei Wikipedia-Stufen und ihre Fallstricke".
 
 WIKIPEDIA_DE_QID = "Q48183"  # deutschsprachige Wikipedia
 WIKIPEDIA_DE_API = "https://de.wikipedia.org/w/api.php"
@@ -1640,18 +1479,12 @@ def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
 # Fallback-Quelle 2: Englische Wikipedia-Elementinfobox (Import-Referenz)
 # ---------------------------------------------------------------------------
 #
-# Die englische Wikipedia pflegt je Element eine Vorlage "Infobox <name>"
-# (z. B. [[Template:Infobox copper]]) mit sauber benannten Feldern:
-#   - "melting point K" / "boiling point K" stehen bereits in KELVIN,
-#     also genau in der Wikidata-Einheit
-#   - "thermal conductivity" und "electrical resistivity at 20" liefern
-#     Groessen, die NOMAD ueberhaupt nicht fuehrt
-# Trotzdem ist Vorsicht noetig; reale Faelle aus dem Bestand:
-#   density=8.935&nbsp;g/cm<sup>3</sup>&thinsp;<ref name="Arblaster 2018" />
-#   thermal conductivity=graphite: 119-165      (Kohlenstoff: Prosa + Bereich)
-#   electrical resistivity at 20=2.3{{e|3}}     (Silizium: Vorlage im Wert)
-# Deshalb wird Markup entfernt und anschliessend nur ein SAUBERER Zahlwert
-# akzeptiert; alles mit Buchstaben, Bereich oder Restvorlage wird verworfen.
+# Je Element eine Vorlage "Infobox <name>" (z. B. [[Template:Infobox copper]]).
+# "melting point K" / "boiling point K" stehen bereits in Kelvin.
+#
+# Markup wird entfernt und anschliessend nur ein SAUBERER Zahlwert akzeptiert;
+# alles mit Buchstaben, Bereich oder Restvorlage wird verworfen. Die realen
+# Faelle, die das noetig machen: README, "Die drei Wikipedia-Stufen".
 
 WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
 
@@ -1798,15 +1631,10 @@ def wikipedia_proposals_for_item(wd_match: dict, name_en: str,
 # Fallback-Quelle 3: {{Chembox}} der englischen Wikipedia (Verbindungen)
 # ---------------------------------------------------------------------------
 #
-# Fuer Verbindungen gibt es keine Vorlagenseite wie bei den Elementen; die
-# Chembox steht im Artikel selbst. Angenehm dabei: die Einheit steckt im
-# FELDNAMEN (MeltingPtC vs. MeltingPtK), es muss also nichts geraten werden.
-#   | Density    = 4.23 g/cm3
-#   | MeltingPtC = 1843
-#   | BoilingPtC = 2972
-#   | CASNo      = 13463-67-7
-# Reihenfolge im Mapping: Kelvin-Felder vor Celsius-Feldern, damit der Wert
-# ohne Umrechnung gewinnt, wenn die Box beide fuehrt.
+# Die Chembox steht im Artikel selbst. Die Einheit steckt im FELDNAMEN
+# (MeltingPtC vs. MeltingPtK), es muss also nichts geraten werden. Reihenfolge
+# im Mapping: Kelvin-Felder vor Celsius-Feldern, damit der Wert ohne
+# Umrechnung gewinnt, wenn die Box beide fuehrt.
 
 # Feld -> (interner Schluessel, Faktor, Offset auf die Wikidata-Einheit)
 CHEMBOX_FIELDS = {
@@ -1911,28 +1739,13 @@ _ECHTES_ELEMENTSYMBOL = re.compile(r"[A-Z][a-z]?")
 # Metalle und Halbmetalle
 # ---------------------------------------------------------------------------
 #
-# Die Einteilung steht hier als feste Liste, NICHT als Wikidata-Abfrage. Der
-# Grund ist gemessen (2026-08-16): Wikidatas Klassifikation ist dafuer zu
-# lueckenhaft.
-#
-#   ueber Q11426 "Metalle" (P31/P279*)   nur 55 der rund 90 Metalle; es
-#                                        fehlen Cr, Mn, Co, Ni, Re, Sr, Ba
-#                                        und saemtliche Lanthanoide und
-#                                        Actinoide
-#   ueber Q19588 "Uebergangsmetalle"     17 statt rund 38
-#   ueber Q11426 direkt                  7 Elemente
-#
-# Chrom, Mangan, Cobalt und Nickel sind zentrale technische Werkstoffe - eine
-# Auswahl, die sie verliert, ist fuer dieses Projekt unbrauchbar.
-#
-# Die Einteilung des Periodensystems in Metalle, Halbmetalle und Nichtmetalle
-# ist dagegen etablierte Lehrbuchsystematik und vollstaendig. Sie wird hier
-# ueber die NICHT-Metalle definiert - das ist die kuerzere und stabilere
-# Liste; alles andere ist Metall.
+# Feste Liste statt Wikidata-Abfrage, weil Wikidatas Klassifikation dafuer zu
+# lueckenhaft ist (die Messung dazu: README, "Auswahl im Periodensystem-Modus").
+# Definiert wird ueber die NICHT-Metalle - die kuerzere, stabilere Liste;
+# alles andere ist Metall oder Halbmetall.
 #
 # Grenzfaelle, bewusst so entschieden:
-#   Po, At   werden je nach Quelle als Halbmetall oder Nichtmetall gefuehrt;
-#            hier Halbmetall (Po) bzw. Nichtmetall (At), wie im gaengigen
+#   Po, At   Halbmetall (Po) bzw. Nichtmetall (At), wie im gaengigen
 #            Periodensystem farblich dargestellt
 #   Ts, Og   Zuordnung ist rein theoretisch (nie in Substanzmenge erzeugt);
 #            als Nichtmetalle gefuehrt, praktisch ohnehin ohne Datenlage
@@ -1952,26 +1765,11 @@ def ist_metall_oder_halbmetall(symbol: str) -> bool:
 # Legierungen
 # ---------------------------------------------------------------------------
 #
-# Die naheliegende Abfrage - alles unter Legierung (Q37756) - liefert 3718
-# Items und ist unbrauchbar. Grund ist ein Modellierungsfehler in Wikidata:
-#
-#     Q11426 "Metalle"  wdt:P279  Q37756 "Legierung"
-#
-# Metalle sind dort also eine UNTERKLASSE von Legierung, fachlich genau
-# verkehrt herum. Dadurch haengt jedes Metall und jedes Metallisotop unter
-# "Legierung"; die Trefferliste fuellt sich mit Selen-78, Rubidium-87 und
-# gediegenem Kupfer (geprueft 2026-08-16, Pfad: Selen-78 -> Selen ->
-# Halbmetalle -> Metalle -> Legierung).
-#
-# Ausgeschlossen wird deshalb, was eine ORDNUNGSZAHL traegt: Elemente und
-# ihre Isotope. Das ist der praezise Schnitt - 3718 Items werden zu 1081.
-#
-# Ein frueherer Versuch schnitt stattdessen den ganzen Metalle-Zweig weg
-# (FILTER NOT EXISTS ?i wdt:P279* wd:Q11426). Das war zu grob und hat 17
-# echte Legierungen mitgerissen, darunter STAHL, Gusseisen und Ti-6Al-4V -
-# die haengen naemlich voellig zu Recht auch unter "Metalle". Gemessen an
-# den 94 klassifizierten Legierungen aus [[List of named alloys]]: der alte
-# Filter liess 77 durch, der neue alle 94.
+# Ohne Filter ist die Grundgesamtheit Muell: Wikidata fuehrt Q11426 "Metalle"
+# als Unterklasse von Q37756 "Legierung", also haengt jedes Metall und jedes
+# Isotop darunter. Ausgeschlossen wird, was eine ORDNUNGSZAHL traegt - warum
+# genau dieser Schnitt und nicht der naheliegendere: README,
+# "Werkstoffgruppen".
 LEGIERUNG_QID = "Q37756"
 
 # Ohne diesen Filter ist die Grundgesamtheit Muell - siehe oben.
@@ -2002,17 +1800,10 @@ OXID_PATTERN = (
 # Benannte Legierungen aus der Wikipedia-Liste
 # ---------------------------------------------------------------------------
 #
-# [[en:List of named alloys]] fuehrt die Legierungen, die einen EIGENEN NAMEN
-# tragen (Duralumin, Hastelloy, Nitinol ...), gruppiert nach Basismetall.
-# Genau diese Gruppierung fehlt in Wikidata weitgehend - und es ist die
-# Klassifikation, die [[Wikidata:WikiProject Materials/Materials]] sich
-# wuenscht (dort als Beispiel: Material -> Metallic material -> Alloy ->
-# Ferrous alloy -> Steel -> Alloy steel -> ...).
-#
-# Die Liste ist als PRUEFLISTE wertvoller denn als Datenquelle. Gemessen
-# 2026-08-16: 140 benannte Legierungen, davon 104 mit Wikidata-Item, davon 94
-# als Legierung klassifiziert. Die Kennwerte sind praktisch leer -
-# Zugfestigkeit 0 von 104, Elastizitaetsmodul 2, Dichte 6.
+# [[en:List of named alloys]] fuehrt die Legierungen mit EIGENEM NAMEN
+# (Duralumin, Hastelloy, Nitinol ...), gruppiert nach Basismetall. Sie ist als
+# PRUEFLISTE wertvoller denn als Datenquelle - Zahlen dazu im README,
+# "Pruefliste statt Datenquelle".
 NAMED_ALLOYS_SEITE = "List_of_named_alloys"
 NAMED_ALLOYS_API = "https://en.wikipedia.org/w/api.php"
 
@@ -2228,7 +2019,8 @@ def pruefe_legierungsklasse(gruppe: str, items: list) -> list:
 def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           wikipedia: bool = True, cod: bool = True,
                           nur_experimentell: bool = True,
-                          nur_stabil: bool = True, max_entries: int = 1):
+                          nur_stabil: bool = True, max_entries: int = 1,
+                          formel: bool = True):
     """Vorschlaege fuer eine Werkstoffgruppe (Generator).
 
     Dieselbe Quellenkaskade wie sonst; welche Stufe traegt, haengt an der
@@ -2239,14 +2031,16 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
     items = items_der_gruppe(gruppe, limit)
     yield from pruefe_legierungsklasse(gruppe, items)
     yield from build_proposals_for_items(
-        items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries)
+        items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries,
+        formel=formel)
 
 
 def build_proposals_for_items(items: list, wikipedia: bool = True,
                               cod: bool = True,
                               nur_experimentell: bool = True,
                               nur_stabil: bool = True, max_entries: int = 1,
-                              nummer_ab: int = 1, gesamt: Optional[int] = None):
+                              nummer_ab: int = 1, gesamt: Optional[int] = None,
+                              formel: bool = True):
     """Vorschlaege fuer eine fertige Itemliste (Generator).
 
     Von build_group_proposals abgetrennt, damit der Chargenbetrieb dieselbe
@@ -2262,7 +2056,21 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                     "title_en": eintrag["title_en"]}
         pids_belegt = set()
         zaehler = collections.Counter()
-        n_cod = n_mp = 0
+        n_cod = n_mp = n_formel = 0
+
+        # Zuerst die Ableitung aus der Formel: sie kostet keine Anfrage nach
+        # aussen und liefert eine Property, die keine der externen Quellen
+        # hergibt - COD und MP kennen kein P527.
+        if formel and eintrag["formula"]:
+            try:
+                for zeile in formel_proposals_for_item(
+                        wd_match, eintrag["formula"]):
+                    pids_belegt.add(zeile["_pid"])
+                    n_formel += 1
+                    yield zeile
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {eintrag['qid']}: Formel uebersprungen - {fehler}",
+                      file=sys.stderr)
 
         if cod and eintrag["formula"]:
             try:
@@ -2312,7 +2120,7 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                       file=sys.stderr)
 
         print(f"  [{i}/{gesamt}] {eintrag['qid']} "
-              f"{eintrag['label'][:28]}: COD {n_cod}, MP {n_mp}"
+              f"{eintrag['label'][:28]}: Formel {n_formel}, COD {n_cod}, MP {n_mp}"
               + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
                  if wikipedia else ""),
               file=sys.stderr)
@@ -2386,23 +2194,12 @@ def fetch_element_qids() -> dict:
 # Formel-Normalisierung
 # ---------------------------------------------------------------------------
 #
-# NOMAD und Wikidata schreiben dieselbe Verbindung unterschiedlich auf, in
-# ZWEI voneinander unabhaengigen Punkten:
-#
-#   Zeichensatz   NOMAD "TiO2" (ASCII-Ziffern) <-> Wikidata "TiO₂" (U+2082).
-#                 Am Bestand geprueft (2026-08-15): unter den haeufigsten
-#                 P274-Werten steht ausnahmslos die tiefgestellte Form, und
-#                 eine VALUES-Abfrage auf TiO2/Al2O3/Fe2O3 liefert NULL
-#                 Treffer, auf TiO₂/Al₂O₃/Fe₂O₃ dagegen 13.
-#   Reihenfolge   NOMAD liefert alphabetisch ("O2Ti") - auch im Feld
-#                 chemical_formula_hill, denn Hill ordnet ohne Kohlenstoff
-#                 alphabetisch. Wikidata schreibt Verbindungen dagegen
-#                 konventionell mit dem elektropositiveren Partner vorn
-#                 ("TiO₂", "Al₂O₃", "NaCl", "SiC").
-#
-# Ein direkter Stringvergleich muss daran scheitern. Deshalb wird die Formel
-# zuerst in ihre Zusammensetzung {Element: Anzahl} zerlegt und daraus werden
+# Datenbanken und Wikidata schreiben dieselbe Verbindung unterschiedlich auf -
+# in Zeichensatz ("TiO2" gegen "TiO₂") wie in Reihenfolge ("O2Ti" gegen
+# "TiO₂"). Ein direkter Stringvergleich muss daran scheitern. Deshalb wird die
+# Formel in ihre Zusammensetzung {Element: Anzahl} zerlegt und daraus werden
 # die plausiblen Schreibweisen ERZEUGT, gegen die dann abgefragt wird.
+# Belege und Trefferzahlen: README, "Formel-Normalisierung".
 
 _TIEFGESTELLT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
 _NORMALZIFFERN = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
@@ -2500,8 +2297,8 @@ def formula_candidates(zusammensetzung: dict) -> list:
         auffindbar.
       konventionell, elektropositiver Partner zuerst: "TiO₂", "Al₂O₃",
         "NaCl", "SiC", "CO₂" - fuer alles Anorganische.
-      alphabetisch: "O₂Ti" - so liefert NOMAD, und vereinzelt steht es auch
-        in Wikidata.
+      alphabetisch: "O₂Ti" - so liefern manche Datenbanken, und vereinzelt
+        steht es auch in Wikidata.
 
     Erzeugt werden immer alle drei; die Reihenfolge bestimmt nur, welche
     Schreibweise zuerst probiert wird. Doppelte fallen raus - bei NaCl
@@ -2526,6 +2323,328 @@ def formula_candidates(zusammensetzung: dict) -> list:
             if s not in kandidaten:
                 kandidaten.append(s)
     return kandidaten
+
+
+# ---------------------------------------------------------------------------
+# "besteht aus" (P527) aus der Summenformel ableiten
+# ---------------------------------------------------------------------------
+#
+# Welche Elemente ein Stoff enthaelt, steht schon in seiner Summenformel - es
+# braucht dafuer keine externe Quelle. Erzeugt wird Element + Anzahl (P1114),
+# nach dem Vorbild von Wasser (Q283).
+#
+# Warum dafuer ein ZWEITER Parser neben parse_formula noetig ist, wie
+# Mischreihen behandelt werden und wie weit das traegt (gemessen an 5700
+# Formeln): README, "besteht aus (P527) aus der Summenformel".
+#
+# Kurzfassung der Regel, die der Code unten umsetzt:
+#   Element sicher, Menge sicher  -> P527 mit P1114
+#   Element sicher, Menge offen   -> P527 ohne P1114
+#   Element nur eine Moeglichkeit -> nichts, nur Klaerungsvermerk
+# Sicher ist ein Element, wenn es mindestens einmal AUSSERHALB jeder
+# Kommagruppe steht - oder in JEDEM Zweig einer Kommagruppe vorkommt.
+
+_TIEFZIFFERN = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
+# Hochgestellte Ziffern und Vorzeichen sind IMMER Ladungen ("Fe³⁺"), nie
+# Stoechiometrie; das Leerstellensymbol ☐ steht fuer eine unbesetzte
+# Gitterposition. Beides traegt zur Zusammensetzung nichts bei.
+_LADUNG_UND_LEERSTELLE = str.maketrans("", "", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻☐□◻ ")
+# Hydratschreibweisen: der Punkt trennt die Formeleinheit vom Kristallwasser.
+# "*" kommt in Wikidata vereinzelt statt des Punktes vor.
+_HYDRAT_TRENNER = re.compile(r"[·⋅•∙*]")
+_KLAMMER_AUF, _KLAMMER_ZU = "([{", ")]}"
+_EDELGAS_OHNE_EN = ("He", "Ne", "Ar", "Rn")
+
+
+class _MengeUnbestimmt(Exception):
+    """Ein Index ist eine Variable ("Cu₂₋ₓ") - die Menge ist nicht ableitbar."""
+
+
+def elemente_aus_formel(formel: str) -> Optional[tuple]:
+    """Summenformel -> ({Element: Anzahl oder None}, {unsichere Elemente}).
+
+    Erster Rueckgabewert sind die Elemente, die SICHER enthalten sind; steht
+    dort None statt einer Zahl, ist das Element sicher und nur seine Menge
+    unbestimmt. Zweiter Rueckgabewert sind Elemente, die bloss eine
+    Moeglichkeit einer Mischreihe sind - fuer die darf nichts behauptet
+    werden.
+
+    None, wenn die Formel gar nicht deutbar ist.
+    """
+    if not formel:
+        return None
+    rest = formel.strip().translate(_TIEFZIFFERN).translate(
+        _LADUNG_UND_LEERSTELLE)
+    # ASCII-Ladungen ("Te6+"): eine Ziffernfolge unmittelbar vor + oder - ist
+    # nie ein stoechiometrischer Index, sondern eine Oxidationsstufe.
+    rest = re.sub(r"\d+[+-]", "", rest)
+    if not rest:
+        return None
+
+    sicher_mit_menge = collections.Counter()
+    nur_moeglich = set()
+    menge_offen = set()
+
+    for i, teil in enumerate(_HYDRAT_TRENNER.split(rest)):
+        if not teil:
+            continue
+        faktor = 1
+        if i > 0:
+            # Die Zahl direkt hinter dem Punkt multipliziert den Hydratanteil:
+            # "·8H₂O" sind acht Formeleinheiten Wasser.
+            treffer = re.match(r"\d+", teil)
+            if treffer:
+                faktor, teil = int(treffer.group()), teil[treffer.end():]
+            else:
+                # "·nH₂O" - variable Wassermenge. Die Elemente stehen fest,
+                # ihre Anzahl nicht.
+                ohne_variable = re.sub(r"^[a-z]+", "", teil)
+                if ohne_variable != teil:
+                    teil, faktor = ohne_variable, None
+        if not teil:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9.()\[\]{},]+", teil):
+            return None
+        try:
+            fest, offen, alternativ = _formelausdruck(teil)
+        except _MengeUnbestimmt:
+            return None
+        if fest is None:
+            return None
+
+        if faktor is None:
+            # Alles aus diesem Abschnitt ist da, aber unbestimmt oft.
+            for element in fest:
+                sicher_mit_menge.setdefault(element, 0)
+            menge_offen |= set(fest) | offen
+        else:
+            for element, anzahl in fest.items():
+                sicher_mit_menge[element] += anzahl * faktor
+            menge_offen |= offen
+        nur_moeglich |= alternativ
+
+    if not sicher_mit_menge and not nur_moeglich:
+        return None
+
+    # Ein Element, das irgendwo unbedingt vorkommt, IST enthalten - auch wenn
+    # es zusaetzlich in einer Mischreihe auftaucht. Dann steht nur seine
+    # Gesamtmenge nicht fest: in "Al₁₃Si₅O₂₀(OH,F)₁₈Cl" ist Sauerstoff durch
+    # O₂₀ gesichert, wie viel davon aus (OH,F) dazukommt aber nicht.
+    sicher = {
+        element: (None if element in menge_offen or element in nur_moeglich
+                  else anzahl)
+        for element, anzahl in sicher_mit_menge.items()
+    }
+    return sicher, {e for e in nur_moeglich if e not in sicher_mit_menge}
+
+
+def _formelausdruck(rest: str) -> tuple:
+    """(feste Zusammensetzung, Elemente mit offener Menge, Alternativen).
+
+    Rekursiv ueber die Klammerebenen. Die feste Zusammensetzung enthaelt nur,
+    was unbedingt vorkommt; alles aus einer Kommagruppe landet je nach
+    Zweigvergleich in den beiden anderen Mengen.
+    """
+    fest = collections.Counter()
+    offen, alternativ = set(), set()
+    pos = 0
+    while pos < len(rest):
+        zeichen = rest[pos]
+        if zeichen in _KLAMMER_AUF:
+            ende = _klammer_ende(rest, pos)
+            if ende is None:
+                return None, offen, alternativ
+            inhalt, pos = rest[pos + 1:ende], ende + 1
+            faktor, pos = _index_lesen(rest, pos)
+            zweige = [_formelausdruck(z) for z in _komma_zerlegen(inhalt)]
+            if not zweige or any(f is None for f, _, _ in zweige):
+                return None, offen, alternativ
+            gruppe, g_offen, g_alternativ = _zweige_vereinen(zweige)
+            if faktor is None:
+                offen |= set(gruppe)
+                faktor = 1
+            for element, anzahl in gruppe.items():
+                fest[element] += anzahl * faktor
+            offen |= g_offen
+            alternativ |= g_alternativ
+        elif zeichen in _KLAMMER_ZU or zeichen == ",":
+            return None, offen, alternativ  # Kommas trennt _komma_zerlegen
+        else:
+            treffer = re.match(r"([A-Z][a-z]?)(\d+\.\d+|\d*)", rest[pos:])
+            if not treffer or not treffer.group(1):
+                return None, offen, alternativ
+            symbol = treffer.group(1)
+            if symbol not in PAULING and symbol not in _EDELGAS_OHNE_EN:
+                return None, offen, alternativ
+            pos += treffer.end()
+            if re.match(r"[a-z]", rest[pos:]):
+                raise _MengeUnbestimmt
+            index = treffer.group(2)
+            if "." in index:
+                # Nichtstoechiometrische Phase ("Ag₁.₁Hg₀.₉"): das Element ist
+                # da, eine gebrochene Anzahl gehoert aber nicht in P1114.
+                offen.add(symbol)
+                fest[symbol] += 1
+            else:
+                fest[symbol] += int(index) if index else 1
+    return fest, offen, alternativ
+
+
+def _zweige_vereinen(zweige: list) -> tuple:
+    """Fasst die Zweige einer Kommagruppe zusammen.
+
+    Was in JEDEM Zweig steht, ist gesichert - "(V⁵⁺,V⁴⁺)" ist zweimal
+    Vanadium. Nur wo die Zweige sich in der Anzahl unterscheiden, bleibt die
+    Menge offen. Alles Uebrige ist eine blosse Moeglichkeit.
+    """
+    if len(zweige) == 1:
+        return zweige[0]
+
+    gemeinsam = set.intersection(*(set(f) for f, _, _ in zweige))
+    gruppe = collections.Counter()
+    g_offen = set().union(*(o for _, o, _ in zweige))
+    g_alternativ = set().union(*(a for _, _, a in zweige))
+    for element in gemeinsam:
+        mengen = {f[element] for f, _, _ in zweige}
+        if len(mengen) == 1:
+            gruppe[element] = mengen.pop()
+        else:
+            gruppe[element] = 0
+            g_offen.add(element)
+    for fest, _, _ in zweige:
+        g_alternativ |= set(fest) - gemeinsam
+    return gruppe, g_offen, g_alternativ
+
+
+def _klammer_ende(rest: str, start: int) -> Optional[int]:
+    """Position der zugehoerigen schliessenden Klammer, oder None."""
+    tiefe = 0
+    for i in range(start, len(rest)):
+        if rest[i] in _KLAMMER_AUF:
+            tiefe += 1
+        elif rest[i] in _KLAMMER_ZU:
+            tiefe -= 1
+            if tiefe == 0:
+                return i
+    return None
+
+
+def _index_lesen(rest: str, pos: int) -> tuple:
+    """(Faktor, neue Position) hinter einer schliessenden Klammer.
+
+    Faktor None heisst: dort steht eine Variable statt einer Zahl.
+    """
+    treffer = re.match(r"\d+\.\d+|\d+", rest[pos:])
+    if treffer:
+        wert = treffer.group()
+        return (None if "." in wert else int(wert)), pos + treffer.end()
+    if re.match(r"[a-z]", rest[pos:]):
+        raise _MengeUnbestimmt
+    return 1, pos
+
+
+def _komma_zerlegen(rest: str) -> list:
+    """Teilt an den Kommas der OBERSTEN Ebene."""
+    teile, tiefe, letzter = [], 0, 0
+    for i, zeichen in enumerate(rest):
+        if zeichen in _KLAMMER_AUF:
+            tiefe += 1
+        elif zeichen in _KLAMMER_ZU:
+            tiefe -= 1
+        elif zeichen == "," and tiefe == 0:
+            teile.append(rest[letzter:i])
+            letzter = i + 1
+    teile.append(rest[letzter:])
+    return [t for t in teile if t]
+
+
+_ELEMENT_QID_CACHE = None
+
+
+def element_qids() -> dict:
+    """fetch_element_qids mit Zwischenspeicher.
+
+    Die Ableitung laeuft ueber Tausende Items; ohne Cache ginge je Item eine
+    SPARQL-Abfrage fuer dieselbe unveraenderliche Elementtabelle raus.
+    """
+    global _ELEMENT_QID_CACHE
+    if _ELEMENT_QID_CACHE is None:
+        _ELEMENT_QID_CACHE = fetch_element_qids()
+    return _ELEMENT_QID_CACHE
+
+
+def formel_proposals_for_item(wd_match: dict, formel: str,
+                              skip_pids: Optional[set] = None) -> list:
+    """P527-Vorschlaege aus der Summenformel des Items.
+
+    Anders als alle uebrigen Stufen holt diese NICHTS von aussen: der Wert
+    wird aus einer Angabe abgeleitet, die am Item schon steht. Deshalb geht
+    die Aussage OHNE S-Beleg raus - siehe OHNE_BELEG_DATENTYPEN, dieselbe
+    Ueberlegung wie bei den Identifikatoren. Ein "importiert aus Wikidata"
+    waere zirkulaer, und die Ableitung ist am Item selbst nachpruefbar: die
+    Formel steht in der Notiz.
+
+    Elemente, die nur EINE Moeglichkeit einer Mischreihe sind, werden nicht
+    vorgeschlagen, sondern zur Klaerung ausgewiesen - bei "(Fe,Mg)₂SiO₄"
+    haengt es vom Glied der Reihe ab, ob Eisen oder Magnesium drinsteckt.
+    """
+    skip_pids = skip_pids or set()
+    prop_info = PROPERTY_MAP["has_part"]
+    if prop_info["pid"] in skip_pids:
+        return []
+
+    zerlegt = elemente_aus_formel(formel)
+    if zerlegt is None:
+        return []
+    sicher, unsicher = zerlegt
+    if not sicher and not unsicher:
+        return []
+
+    symbole = element_qids()
+    # Das Item traegt die Property schon (etwa Quarz -> Siliciumdioxid): dann
+    # wird nichts ergaenzt. Eine bestehende P527-Modellierung mit Verbindungen
+    # statt Elementen zu vermischen, waere schlechter als eine Luecke.
+    vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
+    proposals = []
+
+    for symbol in sorted(sicher):
+        element = symbole.get(symbol)
+        if element is None:
+            continue  # Elementsymbol ohne Wikidata-Item - nicht raten
+        anzahl = sicher[symbol]
+        qualifiers = ([("P1114", str(anzahl), f"Anzahl {anzahl}")]
+                      if anzahl is not None else [])
+        hinweis = "" if anzahl is not None else ", Anzahl nicht bestimmbar"
+        proposals.append(make_row(
+            "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
+            "Formel", wd_match, prop_info, element["qid"], element["label"],
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P274",
+                note=f"abgeleitet aus der Summenformel {formel} "
+                     f"(P274 am Item){hinweis}",
+            ),
+            formula=formel, entry_id=f"formel-{symbol}",
+            qualifiers=qualifiers, ohne_beleg=True,
+        ))
+
+    if unsicher:
+        # Nicht still verschlucken: dass die Formel eine Mischreihe enthaelt,
+        # ist die interessanteste Aussage ueber sie.
+        namen = ", ".join(
+            symbole[s]["label"] if s in symbole else s for s in sorted(unsicher)
+        )
+        proposals.append(make_row(
+            f"MANUELLE_KLAERUNG_NOETIG (Mischreihe in {formel}: {namen} "
+            f"stehen zur Wahl, nicht nebeneinander)",
+            "Formel", wd_match, prop_info, "", namen,
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P274",
+                note=f"Mischreihe in {formel} - Elemente nicht ableitbar",
+            ),
+            formula=formel, entry_id="formel-mischreihe",
+            qualifiers=[], ohne_beleg=True,
+        ))
+    return proposals
 
 
 # ---------------------------------------------------------------------------
@@ -2664,26 +2783,10 @@ def item_has_statement(qid: str, pid: str) -> bool:
 # ---------------------------------------------------------------------------
 #
 # Diese Groessen beschreiben den FESTKOERPER und gehoeren nicht an ein Item,
-# das den Stoff bei Normalbedingungen beschreibt, wenn der dann ein Gas ist:
-#
-#   Moduln, Poissonzahl   am Gas nicht definiert - ein Gas hat keinen
-#                         Schubmodul
-#   Dichte                die des Festkoerpers, nicht die des Gases; MP
-#                         liefert sie fuer die relaxierte Zelle bei 0 K
-#                         (Neon: 1815 kg/m^3 gegen 0,9 kg/m^3 als Gas)
-#   Kristallsystem,       ein Gas hat bei Raumtemperatur keine Kristall-
-#   Raumgruppe            struktur
-#
-# Das Materials Project rechnet ausschliesslich kristalline Festkoerper, fuer
-# Stickstoff, Neon oder Argon also die TIEFTEMPERATURPHASE. Kein
-# hypothetischer Fall: Neon traegt in Wikidata bereits Kompressionsmodul,
-# Schubmodul UND Poissonzahl (geprueft 2026-08-16).
-#
-# Die Schallgeschwindigkeit (P2075) steht BEWUSST nicht in dieser Liste - in
-# Gasen ist sie sauber definiert und gemessen (Luft rund 343 m/s), die
-# Infobox-Werte fuer Gase sind also richtig. Die COD-ID bleibt ebenfalls: sie
-# ist ein Verweis auf einen Datenbankeintrag, keine Aussage ueber den Stoff
-# bei Raumtemperatur.
+# dessen Stoff bei Normalbedingungen ein Gas ist - MP rechnet dann die
+# Tieftemperaturphase. Welche Groesse aus welchem Grund gesperrt ist und warum
+# Schallgeschwindigkeit und COD-ID BEWUSST fehlen: README, "Keine
+# Festkoerper-Kennwerte an Gasen".
 NUR_FESTKOERPER = ("bulk_modulus", "shear_modulus", "poisson_ratio",
                    "density", "crystal_system", "space_group")
 RAUMTEMPERATUR_K = 293.15
@@ -2747,19 +2850,10 @@ def ist_bei_raumtemperatur_gas(qid: str) -> bool:
 # Bewusst NICHT umgesetzt: die chemische Metaklasse (P31)
 # ---------------------------------------------------------------------------
 #
-# [[Wikidata:WikiProject Chemistry]] bittet unter "How to contribute" darum,
-# jedem reinen Stoff P31 = "type of chemical entity" (Q113145171) zu geben.
-# Eine Umsetzung lag hier schon vor und wurde wieder entfernt: die Definition
-# ist derzeit zu vage, und ein automatisierter Massenvorschlag braucht erst
-# eine Abstimmung mit der Community.
-#
-# Der Widerspruch, an dem es haengt (gemessen 2026-08-16): Die Projektseite
-# sagt "each pure chemical substance", die verbindliche Guideline dagegen nur
-# "stereochemically or isotopically defined chemical entities". In der Praxis
-# tragen 1.280.233 Items die Metaklasse, aber KEINES der 118 Elemente - und
-# 387 Gemische tragen sie regelwidrig, darunter Messing.
-#
-# Wer das wieder aufgreift, faengt bei dieser Klaerung an, nicht beim Code.
+# P31 = "type of chemical entity" (Q113145171) wird bewusst NICHT
+# vorgeschlagen: die Definition widerspricht sich zwischen Projektseite und
+# Guideline. Wer das wieder aufgreift, faengt bei dieser Klaerung an, nicht
+# beim Code - Zahlen und Belege im README, "Bewusst nicht umgesetzt".
 
 
 def verfeinere_zentrierung(system, hm_symbol) -> str:
@@ -3052,7 +3146,8 @@ def round_significant(value: float, digits: int = 6) -> float:
 
 
 def make_row(status, source, wd_match, prop_info, value, value_label,
-             reference, formula="", entry_id="", qualifiers=None):
+             reference, formula="", entry_id="", qualifiers=None,
+             ohne_beleg=False):
     """Baut eine Vorschlagszeile - einheitlich fuer alle Quellen.
 
     qualifiers ist eine Liste (pid, quickstatements_wert, klartext). Der Wert
@@ -3060,6 +3155,11 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
     itemwertige, "20U25267" fuer eine mengenwertige Angabe. Er landet sowohl
     lesbar in der CSV-Spalte "bestimmungsmethode" als auch maschinenlesbar
     im QuickStatements-Entwurf.
+
+    ohne_beleg erzwingt den belegfreien Modus auch fuer Datentypen, die nicht
+    in OHNE_BELEG_DATENTYPEN stehen. Gebraucht wird das fuer AUS DEM ITEM
+    ABGELEITETE Aussagen (P527 aus der Summenformel): dort gibt es keine
+    externe Quelle, die man zitieren koennte.
     """
     qualifiers = qualifiers or []
     datentyp = prop_info.get("datatype", "quantity")
@@ -3080,14 +3180,16 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
         "entry_id": entry_id,
     }
 
-    ohne_beleg = datentyp in OHNE_BELEG_DATENTYPEN
+    ohne_beleg = ohne_beleg or datentyp in OHNE_BELEG_DATENTYPEN
     if ohne_beleg:
         # Belegspalten leer lassen - eine gefuellte ref_doi wuerde beim
         # Durchsehen suggerieren, dass ein Beleg mitgeschrieben wird.
         # Die HERKUNFT bleibt in ref_note stehen, damit die Zeile pruefbar
         # ist; sie ist nur kein Beleg im Sinne von Wikidata.
         row.update({
-            "ref_mode": "ohne Beleg (Identifikator)",
+            "ref_mode": ("ohne Beleg (Identifikator)"
+                         if datentyp in OHNE_BELEG_DATENTYPEN
+                         else "ohne Beleg (aus dem Item abgeleitet)"),
             "ref_doi": "", "ref_isbn": "", "ref_url": "", "ref_retrieved": "",
             "ref_note": reference.note,
         })
@@ -3403,7 +3505,7 @@ def _klaerungs_zeilen(row: dict) -> list:
         zeilen = [f"# Formel {row.get('formula', '?')}: {grund}"]
         for kandidat in row["kandidaten"].split("; "):
             zeilen.append(f"#     {kandidat}")
-        zeilen.append(f"#     NOMAD-Eintrag {row.get('entry_id', '?')}, "
+        zeilen.append(f"#     Eintrag {row.get('entry_id', '?')}, "
                       f"DOI {row.get('ref_doi') or '?'}")
         return zeilen
     return [
@@ -3501,8 +3603,12 @@ def write_quickstatements_draft(proposals: list, path: str = "quickstatements_en
             f"{row['qid']}\t{row['_pid']}\t{wert}{qual}{beleg}"
         )
         klartext = f" ({row['value_label']})" if row.get("value_label") else ""
-        modus = ("ohne Beleg, Identifikator"
-                 if row.get("_ohne_beleg") else ref.mode)
+        if not row.get("_ohne_beleg"):
+            modus = ref.mode
+        elif row.get("datatype") in OHNE_BELEG_DATENTYPEN:
+            modus = "ohne Beleg, Identifikator"
+        else:
+            modus = "ohne Beleg, aus dem Item abgeleitet"
         lines.append(
             f"# Quelle: {row['source']} ({modus}) - {ref.note}{klartext}")
     if not vorschlaege:
@@ -3623,7 +3729,7 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
         zeilen_gen = build_proposals_for_items(
             charge, args.wikipedia, args.cod,
             args.experimentell, args.stabil, args.max,
-            nummer_ab=erstes, gesamt=gesamt,
+            nummer_ab=erstes, gesamt=gesamt, formel=args.formel,
         )
         try:
             zeilen = write_csv_streaming(zeilen_gen, csv_pfad)
@@ -3720,7 +3826,7 @@ def main():
         help="nur Materialien mit experimentellem Nachweis (theoretical=false, "
         "in aller Regel ICSD-hinterlegt). Default: an. --no-experimentell "
         "laesst auch rein gerechnete Strukturen zu - dann steigt die Ausbeute, "
-        "aber die Verlaesslichkeit sinkt genau so, wie sie es bei NOMAD tat",
+        "aber die Verlaesslichkeit sinkt entsprechend",
     )
     parser.add_argument(
         "--stabil",
@@ -3748,6 +3854,16 @@ def main():
         "Project drankommt: CC0 statt CC BY, gemessene Struktur statt "
         "DFT-Rechnung, DOI der Originalarbeit statt Sammel-DOI. Default: an. "
         "Mit --no-cod liefert wieder MP diese Groessen",
+    )
+    parser.add_argument(
+        "--formel",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="'besteht aus' (P527) aus der Summenformel des Items ableiten, "
+        "je Element eine Aussage mit der Anzahl als Qualifikator (P1114). "
+        "Braucht keine externe Quelle und geht deshalb ohne S-Beleg raus. "
+        "Elemente aus Mischreihen wie (Fe,Mg) werden NICHT vorgeschlagen, "
+        "sondern zur Klaerung ausgewiesen. Default: an",
     )
     parser.add_argument(
         "--nur-metalle",
@@ -3780,7 +3896,7 @@ def main():
     if args.group:
         proposals = build_group_proposals(
             args.group, args.limit, args.wikipedia, args.cod,
-            args.experimentell, args.stabil, args.max,
+            args.experimentell, args.stabil, args.max, formel=args.formel,
         )
     elif args.periodic_table:
         proposals = build_periodic_table_proposals(

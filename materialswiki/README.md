@@ -6,13 +6,12 @@ Wikidata-Statements. Das Skript **legt keine neuen Wikidata-Items an und
 schreibt nichts automatisch nach Wikidata** — es liefert CSV-Kandidaten zur
 manuellen Prüfung.
 
-## Warum Materials Project und nicht mehr NOMAD
+## Warum das Materials Project
 
-NOMAD lieferte wenige und in der Einzelprüfung nicht belastbare Werte. Der
-Grund ist strukturell: NOMAD sammelt **einzelne Rechnungen**, ohne Aussage
-darüber, ob das gerechnete Material real existiert oder überhaupt stabil ist.
-Ein Wert konnte aus einer hypothetischen Struktur stammen, und man sah es der
-Zeile nicht an.
+Entscheidend ist nicht die Menge der Werte, sondern ob sich einer Zeile
+ansehen lässt, wie belastbar sie ist. Eine reine Sammlung **einzelner
+Rechnungen** kann das nicht: dort steht nirgends, ob das gerechnete Material
+real existiert oder überhaupt stabil ist.
 
 Das Materials Project pflegt dagegen kuratierte Materialdokumente und macht
 genau diese Einordnung **als Query-Parameter** abfragbar:
@@ -23,17 +22,13 @@ genau diese Einordnung **als Query-Parameter** abfragbar:
 | `is_stable=true` | auf der konvexen Hülle, thermodynamisch stabil | an (`--no-stabil` schaltet ab) |
 | `deprecated=false` | keine zurückgezogenen Dokumente | immer an |
 
-Damit fällt genau das weg, was die NOMAD-Ausbeute unbrauchbar machte.
-`--no-experimentell` lässt auch rein gerechnete Strukturen zu — die Ausbeute
-steigt dann, die Verlässlichkeit sinkt aber genau so, wie sie es bei NOMAD tat.
+Damit fallen hypothetische Strukturen, instabile Phasen und Rechenartefakte
+von vornherein weg. `--no-experimentell` lässt auch rein gerechnete
+Strukturen zu — die Ausbeute steigt dann, die Verlässlichkeit sinkt.
 
-Zwei weitere Verbesserungen fallen nebenbei ab:
-
-- **Eine Anfrage statt 1+N.** Ein MP-Materialdokument enthält Formel,
-  Symmetrie und alle Kennwerte auf einmal; NOMAD brauchte je Eintrag einen
-  zweiten Archiv-Abruf.
-- **Eine Größe mehr.** MP führt die Poissonzahl (`P5593`) als Skalar, NOMAD
-  nicht. Abgedeckt sind damit fünf statt vier Properties.
+Dazu kommt: Ein MP-Materialdokument enthält Formel, Symmetrie und alle
+Kennwerte **auf einmal**, es genügt also eine Anfrage je Material statt einer
+Trefferliste plus Einzelabrufen.
 
 ## API-Schlüssel (Pflicht)
 
@@ -487,9 +482,14 @@ In **beiden Modi dieselbe**; jede Stufe liefert nur, was die vorherige nicht
 schon belegt hat:
 
 ```
-COD (DOI der Originalarbeit)  →  Materials Project (DOI)
+Formel (ohne Netzzugriff)     →  COD (DOI der Originalarbeit)
+                              →  Materials Project (DOI)
                               →  de.wikipedia (Import)  →  en.wikipedia (Import)
 ```
+
+Die Stufe **Formel** steht vorn, weil sie ohne eine einzige Netzanfrage
+auskommt und eine Property liefert, die keine der externen Quellen führt —
+siehe [„besteht aus" (P527)](#besteht-aus-p527-aus-der-summenformel).
 
 Die **[Crystallography Open Database](https://www.crystallography.net/cod/)**
 steht vorn und ist die primäre Quelle für Raumgruppe (P690), Kristallsystem
@@ -535,6 +535,201 @@ Zwei weitere Eigenheiten der COD-Abfrage, beide im Code behandelt:
 - Ein COD-Eintrag beschreibt eine Struktur *innerhalb* einer Publikation. Der
   Publikationstitel sagt daher nichts über den Stoff — der beste Kupfertreffer
   steht in einer Arbeit über Ammoniak-Monohydrat.
+
+### „besteht aus" (P527) aus der Summenformel
+
+Welche Elemente ein Stoff enthält, steht bereits in seiner Summenformel — es
+braucht dafür keine externe Quelle. Deshalb lohnt die Stufe: P527 ist bei
+Mineralarten nahezu leer (249 von 6301, gemessen 2026-08-17), während 5694
+eine Formel tragen.
+
+Das Modellvorbild ist Wasser (Q283), am 2026-08-17 abgefragt: `P527 → Q556`
+(Wasserstoff) mit `P1114 = 2` und `P527 → Q629` (Sauerstoff) mit `P1114 = 1`.
+Also **Element plus stöchiometrischer Anzahl** als Qualifikator. Genau diese
+Form wird erzeugt.
+
+**Warum ein zweiter Parser neben `parse_formula`.** `parse_formula` ist für
+den Item-*Abgleich* gebaut und deshalb bewusst streng: es braucht die exakte
+Stöchiometrie, um `TiO₂` gegen Wikidata zu suchen, und lehnt alles ab, was
+daran zweifeln lässt. An echten Mineralformeln scheitert es dadurch in
+**61,8 %** der Fälle (3524 von 5700, gemessen 2026-08-17) — an Hydratpunkten,
+Ladungen, eckigen Klammern, Leerstellen. Für P527 ist die Anforderung aber
+schwächer: gebraucht wird, *welche* Elemente vorkommen, nicht in welchem
+Verhältnis. `Co₃(AsO₄)₂·8H₂O` ist stöchiometrisch unbequem, aber dass Cobalt,
+Arsen, Sauerstoff und Wasserstoff darin stecken, ist eindeutig. Der Abgleich
+darf seine Strenge nicht verlieren, also steht daneben ein toleranterer
+Parser.
+
+**Die eigentliche Falle sind Mischreihen.** Mineralformeln schreiben
+Mischkristallreihen als Klammer mit Komma: `(Fe,Mg)₂SiO₄` heißt Fe *oder* Mg
+auf derselben Gitterposition, je nach Glied der Reihe. Wer daraus „besteht
+aus Eisen" **und** „besteht aus Magnesium" macht, behauptet für jedes
+Endglied etwas Falsches. 850 der 5700 Formeln enthalten ein solches Komma —
+ein Fehler wäre also nicht die Ausnahme. Unterschieden wird dreifach:
+
+| Fall | Ergebnis |
+|---|---|
+| Element sicher, Menge sicher | `P527` **mit** `P1114` |
+| Element sicher, Menge offen | `P527` **ohne** `P1114` |
+| Element nur eine Möglichkeit | nichts, nur `MANUELLE_KLAERUNG_NOETIG` |
+
+Ein Element gilt als sicher, wenn es mindestens einmal **außerhalb** jeder
+Kommagruppe steht — oder wenn es in **jedem** Zweig einer Kommagruppe
+vorkommt. Der zweite Fall ist nicht theoretisch: `(V⁵⁺,V⁴⁺)₄` nennt zweimal
+Vanadium in verschiedenen Oxidationsstufen, Vanadium steht also fest.
+Umgekehrt ist in `Al₁₃Si₅O₂₀(OH,F)₁₈Cl` der Sauerstoff durch `O₂₀` gesichert,
+nur seine Gesamtmenge nicht.
+
+Abdeckung an 5700 echten Formeln (2026-08-17):
+
+| | Anteil |
+|---|---|
+| voll bestimmt | 76,7 % |
+| voll bestimmt neben einer Mischreihe | 9,3 % |
+| Element sicher, Menge teils offen | 8,5 % |
+| nicht deutbar | 5,2 % |
+| kein sicheres Element | 0,3 % |
+
+Macht rund **22 970 P527-Aussagen, davon 22 195 mit Anzahl**. Nicht deutbar
+bleiben Variablen im Index (`Cu₂₋ₓAlₓ…`) und Bereichsangaben
+(`·(10-12)H₂O`) — dort wird bewusst nichts behauptet.
+
+**Beleg.** Die Stufe holt nichts von außen, sie leitet aus P274 am Item selbst
+ab. Ein „importiert aus Wikidata" wäre zirkulär, und ein passendes
+Heuristik-Item für P887 existiert nicht. Die Aussagen gehen deshalb **ohne
+S-Beleg** raus — dieselbe Überlegung wie bei den Identifikatoren (siehe
+[Identifikatoren bekommen gar keinen Beleg](#identifikatoren-bekommen-gar-keinen-beleg)).
+Die Herkunft samt Formel bleibt in der CSV-Spalte `ref_note` nachprüfbar.
+Trägt ein Item bereits P527, wird **nichts ergänzt**: manche Items sind mit
+Verbindungen statt Elementen modelliert (Quarz → Siliciumdioxid), und beide
+Modellierungen zu vermischen wäre schlechter als eine Lücke.
+
+Abschaltbar mit `--no-formel`.
+
+### Die drei Wikipedia-Stufen und ihre Fallstricke
+
+Welche Infobox gelesen wird, entscheidet sich am Artikel. Alle drei Stufen
+belegen als Wikimedia-Import (`P143` + `P4656` mit Permalink auf die
+konkrete Version), sofern der Wert nicht selbst einen Einzelnachweis trägt.
+
+**1. `{{Infobox Chemisches Element}}` (de).** Die ergiebigste Quelle
+überhaupt — sie führt als einzige spezifische Wärmekapazität (`P2056`),
+elektrische Leitfähigkeit (`P2055`), Schallgeschwindigkeit (`P2075`),
+Poissonzahl (`P5593`) und CAS-Nummer (`P231`). Sie steht im **Artikel**, nicht
+in einer eigenen Vorlagenseite. Der Artikeltitel wird über den
+Wikidata-Sitelink aufgelöst und **nicht** aus dem Elementnamen geraten: Titan
+liegt unter „Titan (Element)", weil „Titan" der Mond bzw. die Mythologie ist.
+
+Deutsche Zahl- und Markup-Eigenheiten, alle real im Bestand:
+
+| Beispiel | Eigenheit |
+|---|---|
+| `8,96&nbsp;g/cm³ (20 [[Grad Celsius\|°C]])` | Dezimalkomma, Messtemperatur im Text |
+| `58,1 · 10<sup>6</sup>` | Zehnerpotenz als Markup |
+| `1812 ± 1 [[Kelvin\|K]]` | Toleranzangabe |
+| `etwa 7,14 · 10<sup>6</sup>` | Unschärfewort |
+| `α-Eisen: kubisch raumzentriert<br />γ-…` | **mehrdeutig** |
+| `Graphit: 2,26 g/cm<sup>3</sup><br />Diamant: 3,51` | **mehrdeutig** |
+| `<!--G: 119–165 W/(m·K)-->` | auskommentiert |
+
+Werte mit `<br` oder `:` bezeichnen mehrere Modifikationen und werden
+**verworfen** — sonst landete willkürlich Graphit oder Diamant als „der" Wert
+des Elements in Wikidata.
+
+**2. `Template:Infobox <element>` (en).** Je Element eine eigene Vorlagenseite.
+Angenehm: `melting point K` / `boiling point K` stehen bereits in Kelvin, also
+in der Wikidata-Einheit. Trotzdem nötig ist Vorsicht — reale Fälle:
+`density=8.935&nbsp;g/cm<sup>3</sup>&thinsp;<ref …/>`,
+`thermal conductivity=graphite: 119-165` (Prosa plus Bereich),
+`electrical resistivity at 20=2.3{{e|3}}` (Vorlage im Wert). Deshalb wird
+Markup entfernt und anschließend nur ein **sauberer** Zahlwert akzeptiert;
+alles mit Buchstaben, Bereich oder Restvorlage wird verworfen.
+
+**3. `{{Chembox}}` (en, Verbindungen).** Steht wieder im Artikel selbst. Die
+Einheit steckt hier im **Feldnamen** (`MeltingPtC` vs. `MeltingPtK`), es muss
+also nichts geraten werden. Im Mapping stehen die Kelvin-Felder vor den
+Celsius-Feldern, damit der Wert ohne Umrechnung gewinnt, wenn die Box beide
+führt.
+
+**Einzelnachweise schlagen den Import.** Trägt ein Infobox-Wert einen eigenen
+`<ref>` mit DOI oder ISBN, ist das ein echter Literaturbeleg und wird statt
+des Wikimedia-Imports gesetzt. Zu behandeln sind dabei `[[doi:…]]`,
+`{{DOI|…}}`, `|DOI=…`, `|ISBN=…` — und vor allem die reine **Wiederverwendung**
+`<ref name="Binder" />`, deren Inhalt an anderer Stelle im Artikel steht und
+über den Namen aufgelöst werden muss. Ohne das ginge bei der spezifischen
+Wärmekapazität der Beleg verloren.
+
+## Werkstoffgruppen (`--group`)
+
+Statt über Elemente oder Formeln lässt sich eine ganze Gruppe bestehender
+Wikidata-Items durchgehen. Wie ergiebig das ist, hängt stark an der Gruppe
+(gemessen 2026-08-16):
+
+| Gruppe | Items | mit Formel | mit de-Artikel |
+|---|---|---|---|
+| `minerale` | 6301 | 5694 | 1806 |
+| `legierungen` | 568 | 10 | 178 |
+| `oxide` | 154 | 154 | 108 |
+
+**`minerale`** ist mit Abstand die ergiebigste Gruppe: Instanzen von
+`Q12089225`, also die von der IMA geführten Arten — bewusst **nicht** der
+Subtree unter `Q7946` „Mineral", der auch Gruppen und Sammelbegriffe enthält.
+Bei den Legierungen ist die Summenformel dagegen die Ausnahme (Stahl hat
+keine), weshalb COD und Materials Project dort kaum etwas beitragen können.
+
+**`legierungen` braucht einen Filter, sonst ist die Grundgesamtheit Müll.**
+Die naheliegende Abfrage — alles unter Legierung (`Q37756`) — liefert 3718
+Items. Grund ist ein Modellierungsfehler in Wikidata:
+
+```
+Q11426 "Metalle"  wdt:P279  Q37756 "Legierung"
+```
+
+Metalle sind dort eine *Unterklasse* von Legierung, fachlich genau verkehrt
+herum. Dadurch hängt jedes Metall und jedes Metallisotop unter „Legierung";
+die Trefferliste füllt sich mit Selen-78, Rubidium-87 und gediegenem Kupfer
+(geprüft 2026-08-16, Pfad: Selen-78 → Selen → Halbmetalle → Metalle →
+Legierung). Ausgeschlossen wird deshalb, was eine **Ordnungszahl** trägt:
+Elemente und ihre Isotope. Das ist der präzise Schnitt — aus 3718 Items
+werden 1081.
+
+Ein früherer Versuch schnitt stattdessen den ganzen Metalle-Zweig weg. Das
+war zu grob und riss 17 echte Legierungen mit, darunter **Stahl**, Gusseisen
+und Ti-6Al-4V — die hängen völlig zu Recht auch unter „Metalle". Gemessen an
+den 94 klassifizierten Legierungen aus [[en:List of named alloys]]: der alte
+Filter ließ 77 durch, der neue alle 94.
+
+**`oxide`** verlangt die Summenformel als Teil der *Definition*, nicht bloß
+als Filter: der Subtree unter `Q50690` umfasst 27670 Items, die allermeisten
+labellose Massenimporte ohne jede Angabe. Ohne Formel ist ein Item für diesen
+Zweck wertlos.
+
+### Prüfliste statt Datenquelle
+
+Für die Gruppe aus [[en:List of named alloys]] wird zusätzlich **gemeldet**,
+welche Items nicht als Legierung klassifiziert sind — vorgeschlagen wird dazu
+nichts. Die Einordnung eines Werkstoffs in die Klassenhierarchie ist eine
+fachliche Entscheidung, und [[Wikidata:WikiProject Materials/Materials]]
+verlangt dafür eine differenzierte Einhängung (Ferrous alloy, Alloy steel …),
+die sich aus dem Basismetall allein nicht ableiten lässt.
+
+Die Liste ist als Prüfliste ohnehin wertvoller denn als Datenquelle. Gemessen
+2026-08-16: 140 benannte Legierungen, davon 104 mit Wikidata-Item, davon 94
+als Legierung klassifiziert. Die Kennwerte sind praktisch leer —
+Zugfestigkeit 0 von 104, Elastizitätsmodul 2, Dichte 6.
+
+### Chargenbetrieb (`--batch-size`)
+
+Bei 6301 Mineralen läuft ein Durchgang stundenlang, und ohne Zwischenstände
+gäbe es bis zum Schluss keine einspielbaren QuickStatements. Mit
+`--batch-size N` werden CSV und Entwurf nach **jeder** Charge geschrieben —
+man kann also einspielen, während der Rest noch läuft, und ein Abbruch kostet
+höchstens die angefangene Charge.
+
+Der Stand landet in einer Fortschrittsdatei; `--weiter` setzt dort auf. Nach
+einem Abbruch steht der Fortschritt auf der letzten **vollständigen** Charge,
+die angefangene wird wiederholt — lieber doppelt geprüfte Items als
+übersprungene.
 
 ### Auswahl im Periodensystem-Modus: Metalle und Halbmetalle
 
@@ -719,10 +914,16 @@ ausgewertet am 2026-08-15).
 
 Bewusst **nicht** übernommen, obwohl MP es führt:
 
-- **Bandlücke** (`band_gap`, eV) — Wikidata hat dafür keine Property. Die
-  beiden passenden Items (Q806352, Q103982939) sind als Prädikat unbrauchbar;
-  der saubere Weg wäre ein Property-Proposal. Details im Kommentar zu
-  `MP_FIELD_MAP` in [cli.py](cli.py).
+- **Bandlücke** (`band_gap`, eV) — Wikidata hat dafür **keine** Property. Es
+  gibt zwei thematisch passende Items, beide als Prädikat unbrauchbar, denn
+  an der mittleren Stelle einer Aussage steht zwingend eine P-Nummer:
+  `Q806352` „Bandlücke" (Konzept, Energiebereich) und `Q103982939`
+  „Bandlückenenergie" (physikalische Größe). Geprüft am 2026-08-13: keines
+  der beiden trägt `P1687`, keine Property trägt `P1629` darauf, ein Sweep
+  über alle `quantity`-Properties auf band/gap/semiconduct liefert nur
+  `P2911` „time gap" und `P9279` „Egapro", und auch Silizium (Q670) und
+  Galliumarsenid (Q147395) führen keine solche Aussage. Der saubere Weg wäre
+  ein Property-Proposal mit `P1629` → `Q103982939`.
 - **Dielektrizitätskonstante, Brechungsindex, piezoelektrischer Modul,
   Austrittsarbeit, Magnetisierung** — rechnerische Größen ohne etablierte
   Wikidata-Property bzw. ohne eindeutigen Bezug zum Stoff statt zur

@@ -42,29 +42,19 @@ def nach_pid(rows):
 
 # --- Einheitenumrechnung, der eigentliche Fallstrick ----------------------
 
-def test_dichte_wird_von_g_pro_cm3_nach_kg_pro_m3_gerechnet():
-    """MP liefert g/cm³, Wikidata P2054 erwartet kg/m³."""
-    zeilen = nach_pid(proposals_for_material(RUTIL, WD))
-    assert zeilen["P2054"]["value"] == pytest.approx(4240.0)
-
-
-def test_moduln_werden_von_gpa_nach_pascal_gerechnet():
-    """MP liefert GPa, Wikidata P5668/P5673 erwarten Pascal."""
-    zeilen = nach_pid(proposals_for_material(RUTIL, WD))
-    assert zeilen["P5668"]["value"] == pytest.approx(2.13e11)
-    assert zeilen["P5673"]["value"] == pytest.approx(1.02e11)
-
-
-def test_moduln_nehmen_das_voigt_reuss_hill_mittel():
-    """Nicht voigt (216) oder reuss (210), sondern vrh (213)."""
-    zeilen = nach_pid(proposals_for_material(RUTIL, WD))
-    assert zeilen["P5668"]["value"] == pytest.approx(213.0 * 1e9)
-
-
-def test_poissonzahl_bleibt_dimensionslos():
-    zeilen = nach_pid(proposals_for_material(RUTIL, WD))
-    assert zeilen["P5593"]["value"] == pytest.approx(0.28)
-    assert zeilen["P5593"]["unit_qid"] == ""
+@pytest.mark.parametrize("pid, erwartet, einheit", [
+    # g/cm³ -> kg/m³
+    ("P2054", 4240.0, "Q844211"),
+    # GPa -> Pa, und zwar das vrh-Mittel (213), nicht voigt (216)/reuss (210)
+    ("P5668", 213.0e9, "Q44395"),
+    ("P5673", 102.0e9, "Q44395"),
+    # dimensionslos, bleibt wie geliefert
+    ("P5593", 0.28, ""),
+])
+def test_einheiten_werden_umgerechnet(pid, erwartet, einheit):
+    zeile = nach_pid(proposals_for_material(RUTIL, WD))[pid]
+    assert zeile["value"] == pytest.approx(erwartet)
+    assert zeile["unit_qid"] == einheit
 
 
 # --- Kristallsystem -------------------------------------------------------
@@ -84,21 +74,15 @@ def test_unbekanntes_kristallsystem_wird_nicht_geraten():
 
 # --- Beleg ----------------------------------------------------------------
 
-def test_beleg_traegt_datenbank_doi_und_mp_id():
+def test_beleg_nennt_doi_mp_id_und_qualitaetsmerkmale():
     """Einzelne MP-Materialien haben keine eigene DOI - belegt wird mit der
-    Referenzpublikation, identifiziert ueber die mp-ID."""
+    Referenzpublikation, identifiziert ueber die mp-ID. Beim Durchsehen soll
+    ausserdem ohne Nachschlagen erkennbar sein, worauf der Wert beruht."""
     zeile = proposals_for_material(RUTIL, WD)[0]
     assert zeile["ref_doi"] == MP_DOI
-    assert "mp-2657" in zeile["ref_note"]
-
-
-def test_beleg_nennt_qualitaetsmerkmale():
-    """Beim Durchsehen soll ohne Nachschlagen erkennbar sein, worauf der
-    Wert beruht."""
-    note = proposals_for_material(RUTIL, WD)[0]["ref_note"]
-    assert "experimentell nachgewiesen" in note
-    assert "stabil" in note
-    assert "icsd-33837" in note
+    for text in ("mp-2657", "experimentell nachgewiesen", "stabil",
+                 "icsd-33837"):
+        assert text in zeile["ref_note"]
 
 
 def test_gerechnete_werte_sind_als_berechnet_ausgewiesen():
@@ -123,40 +107,31 @@ def test_gerechnete_aussagen_tragen_p459_dft():
     for pid in ("P2054", "P5668", "P5673", "P5593"):
         assert (DETERMINATION_PID, DFT_QID, "Dichtefunktionaltheorie") \
             in zeilen[pid]["_qualifiers"], pid
-
-
-def test_bestimmungsmethode_steht_lesbar_in_der_csv():
-    zeile = nach_pid(proposals_for_material(RUTIL, WD))["P5668"]
-    assert zeile["bestimmungsmethode"] == \
+    # und lesbar in der CSV
+    assert zeilen["P5668"]["bestimmungsmethode"] == \
         "P459=Q1048589 (Dichtefunktionaltheorie)"
 
 
 # --- Literaturbeleg statt Rechnung ---------------------------------------
 
 def test_kristallsystem_wird_mit_literatur_belegt():
-    """Dass Rutil tetragonal ist, ist etablierte Kristallographie. Eine
-    DFT-Symmetrieanalyse dafuer zu zitieren waere die schlechtere Quelle."""
+    """Dass Rutil tetragonal ist, ist etablierte Kristallographie - eine
+    DFT-Symmetrieanalyse dafuer zu zitieren waere die schlechtere Quelle.
+    Ein Literaturwert mit dem Vermerk "berechnet" waere zugleich falsch, und
+    die Herkunft aus MP muss trotzdem pruefbar bleiben: sonst ist nicht
+    erkennbar, welche Modifikation gemeint ist."""
     zeile = nach_pid(proposals_for_material(RUTIL, WD))["P556"]
+
     assert zeile["ref_isbn"] == "0-08-037941-9"
     assert zeile["ref_doi"] == ""
     assert zeile["ref_mode"] == "ISBN-10"
 
-
-def test_kristallsystem_traegt_keinen_dft_qualifikator():
-    """Ein Literaturwert mit dem Vermerk 'berechnet' waere schlicht falsch."""
-    zeile = nach_pid(proposals_for_material(RUTIL, WD))["P556"]
     assert zeile["_qualifiers"] == []
     assert zeile["bestimmungsmethode"] == ""
     assert "berechnet (DFT)" not in zeile["ref_note"]
 
-
-def test_kristallsystem_bleibt_rueckverfolgbar():
-    """Der Wert kommt weiterhin von MP - das muss in der Zeile stehen,
-    sonst ist nicht pruefbar, welche Modifikation gemeint ist."""
-    zeile = nach_pid(proposals_for_material(RUTIL, WD))["P556"]
-    assert "mp-2657" in zeile["ref_note"]
-    assert "Greenwood/Earnshaw" in zeile["ref_note"]
-    assert "pruefen" in zeile["ref_note"]
+    for text in ("mp-2657", "Greenwood/Earnshaw", "pruefen"):
+        assert text in zeile["ref_note"]
 
 
 # --- Identifikatoren ohne Beleg -------------------------------------------
@@ -177,38 +152,24 @@ def _cas_zeile():
 def test_cas_nummer_geht_ohne_beleg_raus(tmp_path):
     """Ein Identifikator belegt sich selbst: 7440-50-8 IST der Verweis ins
     CAS-Register. 'importiert aus Wikipedia' belegt nur, wo abgeschrieben
-    wurde - nicht, dass es stimmt."""
+    wurde - nicht, dass es stimmt. Spurlos ist das trotzdem nicht: die
+    Herkunft bleibt in ref_note, die Belegspalten bleiben leer."""
     from materialswiki.cli import write_quickstatements_draft
 
-    pfad = tmp_path / "e.txt"
-    write_quickstatements_draft([_cas_zeile()], str(pfad))
-    aussage = [z for z in pfad.read_text(encoding="utf-8").splitlines()
-               if z.startswith("Q320603")][0]
-
-    assert aussage == 'Q320603\tP231\t"7440-50-8"'
-    assert "\tS" not in aussage
-
-
-def test_cas_herkunft_bleibt_trotzdem_nachvollziehbar(tmp_path):
-    """Kein Beleg heisst nicht spurlos - beim Durchsehen muss erkennbar
-    bleiben, woher die Nummer stammt."""
-    from materialswiki.cli import write_quickstatements_draft
-
-    pfad = tmp_path / "e.txt"
-    write_quickstatements_draft([_cas_zeile()], str(pfad))
-    text = pfad.read_text(encoding="utf-8")
-
-    assert "Infobox-Feld 'CAS'" in text
-    assert "ohne Beleg, Identifikator" in text
-
-
-def test_cas_belegspalten_der_csv_bleiben_leer():
-    """Eine gefuellte ref_url wuerde suggerieren, dass ein Beleg
-    mitgeschrieben wird."""
     zeile = _cas_zeile()
     assert zeile["ref_mode"] == "ohne Beleg (Identifikator)"
     assert zeile["ref_url"] == zeile["ref_doi"] == zeile["ref_isbn"] == ""
-    assert zeile["ref_note"] == "Infobox-Feld 'CAS'"  # Herkunft bleibt
+    assert zeile["ref_note"] == "Infobox-Feld 'CAS'"
+
+    pfad = tmp_path / "e.txt"
+    write_quickstatements_draft([zeile], str(pfad))
+    text = pfad.read_text(encoding="utf-8")
+    aussage = [z for z in text.splitlines() if z.startswith("Q320603")][0]
+
+    assert aussage == 'Q320603\tP231\t"7440-50-8"'
+    assert "\tS" not in aussage
+    assert "Infobox-Feld 'CAS'" in text
+    assert "ohne Beleg, Identifikator" in text
 
 
 def test_mengenwerte_behalten_ihren_beleg():
@@ -424,17 +385,13 @@ def test_mp_user_agent_enthaelt_kein_bot():
     assert MP_USER_AGENT != USER_AGENT
 
 
-def test_mp_header_setzt_schluessel_und_eigene_kennung(monkeypatch):
+def test_mp_header_setzt_schluessel_oder_meldet_sich_verstaendlich(monkeypatch):
     from materialswiki import cli
 
     monkeypatch.setattr(cli, "MP_API_KEY", "testschluessel")
     kopf = cli.mp_headers()
     assert kopf["X-API-KEY"] == "testschluessel"
     assert "bot" not in kopf["User-Agent"].lower()
-
-
-def test_fehlender_schluessel_meldet_sich_verstaendlich(monkeypatch):
-    from materialswiki import cli
 
     monkeypatch.setattr(cli, "MP_API_KEY", "")
     with pytest.raises(cli.MissingApiKey, match="MP_API_KEY"):
@@ -458,18 +415,19 @@ ZINK_KAPUTT = {
 }
 
 
-def test_negativer_schubmodul_wird_nicht_vorgeschlagen():
-    """Ein negativer Schubmodul bedeutet mechanische Instabilitaet. Zink ist
-    stabil - der Wert ist Rechenmuell und darf nie nach Wikidata."""
-    zeile = nach_pid(proposals_for_material(ZINK_KAPUTT, WD))["P5673"]
-    assert zeile["status"].startswith("MANUELLE_KLAERUNG_NOETIG")
-    assert "unplausibler Wert" in zeile["status"]
+def test_unplausible_werte_werden_ausgewiesen_statt_verworfen():
+    """Ein negativer Schubmodul bedeutet mechanische Instabilitaet, und fuer
+    isotrope lineare Elastizitaet gilt -1 <= nu <= 0,5. Zink ist stabil - die
+    Werte sind Rechenmuell und duerfen nie nach Wikidata. Still verworfen
+    werden sie trotzdem nicht, sonst faellt nie auf, dass die Datenbank an
+    dieser Stelle kaputt ist."""
+    zeilen = nach_pid(proposals_for_material(ZINK_KAPUTT, WD))
 
-
-def test_poissonzahl_ausserhalb_der_thermodynamischen_schranken():
-    """Fuer isotrope lineare Elastizitaet gilt -1 <= nu <= 0,5."""
-    zeile = nach_pid(proposals_for_material(ZINK_KAPUTT, WD))["P5593"]
-    assert zeile["status"].startswith("MANUELLE_KLAERUNG_NOETIG")
+    for pid in ("P5673", "P5593"):
+        assert zeilen[pid]["status"].startswith("MANUELLE_KLAERUNG_NOETIG"), pid
+    assert "unplausibler Wert" in zeilen["P5673"]["status"]
+    assert "mp-aaaaaadb" in zeilen["P5673"]["status"]
+    assert zeilen["P5673"]["value"] == pytest.approx(-2.78121e12)
 
 
 def test_die_gesunden_groessen_desselben_materials_bleiben():
@@ -478,13 +436,6 @@ def test_die_gesunden_groessen_desselben_materials_bleiben():
     assert zeilen["P2054"]["status"] == "VORSCHLAG"   # Dichte 7530 kg/m^3
     assert zeilen["P5668"]["status"] == "VORSCHLAG"   # Kompressionsmodul
     assert zeilen["P556"]["status"] == "VORSCHLAG"    # hexagonal
-
-
-def test_unplausibles_verschwindet_nicht_stillschweigend():
-    """Sonst faellt nie auf, dass die Datenbank an dieser Stelle kaputt ist."""
-    zeile = nach_pid(proposals_for_material(ZINK_KAPUTT, WD))["P5673"]
-    assert "mp-aaaaaadb" in zeile["status"]
-    assert zeile["value"] == pytest.approx(-2.78121e12)
 
 
 @pytest.mark.parametrize("key, wert, erwartet", [
@@ -522,15 +473,12 @@ def test_nichtzahlen_werden_verworfen_statt_gedeutet():
 
 # --- Konsistenz der Abbildung --------------------------------------------
 
-def test_jeder_mp_pfad_zeigt_auf_eine_bekannte_property():
+def test_die_feldabbildung_ist_in_sich_stimmig():
     """Ein Tippfehler im Schluessel wuerde die Groesse still verschwinden
-    lassen - hier faellt er auf."""
-    for pfad, (schluessel, _) in MP_FIELD_MAP.items():
-        assert schluessel in PROPERTY_MAP, f"{pfad} -> unbekannt: {schluessel}"
-
-
-def test_itemwertige_groessen_haben_keinen_faktor():
+    lassen - hier faellt er auf. Und itemwertige Groessen duerfen keinen
+    Umrechnungsfaktor tragen."""
     for pfad, (schluessel, faktor) in MP_FIELD_MAP.items():
+        assert schluessel in PROPERTY_MAP, f"{pfad} -> unbekannt: {schluessel}"
         ist_item = PROPERTY_MAP[schluessel].get("datatype") == "item"
         assert ist_item == (faktor is None), f"{pfad}: Faktor passt nicht zum Typ"
 
@@ -620,21 +568,16 @@ def test_zentrierung_aus_dem_raumgruppensymbol(system, symbol, erwartet):
     assert verfeinere_zentrierung(system, symbol) == erwartet
 
 
-def test_mp_kupfer_wird_fcc():
-    kupfer = {**RUTIL, "material_id": "mp-30", "formula_pretty": "Cu",
-              "formula": "Cu",
-              "symmetry": {"crystal_system": "Cubic", "symbol": "Fm-3m"}}
-    zeile = nach_pid(proposals_for_material(kupfer, WD))["P556"]
-    assert zeile["value"] == "Q3006714"
-    assert zeile["value_label"] == "kubisch flaechenzentriert"
-
-
-def test_mp_wolfram_wird_bcc():
-    wolfram = {**RUTIL, "material_id": "mp-91", "formula_pretty": "W",
-               "formula": "W",
-               "symmetry": {"crystal_system": "Cubic", "symbol": "Im-3m"}}
-    zeile = nach_pid(proposals_for_material(wolfram, WD))["P556"]
-    assert zeile["value"] == "Q851536"
+@pytest.mark.parametrize("symbol, qid, label", [
+    ("Fm-3m", "Q3006714", "kubisch flaechenzentriert"),   # Kupfer
+    ("Im-3m", "Q851536", "kubisch raumzentriert"),        # Wolfram
+])
+def test_mp_kubisch_wird_auf_die_zentrierung_verfeinert(symbol, qid, label):
+    doc = {**RUTIL, "formula_pretty": "X", "formula": "X",
+           "symmetry": {"crystal_system": "Cubic", "symbol": symbol}}
+    zeile = nach_pid(proposals_for_material(doc, WD))["P556"]
+    assert zeile["value"] == qid
+    assert zeile["value_label"] == label
 
 
 @pytest.mark.parametrize("text, erwartet", [

@@ -68,9 +68,9 @@ wird.
 
 Von den 58 Properties der Liste überschneidet sich das Materials Project mit
 fünf — Dichte (`P2054`), Kristallsystem (`P556`), Kompressionsmodul
-(`P5668`), Schubmodul (`P5673`) und Poissonzahl (`P5593`). Die letzte kam mit
-dem Wechsel von NOMAD dazu. Details im Kommentar zu `MP_FIELD_MAP` in
-[../materialswiki/cli.py](../materialswiki/cli.py).
+(`P5668`), Schubmodul (`P5673`) und Poissonzahl (`P5593`). Welche MP-Felder
+bewusst nicht übernommen sind und warum, steht im Abschnitt „Abgedeckte
+Properties" in [../materialswiki/README.md](../materialswiki/README.md).
 
 ## Vor dem Einsatz anpassen
 

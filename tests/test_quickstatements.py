@@ -7,7 +7,7 @@ from materialswiki.cli import Reference, write_quickstatements_draft
 def zeile(status, **rest):
     basis = {
         "status": status,
-        "source": "NOMAD",
+        "source": "MP",
         "qid": "Q42",
         "label": "Testitem",
         "property": "P2054 (Dichte)",
@@ -16,7 +16,7 @@ def zeile(status, **rest):
         "value_label": "",
         "datatype": "quantity",
         "unit_qid": "Q844211",
-        "_ref": Reference(doi="10.1000/test", note="NOMAD entry_id abc"),
+        "_ref": Reference(doi="10.1000/test", note="MP entry_id abc"),
     }
     basis.update(rest)
     return basis

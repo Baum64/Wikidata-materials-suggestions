@@ -8,14 +8,16 @@ Wikidata geschrieben.
 | Anwendung | Verzeichnis | Was sie macht |
 |---|---|---|
 | **Wikidata Knowledge Graph** | [wikikg/](wikikg/) | Vergleicht die ausgehenden Links eines Wikipedia-Artikels mit den Statements des zugehörigen Wikidata-Items und zeigt fehlende Beziehungen. Enthält zusätzlich den browserbasierten *Wortfeld-Explorer*. |
-| **Materials Wiki** | [materialswiki/](materialswiki/) | Holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
+| **Materials Wiki** | [materialswiki/](materialswiki/) | Leitet „besteht aus" (P527) aus der Summenformel des Items ab, holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
 | **Benchmark** | [benchmark/](benchmark/) | Misst, wie gut metallische Werkstoffe in Wikidata belegt sind — je Property aus dem WikiProject Materials. Zeigt, wo Vorschläge sich überhaupt lohnen. |
+| **P279-Struktur** | [P279-structure/](P279-structure/) | Prüft, wie `P279` („Unterklasse von") unterhalb der Werkstoffe verwendet wird — fehlende, doppelte, verkehrte und mit `P31` verwechselte Kanten — und entwirft die Änderungen als QuickStatements. Einspielbar ist nur, was mechanisch aus dem Graphen folgt. |
 | **Kategorie-Hierarchie** | [Kategorie Hirachie/](Kategorie%20Hirachie/) | Prüft und zeichnet, wie Werkstoffe in der Wikidata-Klassenhierarchie unter `material` (Q214609) hängen — und welche über einen parallelen Zweig laufen. |
 
 Details, Nutzung und Grenzen stehen jeweils im README der Anwendung:
 [wikikg/README.md](wikikg/README.md) ·
 [materialswiki/README.md](materialswiki/README.md) ·
 [benchmark/README.md](benchmark/README.md) ·
+[P279-structure/README.md](P279-structure/README.md) ·
 [Kategorie Hirachie/README.md](Kategorie%20Hirachie/README.md)
 
 ## Repo-Aufbau
@@ -34,6 +36,8 @@ materialswiki/ Materials Project → Wikidata Vorschläge
 benchmark/     Abdeckungsmessung der Werkstoff-Properties in Wikidata
   benchmark.py       Kommandozeile (python -m benchmark.benchmark)
   properties_snapshot.json  Momentaufnahme der Property-Liste (für --offline)
+P279-structure/  P279-Struktur der Werkstoffe prüfen und Änderungen entwerfen
+  P279benchmark.py   Kommandozeile (python "P279-structure/P279benchmark.py")
 Kategorie Hirachie/  Klassenhierarchie-Analyse (Graphen als PNG)
   material_hierarchy_check.py
 tests/         Offline-Tests (pytest)
@@ -57,6 +61,7 @@ Gestartet wird aus dem Repo-Wurzelverzeichnis heraus:
 python -m wikikg --title Holz --lang de
 python -m materialswiki --elements Ti O --max 50
 python -m benchmark.benchmark --offline
+python "P279-structure/P279benchmark.py"
 python "Kategorie Hirachie/material_hierarchy_check.py" --skip-tree
 ```
 
@@ -73,6 +78,7 @@ nicht ins Repo:
 | `vorschlaege_<Zeitstempel>.csv`, `quickstatements_entwurf_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
 | `werkstoffe_vorschlaege.csv`, `werkstoffe_quickstatements_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
 | `abdeckung.csv` (bzw. was `--csv` angibt) | [benchmark/benchmark.py](benchmark/benchmark.py) |
+| `p279_befunde_<Zeitstempel>.csv`, `quickstatements_p279_<Zeitstempel>.txt` | [P279-structure/P279benchmark.py](P279-structure/P279benchmark.py) |
 | `werkstoff_check.csv`, `werkstoff_graph.png`, `subclass_tree_material.png`, `trace_*.png` | [Kategorie Hirachie/material_hierarchy_check.py](Kategorie%20Hirachie/material_hierarchy_check.py) |
 | `output/…` (`--output`) | [wikikg/cli.py](wikikg/cli.py) |
 
@@ -150,6 +156,7 @@ Bedingungen:
 
 | Quelle | Lizenz | Was daraus stammt | Pflichten |
 |---|---|---|---|
+| Wikidata selbst (P274) | CC0 (Public Domain) | „besteht aus" (P527), aus der Summenformel abgeleitet | keine |
 | [Materials Project](https://next-gen.materialsproject.org/) | CC BY 4.0 | Dichte, elastische Moduln, Poissonzahl; Kristallsystem nur als Rückfall | Namensnennung + Zitierung, siehe unten |
 | [Crystallography Open Database](https://www.crystallography.net/cod/) | CC0 (Public Domain) | Raumgruppe, Kristallsystem, COD-ID | keine; Nennung der Originalautoren erbeten |
 | Wikipedia (de/en) | CC BY-SA 4.0 | Infobox-Werte als Rückfall | Namensnennung, Weitergabe unter gleichen Bedingungen |
@@ -193,6 +200,11 @@ berührt sein. Das ist der Grund, warum die Werkzeuge hier ausschließlich
 Vorschlagslisten erzeugen und **nie automatisch nach Wikidata schreiben** —
 und warum COD (CC0) für Struktur­angaben die bevorzugte Quelle ist, wo es
 etwas liefert.
+
+Die Stufe „Formel" ist von alledem nicht betroffen: sie leitet P527 aus der
+Summenformel ab, die am Wikidata-Item bereits steht. Es wird nichts von außen
+geholt und nichts weitergegeben — deshalb tragen diese Aussagen auch keinen
+Beleg, sondern nur die Herkunftsnotiz in der CSV-Spalte `ref_note`.
 
 ## Lizenz
 

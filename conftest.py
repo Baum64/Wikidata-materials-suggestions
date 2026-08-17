@@ -38,3 +38,6 @@ def kein_netz(monkeypatch):
     # Tests beeinflussen.
     cli._CLAIM_CACHE.clear()
     cli._SIEDEPUNKT_CACHE.clear()
+    # Die Elementtabelle haengt am Netz und wird modulweit zwischengespeichert
+    # - ohne Zuruecksetzen erbte ein Test die Tabelle des vorigen.
+    cli._ELEMENT_QID_CACHE = None

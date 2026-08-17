@@ -5,7 +5,6 @@ from materialswiki.cli import (
     MP_DATASET_DOI,
     MP_DATASET_WERK,
     MP_DOI,
-    PROPERTY_MAP,
     Reference,
     _sg_besser,
     cod_best_entry,
@@ -50,31 +49,22 @@ def test_hill_notation_gibt_bei_unlesbarer_formel_none():
 # Auswahl des Eintrags
 # ---------------------------------------------------------------------------
 
-def test_eintrag_mit_doi_schlaegt_eintrag_ohne():
-    """Nur mit DOI laesst sich die Originalarbeit als Beleg setzen - das ist
-    der ganze Grund, COD dem Materials Project vorzuziehen."""
-    entries = [
-        {"file": "1", "year": "2020", "doi": None},
-        {"file": "2", "year": "1990", "doi": "10.1/x"},
-    ]
-    assert cod_best_entry(entries)["file"] == "2"
-
-
-def test_bei_gleichem_beleg_gewinnt_das_juengere_jahr():
-    entries = [
-        {"file": "1", "year": "1990", "doi": "10.1/a"},
-        {"file": "2", "year": "2020", "doi": "10.1/b"},
-    ]
-    assert cod_best_entry(entries)["file"] == "2"
-
-
-def test_duplikate_und_fehlerhafte_eintraege_fliegen_raus():
-    entries = [
-        {"file": "1", "year": "2020", "doi": "10.1/a", "duplicateof": "999"},
-        {"file": "2", "year": "2019", "doi": "10.1/b", "status": "retracted"},
-        {"file": "3", "year": "1990", "doi": "10.1/c"},
-    ]
-    assert cod_best_entry(entries)["file"] == "3"
+@pytest.mark.parametrize("entries, erwartet, regel", [
+    # Nur mit DOI laesst sich die Originalarbeit als Beleg setzen - das ist
+    # der ganze Grund, COD dem Materials Project vorzuziehen.
+    ([{"file": "1", "year": "2020", "doi": None},
+      {"file": "2", "year": "1990", "doi": "10.1/x"}],
+     "2", "DOI schlaegt kein-DOI, auch gegen das juengere Jahr"),
+    ([{"file": "1", "year": "1990", "doi": "10.1/a"},
+      {"file": "2", "year": "2020", "doi": "10.1/b"}],
+     "2", "bei gleichem Beleg gewinnt das juengere Jahr"),
+    ([{"file": "1", "year": "2020", "doi": "10.1/a", "duplicateof": "999"},
+      {"file": "2", "year": "2019", "doi": "10.1/b", "status": "retracted"},
+      {"file": "3", "year": "1990", "doi": "10.1/c"}],
+     "3", "Duplikate und zurueckgezogene Eintraege fliegen raus"),
+])
+def test_eintragswahl(entries, erwartet, regel):
+    assert cod_best_entry(entries)["file"] == erwartet, regel
 
 
 def test_bei_voelligem_gleichstand_entscheidet_die_kleinere_cod_id():
@@ -100,26 +90,21 @@ def test_ohne_brauchbaren_eintrag_kommt_none():
     (16, "orthorhombic"), (74, "orthorhombic"), (75, "tetragonal"),
     (142, "tetragonal"), (143, "trigonal"), (167, "trigonal"),
     (168, "hexagonal"), (194, "hexagonal"), (195, "cubic"), (230, "cubic"),
+    (0, None), (231, None),   # ausserhalb der 230 Raumgruppen
 ])
 def test_kristallsystem_aus_raumgruppennummer(nummer, erwartet):
     """Bereiche aus den International Tables - normativ, nicht geraten."""
     assert kristallsystem_aus_nummer(nummer) == erwartet
 
 
-def test_kristallsystem_ausserhalb_der_230_gibt_none():
-    assert kristallsystem_aus_nummer(0) is None
-    assert kristallsystem_aus_nummer(231) is None
-
-
-def test_dubletten_bevorzugen_item_mit_kristallsystem():
-    """Sechs Raumgruppennummern haben mehr als ein Wikidata-Item."""
+def test_raumgruppen_dubletten_werden_deterministisch_aufgeloest():
+    """Sechs Raumgruppennummern haben mehr als ein Wikidata-Item. Item MIT
+    Kristallsystem gewinnt, bei Gleichstand die kleinere Q-Nummer."""
     mit = {"qid": "Q99", "cs_qid": "Q473227"}
     ohne = {"qid": "Q10", "cs_qid": ""}
     assert _sg_besser(mit, ohne) is True
     assert _sg_besser(ohne, mit) is False
 
-
-def test_bei_gleichstand_gewinnt_die_kleinere_q_nummer():
     alt = {"qid": "Q15040793", "cs_qid": "Q588274"}
     neu = {"qid": "Q56235829", "cs_qid": "Q588274"}
     assert _sg_besser(neu, alt) is False
@@ -350,18 +335,6 @@ def test_beide_dois_landen_im_quickstatements_referenzblock():
     ref = Reference(doi=MP_DOI, dataset_doi="10.1038/sdata.2015.9")
     qs = ref.as_quickstatements()
     assert qs == f'\tS356\t"{MP_DOI}"\tS356\t"10.1038/sdata.2015.9"'
-
-
-def test_jede_datensatz_doi_hat_einen_klartext_werkverweis():
-    """Sonst steht in der Notiz eine nackte DOI, die beim Durchsehen
-    niemandem etwas sagt."""
+    # Sonst steht in der Notiz eine nackte DOI, die niemandem etwas sagt.
     for doi in set(MP_DATASET_DOI.values()):
         assert doi in MP_DATASET_WERK
-
-
-def test_die_neuen_properties_sind_vollstaendig_beschrieben():
-    for schluessel in ("space_group", "cod_id"):
-        info = PROPERTY_MAP[schluessel]
-        assert info["pid"].startswith("P")
-        assert info["datatype"] in {"item", "external-id"}
-        assert info["label"]
