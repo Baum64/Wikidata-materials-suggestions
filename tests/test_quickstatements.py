@@ -12,10 +12,10 @@ def zeile(status, **rest):
         "label": "Testitem",
         "property": "P2054 (Dichte)",
         "_pid": "P2054",
-        "value": 4230.0,
+        "value": 4.23,
         "value_label": "",
         "datatype": "quantity",
-        "unit_qid": "Q844211",
+        "unit_qid": "Q13147228",
         "_ref": Reference(doi="10.1000/test", note="MP entry_id abc"),
     }
     basis.update(rest)
@@ -41,7 +41,7 @@ def abschnitte(text):
 
 def test_vorschlag_wird_zu_einer_ausfuehrbaren_zeile(entwurf):
     text = entwurf([zeile("VORSCHLAG")])
-    assert 'Q42\tP2054\t4230.0U844211\tS356\t"10.1000/test"' in text
+    assert 'Q42\tP2054\t4.23U13147228\tS356\t"10.1000/test"' in text
 
 
 def test_nur_vorschlaege_sind_ausfuehrbar(entwurf):

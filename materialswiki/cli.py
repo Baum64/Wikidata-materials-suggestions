@@ -11,7 +11,13 @@ Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
 
     Formel  ->  COD  ->  Materials Project  ->  de.wikipedia  ->  en.wikipedia
 
-Abschaltbar mit --no-formel, --no-cod, --no-wikipedia.
+Wo gar keine Formel dasteht, laeuft die erste Stufe rueckwaerts: aus
+"besteht aus" (P527) wird eine chemische Formel (P274) gebaut - das greift
+praktisch nur bei Legierungen. Aus einer Raumgruppe (P690) am Item wird
+ausserdem die Punktgruppe (P589) nachgeschlagen.
+
+Abschaltbar mit --no-formel, --no-legierungsformel, --no-punktgruppe,
+--no-cod, --no-wikipedia.
 
     python -m materialswiki --elements Ti O --max 50
     python -m materialswiki --group minerale --batch-size 150 --weiter
@@ -124,13 +130,15 @@ WIKIDATA_API = "https://www.wikidata.org/w/api.php"
 REQUEST_DELAY_SEC = 1.0  # höflich sein, Rate Limits respektieren
 
 # MP-Feldpfad -> (interner Schluessel, Faktor auf die Wikidata-Einheit).
-# Der Faktor ist der Knackpunkt: MP liefert die Dichte in g/cm^3 und die
-# Moduln in GPa, Wikidata erwartet kg/m^3 und Pascal.
+# Der Faktor ist der Knackpunkt: die Moduln liefert MP in GPa, Wikidata will
+# Pascal. Die DICHTE dagegen kommt in g/cm^3 - genau der Einheit, in der sie
+# auch nach Wikidata geht (siehe PROPERTY_MAP) - und bleibt deshalb, wie sie
+# ist.
 #
 # Welche MP-Felder bewusst NICHT uebernommen sind (band_gap und weitere) und
 # warum: README, "Abgedeckte Properties".
 MP_FIELD_MAP = {
-    "density": ("density", 1000.0),                    # g/cm^3  -> kg/m^3
+    "density": ("density", 1.0),                       # g/cm^3, unveraendert
     "symmetry.crystal_system": ("crystal_system", None),  # itemwertig
     "bulk_modulus.vrh": ("bulk_modulus", 1e9),         # GPa     -> Pa
     "shear_modulus.vrh": ("shear_modulus", 1e9),       # GPa     -> Pa
@@ -174,6 +182,13 @@ AGGREGAT_GAS = "Q11432"       # Gas
 # die deutschen Elementinfoboxen schreiben ueberwiegend "(20 °C)".
 STANDARD_TEMPERATUR_C = 20.0
 
+# Die Temperatur JEDER MP-Groesse. Eine DFT-Rechnung kennt keine thermische
+# Anregung: Dichte wie Elastizitaetstensor gehoeren zum relaxierten
+# Grundzustand, also zu 0 K. Das ist keine Annahme ueber eine Messung,
+# sondern eine Eigenschaft der Rechnung - und genau die Groesse, an der die
+# systematische Abweichung von den Handbuchwerten haengt.
+DFT_TEMPERATUR = (TEMPERATUR_PID, f"0U{KELVIN_QID[1:]}", "0 K (DFT-Grundzustand)")
+
 # ---------------------------------------------------------------------------
 # Groessen, die NICHT mit der Rechnung belegt werden
 # ---------------------------------------------------------------------------
@@ -195,17 +210,22 @@ STANDARD_TEMPERATUR_C = 20.0
 #                Diamant (Kompressionsmodul ~443 GPa, Schubmodul ~535 GPa)
 #   Poissonzahl  ist fuer isotrope lineare Elastizitaet thermodynamisch auf
 #                [-1; 0,5] beschraenkt - ausserhalb ist sie unmoeglich
-#   Dichte       zwischen Lithium (534 kg/m^3) und Osmium (22590 kg/m^3),
+#   Dichte       zwischen Lithium (0,534 g/cm^3) und Osmium (22,59 g/cm^3),
 #                grosszuegig gefasst
 #
 # Unplausible Werte werden NICHT still verworfen, sondern als
 # MANUELLE_KLAERUNG_NOETIG ausgewiesen: sonst faellt nie auf, dass die
 # Datenbank an dieser Stelle kaputt ist.
 PLAUSIBEL = {
-    "density": (10.0, 30000.0),            # kg/m^3
+    "density": (0.01, 30.0),               # g/cm^3
     "bulk_modulus": (1e6, 1e12),           # Pa, also 0,001 bis 1000 GPa
     "shear_modulus": (1e6, 1e12),          # Pa
     "poisson_ratio": (-1.0, 0.5),          # dimensionslos, thermodynamisch
+    # Spannweite an den 62 Elementwerten der englischen Infoboxen: 2,556
+    # (Silicium) bis 92,6 (Caesium). Grosszuegig gefasst - unterhalb von 0
+    # waere die Angabe aber physikalisch kaum noch ein Elementwert, und
+    # oberhalb von 200 steht dort etwas anderes.
+    "linear_thermal_expansion": (0.0, 200.0),   # um/(m*K)
 }
 
 
@@ -250,10 +270,16 @@ LITERATUR_BELEG = {
 #                 Werte ausserhalb der value_map werden NICHT geraten, sondern
 #                 zur manuellen Klaerung markiert.
 PROPERTY_MAP = {
+    # Dichte in GRAMM PRO KUBIKZENTIMETER. Beide Einheiten sind laut
+    # Constraint erlaubt (Q844211 kg/m^3, Q13147228 g/cm^3, dazu g/l und
+    # g/m^3), aber der Bestand ist eindeutig: 2015 der 2476 P2054-Aussagen
+    # stehen in g/cm^3 und nur 461 in kg/m^3 (gemessen 2026-08-19). Es ist
+    # ausserdem die Einheit, in der alle hiesigen Quellen liefern - MP wie
+    # beide Wikipedias -, also entfaellt jede Umrechnung.
     "density": {
         "pid": "P2054",
         "datatype": "quantity",
-        "unit_qid": "Q844211",  # Kilogramm pro Kubikmeter, kg/m^3
+        "unit_qid": "Q13147228",  # Gramm pro Kubikzentimeter, g/cm^3
         "label": "Dichte",
     },
     "melting_point": {
@@ -379,6 +405,29 @@ PROPERTY_MAP = {
         "unit_qid": "",
         "label": "Raumgruppe",
     },
+    # Laengenausdehnungskoeffizient. Einzige laut Constraint erlaubte
+    # Einheit ist Q56025776 (Mikrometer pro Meterkelvin) - genau die, in der
+    # die englischen Elementinfoboxen rechnen: "{{val|16.64|e=-6}}/K" sind
+    # 16,64 um/(m*K). Am Bestand traegt die Property noch KEINE einzige
+    # Aussage (gemessen 2026-08-19); Quelle und Grenzen: README,
+    # "Laengenausdehnungskoeffizient (P5672)".
+    "linear_thermal_expansion": {
+        "pid": "P5672",
+        "datatype": "quantity",
+        "unit_qid": "Q56025776",  # Mikrometer pro Meterkelvin, um/(m*K)
+        "label": "Laengenausdehnungskoeffizient",
+    },
+    # Punktgruppe. Wie die Raumgruppe itemwertig und ohne value_map - die 32
+    # kristallographischen Punktgruppen stehen als Items in Wikidata und
+    # haengen dort schon an den Raumgruppen (230 der 236 Raumgruppen-Items
+    # tragen P589, gemessen 2026-08-19). Abgelesen statt abgebildet: eine
+    # eigene Tabelle waere eine zweite Wahrheit.
+    "point_group": {
+        "pid": "P589",
+        "datatype": "item",
+        "unit_qid": "",
+        "label": "Punktgruppe",
+    },
     "cod_id": {
         "pid": "P9824",
         "datatype": "external-id",
@@ -398,6 +447,16 @@ PROPERTY_MAP = {
         "datatype": "item",
         "unit_qid": "",
         "label": "besteht aus",
+    },
+    # Chemische Formel. Datentyp string (am 2026-08-18 abgefragt), also eine
+    # blosse Zeichenkette - die Schreibweise ist damit reine Konvention und
+    # wird nur von einem Format-Constraint bewacht. Erzeugt wird sie hier aus
+    # P527, siehe Abschnitt "Summenformel (P274) aus 'besteht aus' (P527)".
+    "chemical_formula": {
+        "pid": "P274",
+        "datatype": "string",
+        "unit_qid": "",
+        "label": "chemische Formel",
     },
 }
 
@@ -687,15 +746,17 @@ _SPACE_GROUP_CACHE = None
 
 
 def fetch_space_group_qids() -> dict:
-    """{Raumgruppennummer: {qid, label, cs_qid, cs_label}} aus Wikidata.
+    """{Raumgruppennummer: {qid, label, cs_qid, cs_label, pg_qid, pg_label}}.
 
     Aufgeloest ueber P9733 (Raumgruppennummer) statt ueber Labels - die
     Raumgruppen-Items sind uneinheitlich benannt ("Raumgruppe 227" neben
     "space group C2/m"), die Nummer ist der einzige verlaessliche Schluessel.
 
-    Das Kristallsystem kommt vom Raumgruppen-Item selbst (P556): Wikidata
-    weiss dort bereits, dass Raumgruppe 227 kubisch ist. Das erspart eine
-    zweite gepflegte Tabelle.
+    Kristallsystem (P556) und Punktgruppe (P589) kommen vom Raumgruppen-Item
+    selbst: Wikidata weiss dort bereits, dass Raumgruppe 227 kubisch ist und
+    zur Punktgruppe m-3m gehoert. Das erspart zwei gepflegte Tabellen - und
+    die Punktgruppe kostet nicht einmal eine eigene Abfrage, sie faellt in
+    derselben ab. 230 der 236 Raumgruppen-Items fuehren sie (2026-08-19).
 
     Sechs Nummern haben mehr als ein Item (Dubletten in Wikidata, am
     2026-08-16: 40, 122, 146, 147, 148, 160). Gewaehlt wird deterministisch
@@ -706,9 +767,10 @@ def fetch_space_group_qids() -> dict:
         return _SPACE_GROUP_CACHE
 
     query = """
-    SELECT ?nummer ?sg ?sgLabel ?cs ?csLabel WHERE {
+    SELECT ?nummer ?sg ?sgLabel ?cs ?csLabel ?pg ?pgLabel WHERE {
       ?sg wdt:P9733 ?nummer .
       OPTIONAL { ?sg wdt:P556 ?cs . }
+      OPTIONAL { ?sg wdt:P589 ?pg . }
       SERVICE wikibase:label { bd:serviceParam wikibase:language "de,en". }
     }
     """
@@ -722,12 +784,23 @@ def fetch_space_group_qids() -> dict:
             "label": b.get("sgLabel", {}).get("value", qid),
             "cs_qid": (b["cs"]["value"].rsplit("/", 1)[-1] if "cs" in b else ""),
             "cs_label": b.get("csLabel", {}).get("value", ""),
+            "pg_qid": (b["pg"]["value"].rsplit("/", 1)[-1] if "pg" in b else ""),
+            "pg_label": b.get("pgLabel", {}).get("value", ""),
         }
         bisher = gefunden.get(nummer)
         if bisher is None or _sg_besser(eintrag, bisher):
             gefunden[nummer] = eintrag
     _SPACE_GROUP_CACHE = gefunden
     return gefunden
+
+
+def raumgruppen_nach_qid() -> dict:
+    """Dieselbe Tabelle, aber nach der QID des Raumgruppen-Items geschluesselt.
+
+    Gebraucht fuer den umgekehrten Weg: am Item steht eine Raumgruppe, und
+    gesucht ist ihre Punktgruppe - da ist die Nummer gar nicht bekannt.
+    """
+    return {e["qid"]: e for e in fetch_space_group_qids().values()}
 
 
 def _sg_besser(neu: dict, alt: dict) -> bool:
@@ -947,6 +1020,13 @@ def cod_proposals_for_item(wd_match: dict, entries: list,
     )
     anfuegen("space_group", sg["qid"], sg["label"], status=klaerung)
 
+    # Die Punktgruppe folgt zwingend aus der Raumgruppe - jede der 230 gehoert
+    # zu genau einer der 32. Sie wird deshalb mit DERSELBEN Quelle belegt und
+    # traegt denselben Klaerungsvermerk: ist die Modifikation offen, ist es
+    # die Punktgruppe auch.
+    if sg["pg_qid"]:
+        anfuegen("point_group", sg["pg_qid"], sg["pg_label"], status=klaerung)
+
     # Kristallsystem: bevorzugt am Raumgruppen-Item abgelesen, sonst ueber
     # die normativen Nummernbereiche. Anschliessend wie bei MP auf fcc/bcc
     # verfeinert, wo das Hermann-Mauguin-Symbol die Zentrierung hergibt.
@@ -1075,7 +1155,7 @@ WIKIPEDIA_DE_API = "https://de.wikipedia.org/w/api.php"
 WIKIPEDIA_DE_FIELDS = {
     "Schmelzpunkt_K": ("melting_point", 1.0),            # K
     "Siedepunkt_K": ("boiling_point", 1.0),              # K
-    "Dichte": ("density", 1000.0),                       # g/cm^3 -> kg/m^3
+    "Dichte": ("density", 1.0),                          # g/cm^3
     "Wärmeleitfähigkeit": ("thermal_conductivity", 1.0),  # W/(m*K)
     "ElektrischeLeitfähigkeit": ("electrical_conductivity", 1.0),  # S/m
     "SpezifischeWärmekapazität": ("specific_heat_capacity", 1.0),  # J/(kg*K)
@@ -1186,7 +1266,7 @@ def parse_de_cas(raw: str) -> Optional[str]:
 # beide Feldsaetze gefahrlos nacheinander auf denselben Wikitext angewendet
 # werden.
 WIKIPEDIA_DE_CHEM_FIELDS = {
-    "Dichte": ("density", 1000.0),   # g/cm^3 -> kg/m^3
+    "Dichte": ("density", 1.0),   # g/cm^3
 }
 
 _DE_TEMP_K = re.compile(r"([+-]?[\d.,]+)\s*K(?![A-Za-z])")
@@ -1584,10 +1664,11 @@ def wikipedia_values(fields: dict, article_wikitext: str = "") -> dict:
         if value is not None:
             merken(key, value * faktor, feld, f"Infobox-Feld '{feld}'")
 
-    # Dichte steht konventionell in g/cm^3 -> kg/m^3
+    # Dichte steht konventionell in g/cm^3 - der Zieleinheit, siehe
+    # PROPERTY_MAP. Nichts umzurechnen, nur zu pruefen.
     dichte = parse_wiki_number(fields.get("density", ""))
     if dichte is not None and 0.01 <= dichte <= 30:
-        merken("density", dichte * 1000.0, "density",
+        merken("density", dichte, "density",
                "Infobox-Feld 'density' (g/cm^3)")
 
     # Spezifischer Widerstand: Zahl + eigenes Praefix-Feld. Ohne bekanntes
@@ -1614,17 +1695,129 @@ def wikipedia_values(fields: dict, article_wikitext: str = "") -> dict:
     return out
 
 
+# ---------------------------------------------------------------------------
+# Laengenausdehnungskoeffizient (P5672) aus der englischen Elementinfobox
+# ---------------------------------------------------------------------------
+#
+# Die einzige Quelle im ganzen Werkzeug, die diese Groesse fuehrt - die
+# deutsche Elementinfobox hat kein solches Feld, die Chembox auch nicht, und
+# das Materials Project rechnet keine thermische Ausdehnung.
+#
+# Das Feld heisst "thermal expansion comment" und steht in der Form
+#   {{val|16.64|e=−6}}/K (at&nbsp;20&nbsp;°C)<ref name="Arblaster 2018" />
+# also 16,64 um/(m*K) mit ausdruecklicher Temperatur. Aeltere Vorlagen fuehren
+# stattdessen "thermal expansion at 25" als blosse Zahl, die dort bereits in
+# um/(m*K) steht.
+#
+# Wie weit das traegt, an allen 118 Elementvorlagen gemessen (2026-08-19):
+# 38 isotrope Werte, 24 anisotrope, 11 unbrauchbare, 45 ohne Angabe. Warum die
+# anisotropen NICHT vorgeschlagen werden: README.
+_AUSDEHNUNG_VAL = re.compile(
+    r"\{\{val\|([\d.]+)\|e=[−-]6(?:\|u=[^}]*)?\}\}\s*/?\s*K?\s*"
+    r"\(at&nbsp;([\d.]+)&nbsp;°C\)"
+)
+# "The thermal expansion is anisotropic" - dann ist der genannte Wert das
+# Mittel ueber die Achsen (alpha_V/3), nicht "der" Laengenkoeffizient.
+_AUSDEHNUNG_ANISOTROP = re.compile(r"anisotrop", re.I)
+
+
+def parse_thermal_expansion(fields: dict) -> Optional[tuple]:
+    """(Wert in um/(m*K), Temperatur in °C, anisotrop) oder None.
+
+    Verworfen wird alles, was die Temperatur nicht ausdruecklich nennt
+    ("at r.t.") oder sich auf eine Modifikation bezieht ("diamond: 0.8",
+    "beta form: 5-7") - beides kommt real vor und waere geraten.
+    """
+    kommentar = fields.get("thermal expansion comment", "")
+    treffer = _AUSDEHNUNG_VAL.search(kommentar)
+    if treffer:
+        return (float(treffer.group(1)), float(treffer.group(2)),
+                bool(_AUSDEHNUNG_ANISOTROP.search(kommentar)))
+    if kommentar:
+        return None  # Kommentar da, aber ohne verwertbare Zahl-Temperatur
+
+    # Aeltere Vorlagen: Zahl in um/(m*K), Temperatur steckt im Feldnamen.
+    roh = fields.get("thermal expansion at 25", "").strip()
+    if re.fullmatch(r"[\d.]+", roh):
+        return float(roh), 25.0, False
+    return None
+
+
+def waermeausdehnung_proposals_for_item(wd_match: dict, fields: dict,
+                                        permalink: str, wikitext: str,
+                                        skip_keys: set) -> list:
+    """P5672-Vorschlag aus der englischen Elementinfobox.
+
+    Eigene Stufe statt eines Eintrags in WIKIPEDIA_NUMERIC_FIELDS: die
+    Groesse braucht eine Temperatur als Qualifikator, und die anisotropen
+    Faelle brauchen einen Klaerungsvermerk. Beides passt nicht in die
+    generische Feldabbildung.
+    """
+    prop_info = PROPERTY_MAP["linear_thermal_expansion"]
+    if "linear_thermal_expansion" in skip_keys:
+        return []
+    if ist_bei_raumtemperatur_gas(wd_match["qid"]):
+        return []  # siehe NUR_FESTKOERPER - der Wert waere der des Feststoffs
+    gemessen = parse_thermal_expansion(fields)
+    if gemessen is None:
+        return []
+    wert, temperatur_c, anisotrop = gemessen
+    if not ist_plausibel("linear_thermal_expansion", wert):
+        return []
+
+    feld = ("thermal expansion comment"
+            if fields.get("thermal expansion comment") else
+            "thermal expansion at 25")
+    ids = extract_ref_ids(fields.get(feld, ""), wikitext)
+    note = f"Infobox-Feld '{feld}' ({wert} um/(m*K) bei {temperatur_c:g} °C)"
+    if ids.get("doi"):
+        reference = Reference(doi=ids["doi"],
+                              note=f"{note}, Beleg aus Wikipedia (en): {permalink}")
+    elif ids.get("isbn"):
+        reference = Reference(isbn=ids["isbn"],
+                              note=f"{note}, Beleg aus Wikipedia (en): {permalink}")
+    else:
+        reference = Reference(imported_from=WIKIPEDIA_EN_QID,
+                              import_url=permalink, note=note)
+
+    zahl = format(Decimal(str(temperatur_c)).normalize(), "f")
+    qualifiers = [(TEMPERATUR_PID, f"{zahl}U{CELSIUS_QID[1:]}", f"{zahl} °C")]
+
+    if anisotrop:
+        # Bei anisotropen Kristallen haengt der Koeffizient von der
+        # Kristallachse ab; die Infobox nennt das Mittel alpha_V/3 und die
+        # Achsenwerte in einer Fussnote. Ein einzelner Wert ohne Achsenangabe
+        # waere in Wikidata eine Halbwahrheit - das entscheidet niemand
+        # nebenbei.
+        return [make_row(
+            f"MANUELLE_KLAERUNG_NOETIG (anisotrope Ausdehnung: {wert} "
+            f"um/(m*K) ist das Mittel alpha_V/3, die Achsenwerte stehen in "
+            f"der Fussnote der Infobox)",
+            "Wikipedia (en)", wd_match, prop_info, round_significant(wert), "",
+            reference, entry_id="waermeausdehnung", qualifiers=qualifiers,
+        )]
+
+    vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
+    return [make_row(
+        "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
+        "Wikipedia (en)", wd_match, prop_info, round_significant(wert), "",
+        reference, entry_id="waermeausdehnung", qualifiers=qualifiers,
+    )]
+
+
 def wikipedia_proposals_for_item(wd_match: dict, name_en: str,
                                  skip_keys: set) -> list:
     """Vorschlaege aus der englischen Elementinfobox, als Import referenziert."""
     fields, permalink, wikitext = fetch_wikipedia_infobox(name_en)
     if not fields:
         return []
-    return _infobox_proposals(
+    zeilen = _infobox_proposals(
         wd_match, wikipedia_values(fields, wikitext), skip_keys,
         "Wikipedia (en)", WIKIPEDIA_EN_QID, permalink,
         messtemperatur=parse_de_messtemperatur(fields.get("density", "")),
     )
+    return zeilen + waermeausdehnung_proposals_for_item(
+        wd_match, fields, permalink, wikitext, skip_keys)
 
 
 # ---------------------------------------------------------------------------
@@ -1642,7 +1835,7 @@ CHEMBOX_FIELDS = {
     "MeltingPtC": ("melting_point", 1.0, 273.15),
     "BoilingPtK": ("boiling_point", 1.0, 0.0),
     "BoilingPtC": ("boiling_point", 1.0, 273.15),
-    "Density": ("density", 1000.0, 0.0),          # g/cm^3 -> kg/m^3
+    "Density": ("density", 1.0, 0.0),             # g/cm^3
 }
 
 _CAS_RE = re.compile(r"^\d{2,7}-\d{2}-\d$")
@@ -2020,19 +2213,22 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           wikipedia: bool = True, cod: bool = True,
                           nur_experimentell: bool = True,
                           nur_stabil: bool = True, max_entries: int = 1,
-                          formel: bool = True):
+                          formel: bool = True, legierungsformel_an: bool = True,
+                          punktgruppe_an: bool = True):
     """Vorschlaege fuer eine Werkstoffgruppe (Generator).
 
     Dieselbe Quellenkaskade wie sonst; welche Stufe traegt, haengt an der
     Gruppe. Bei Mineralen und Oxiden greifen COD und Materials Project ueber
     die Summenformel; bei Legierungen tragen beide kaum etwas bei, weil dort
-    nur 10 von 568 Items eine Formel haben - siehe fetch_group_items.
+    nur 10 von 568 Items eine Formel haben - siehe fetch_group_items. Dafuer
+    greift dort die umgekehrte Ableitung: Formel AUS den Bestandteilen.
     """
     items = items_der_gruppe(gruppe, limit)
     yield from pruefe_legierungsklasse(gruppe, items)
     yield from build_proposals_for_items(
         items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries,
-        formel=formel)
+        formel=formel, legierungsformel_an=legierungsformel_an,
+        punktgruppe_an=punktgruppe_an)
 
 
 def build_proposals_for_items(items: list, wikipedia: bool = True,
@@ -2040,7 +2236,9 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                               nur_experimentell: bool = True,
                               nur_stabil: bool = True, max_entries: int = 1,
                               nummer_ab: int = 1, gesamt: Optional[int] = None,
-                              formel: bool = True):
+                              formel: bool = True,
+                              legierungsformel_an: bool = True,
+                              punktgruppe_an: bool = True):
     """Vorschlaege fuer eine fertige Itemliste (Generator).
 
     Von build_group_proposals abgetrennt, damit der Chargenbetrieb dieselbe
@@ -2050,13 +2248,46 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
     Fortschritt ueber Chargen hinweg fortlaufend gezaehlt wird.
     """
     gesamt = gesamt if gesamt is not None else len(items)
+    # Die Bestandteile aller formellosen Items auf einmal holen: eine Abfrage
+    # je 200 Items statt je Item. Scheitert das, laeuft der Rest trotzdem -
+    # die Stufe fragt dann eben einzeln nach.
+    if legierungsformel_an:
+        try:
+            bestandteile_vorladen([e["qid"] for e in items if not e["formula"]])
+        except (RuntimeError, ValueError, requests.RequestException) as fehler:
+            print(f"  Bestandteile nicht vorgeladen - {fehler}",
+                  file=sys.stderr)
+    # Dasselbe fuer die Raumgruppen am Item, aus denen die Punktgruppe folgt.
+    if punktgruppe_an:
+        try:
+            item_raumgruppen_vorladen([e["qid"] for e in items])
+        except (RuntimeError, ValueError, requests.RequestException) as fehler:
+            print(f"  Raumgruppen nicht vorgeladen - {fehler}",
+                  file=sys.stderr)
+
     for i, eintrag in enumerate(items, nummer_ab):
         wd_match = {"qid": eintrag["qid"], "label": eintrag["label"],
                     "ambiguous": False, "title_de": eintrag["title_de"],
                     "title_en": eintrag["title_en"]}
         pids_belegt = set()
         zaehler = collections.Counter()
-        n_cod = n_mp = n_formel = 0
+        n_cod = n_mp = n_formel = n_p274 = n_p589 = 0
+
+        # Der umgekehrte Weg, nur wo gar keine Formel dasteht: aus den
+        # Bestandteilen (P527) eine Summenformel (P274) bauen. Das greift
+        # praktisch nur bei Legierungen - genau dort, wo alle uebrigen Stufen
+        # mangels Formel leerlaufen. Die so gebaute Formel wird BEWUSST nicht
+        # an COD und MP weitergereicht: "Cu·Sn" ist keine Stoechiometrie,
+        # eine Strukturdatenbank kann damit nichts Richtiges finden.
+        if legierungsformel_an and not eintrag["formula"]:
+            try:
+                for zeile in legierungsformel_proposals_for_item(wd_match):
+                    pids_belegt.add(zeile["_pid"])
+                    n_p274 += 1
+                    yield zeile
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {eintrag['qid']}: P527-Formel uebersprungen - "
+                      f"{fehler}", file=sys.stderr)
 
         # Zuerst die Ableitung aus der Formel: sie kostet keine Anfrage nach
         # aussen und liefert eine Property, die keine der externen Quellen
@@ -2072,11 +2303,33 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                 print(f"  {eintrag['qid']}: Formel uebersprungen - {fehler}",
                       file=sys.stderr)
 
+        # Punktgruppe aus der Raumgruppe, die am Item schon steht. Vor der
+        # COD-Stufe, damit die dort nicht dasselbe noch einmal vorschlaegt -
+        # und weil ein bereits eingetragener Strukturbefund mehr wiegt als
+        # ein frisch aus COD gezogener.
+        if punktgruppe_an:
+            try:
+                for zeile in punktgruppe_proposals_for_item(wd_match):
+                    pids_belegt.add(zeile["_pid"])
+                    n_p589 += 1
+                    yield zeile
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {eintrag['qid']}: Punktgruppe uebersprungen - "
+                      f"{fehler}", file=sys.stderr)
+
         if cod and eintrag["formula"]:
             try:
                 treffer = fetch_cod_entries(formula=eintrag["formula"])
                 if treffer:
-                    for zeile in cod_proposals_for_item(wd_match, treffer):
+                    # pids_belegt enthaelt hier, was die beiden Ableitungen
+                    # aus dem Item selbst schon geliefert haben. Bei der
+                    # Punktgruppe koennen sich beide Wege widersprechen -
+                    # Graphit traegt Raumgruppe 194, die COD-Suche nach "C"
+                    # findet aber ueberwiegend Diamant. Dann gilt, was am
+                    # Item steht; die abweichende COD-Raumgruppe bleibt als
+                    # eigene Zeile sichtbar.
+                    for zeile in cod_proposals_for_item(wd_match, treffer,
+                                                        skip_pids=pids_belegt):
                         pids_belegt.add(zeile["_pid"])
                         n_cod += 1
                         yield zeile
@@ -2120,7 +2373,8 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                       file=sys.stderr)
 
         print(f"  [{i}/{gesamt}] {eintrag['qid']} "
-              f"{eintrag['label'][:28]}: Formel {n_formel}, COD {n_cod}, MP {n_mp}"
+              f"{eintrag['label'][:28]}: Formel {n_formel}, P274 {n_p274}, "
+              f"P589 {n_p589}, COD {n_cod}, MP {n_mp}"
               + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
                  if wikipedia else ""),
               file=sys.stderr)
@@ -2648,6 +2902,334 @@ def formel_proposals_for_item(wd_match: dict, formel: str,
 
 
 # ---------------------------------------------------------------------------
+# Summenformel (P274) aus "besteht aus" (P527) - der umgekehrte Weg
+# ---------------------------------------------------------------------------
+#
+# Fuer Legierungen laeuft die Ableitung andersherum als oben: eine Formel zum
+# Zerlegen gibt es dort fast nie (10 von 568 Items), die Bestandteile stehen
+# aber vielfach schon da. Aus ihnen laesst sich die Formel ZUSAMMENSETZEN.
+# Zahlen, Konvention und die Grenzen des Verfahrens: README, "Summenformel
+# (P274) aus 'besteht aus' (P527)".
+#
+# Kurzfassung der Regel, die der Code unten umsetzt:
+#   alle Teile Elemente, >= 2 verschiedene, Anzahl ueberall  -> "AgCu₃"
+#   alle Teile Elemente, >= 2 verschiedene, Anzahl fehlt     -> "Ag·Cu"
+#   ein Teil ist keine Element-Item / nur ein Element        -> nichts
+
+# WikiProject Chemistry schreibt unbestimmte Mischungsverhaeltnisse mit dem
+# Mittelpunkt (U+00B7), wie bei Hydraten. In Wikidata steht es bereits so:
+# Elektron (Q239481) traegt "Au·Ag". Genau diese Form wird erzeugt - bei
+# einer Legierung ist das Verhaeltnis der Regelfall des Unbestimmten.
+MITTELPUNKT = "·"
+
+# Wikidata fuehrt Q11426 "Metall" als Unterklasse von Q37756 "Legierung".
+# Ueber diesen Knoten haengt alles Metallische unter der Legierung - auch
+# Sammelbegriffe wie "Platinmetalle" oder "metals of antiquity", deren P527
+# eine AUFZAEHLUNG ist und keine Zusammensetzung. Wer daraus eine Formel
+# macht, behauptet Unsinn. Der Knoten wird deshalb beim Pruefen der
+# Klassenzugehoerigkeit ausgespart, siehe legierungs_qids.
+METALL_QID = "Q11426"
+
+
+def hill_reihenfolge(symbole) -> list:
+    """Elementsymbole in Hill-Reihenfolge: C, dann H, dann alphabetisch.
+
+    Die vom WikiProject Chemistry empfohlene Konvention. Fuer Legierungen
+    faellt sie meist mit der alphabetischen zusammen ("Cu·Sn"); wo Kohlenstoff
+    dabei ist, wirkt sie sichtbar: Stahl wird "C·Fe", nicht "Fe·C".
+    """
+    uebrige = sorted(s for s in symbole if s not in ("C", "H"))
+    vorne = [s for s in ("C", "H") if s in symbole]
+    return vorne + uebrige
+
+
+def legierungsformel(bestandteile: dict) -> Optional[str]:
+    """{Symbol: Anzahl oder None} -> Formel in Hill-Reihenfolge.
+
+    Steht die Anzahl fuer JEDEN Bestandteil fest, entsteht eine gewoehnliche
+    Summenformel mit tiefgestellten Ziffern ("AgCu₃"). Fehlt sie auch nur
+    einmal, ist das Verhaeltnis unbestimmt und die Teile werden mit dem
+    Mittelpunkt verbunden ("Ag·Cu") - eine Formel ohne Ziffern wuerde
+    Gleichteiligkeit behaupten.
+
+    None, wenn weniger als zwei verschiedene Elemente vorliegen: bei einem
+    einzigen waere die "Formel" das Elementsymbol, und ein Item mit genau
+    einem Bestandteil ist in aller Regel eine Legierungs-KLASSE
+    ("Nickelbasislegierung"), kein Werkstoff.
+    """
+    if len(bestandteile) < 2:
+        return None
+    reihenfolge = hill_reihenfolge(bestandteile)
+    if all(bestandteile[s] for s in reihenfolge):
+        return _formel_schreiben(bestandteile, reihenfolge, tiefgestellt=True)
+    return MITTELPUNKT.join(reihenfolge)
+
+
+def legierungs_qids(qids: list) -> set:
+    """Welche der Items sind Legierungen - ohne den Umweg ueber "Metall"?
+
+    Gefragt ist nicht bloss, ob das Item irgendwie unter Q37756 haengt: das
+    tut wegen Q11426 (siehe METALL_QID) jeder Sammelbegriff fuer Metalle. Die
+    Kante ueber Q11426 wird deshalb ausgespart und der Rest des Klassenwegs
+    hier durchlaufen - in SPARQL laesst sich ein AUSGESPARTER Knoten in einem
+    Pfad nicht ausdruecken.
+
+    Ein simples "hat gar keinen Metall-Weg" reicht nicht: Stahl hat einen,
+    kommt aber ausserdem ueber Ferrolegierung an die Legierung heran und ist
+    selbstverstaendlich eine.
+    """
+    if not qids:
+        return set()
+    werte = " ".join(f"wd:{q}" for q in qids)
+    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT DISTINCT ?von ?nach WHERE {{
+      VALUES ?i {{ {werte} }}
+      {{ ?i (wdt:P31|wdt:P279) ?nach . BIND(?i AS ?von) }}
+      UNION
+      {{ ?i (wdt:P31|wdt:P279)/wdt:P279* ?von .
+         FILTER(?von != wd:{METALL_QID})
+         ?von wdt:P279 ?nach . }}
+    }}
+    """})
+    kanten = collections.defaultdict(set)
+    for b in resp.json()["results"]["bindings"]:
+        von = b["von"]["value"].rsplit("/", 1)[-1]
+        kanten[von].add(b["nach"]["value"].rsplit("/", 1)[-1])
+
+    gefunden = set()
+    for qid in qids:
+        gesehen, offen = set(), list(kanten.get(qid, ()))
+        while offen:
+            knoten = offen.pop()
+            if knoten == LEGIERUNG_QID:
+                gefunden.add(qid)
+                break
+            if knoten in gesehen or knoten == METALL_QID:
+                continue
+            gesehen.add(knoten)
+            offen.extend(kanten.get(knoten, ()))
+    return gefunden
+
+
+def fetch_bestandteile(qids: list) -> dict:
+    """{QID: {"teile": {Symbol: Anzahl oder None}, "fremd": bool,
+              "legierung": bool}} fuer die uebergebenen Items.
+
+    "fremd" ist gesetzt, sobald ein Bestandteil KEIN chemisches Element ist
+    (rostfreier Stahl -> Stahl, Nikasil -> Carbide). Aus solchen Angaben eine
+    Elementformel zu bauen, hiesse den Bestandteil stillschweigend
+    wegzulassen - dann lieber keine Formel.
+
+    Die Anzahl kommt aus dem Qualifikator P1114. Widersprechen sich mehrere
+    Aussagen zu demselben Element, gilt die Anzahl als unbestimmt.
+    """
+    if not qids:
+        return {}
+    nach_qid = {info["qid"]: symbol for symbol, info in element_qids().items()}
+    werte = " ".join(f"wd:{q}" for q in qids)
+    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT ?i ?teil ?anzahl WHERE {{
+      VALUES ?i {{ {werte} }}
+      ?i p:P527 ?st . ?st ps:P527 ?teil .
+      OPTIONAL {{ ?st pq:P1114 ?anzahl }}
+    }}
+    """})
+
+    roh = collections.defaultdict(lambda: collections.defaultdict(set))
+    fremd = set()
+    for b in resp.json()["results"]["bindings"]:
+        qid = b["i"]["value"].rsplit("/", 1)[-1]
+        teil = b["teil"]["value"].rsplit("/", 1)[-1]
+        symbol = nach_qid.get(teil)
+        if symbol is None:
+            fremd.add(qid)
+            continue
+        roh[qid][symbol].add(b.get("anzahl", {}).get("value"))
+
+    legierungen = legierungs_qids([q for q in qids if q in roh])
+    out = {}
+    for qid in qids:
+        teile = {}
+        for symbol, mengen in roh.get(qid, {}).items():
+            # Genau ein ganzzahliger Wert an allen Aussagen - sonst unbestimmt.
+            zahlen = {m for m in mengen if m and re.fullmatch(r"\d+", m)}
+            teile[symbol] = (int(zahlen.pop())
+                             if len(zahlen) == 1 and len(mengen) == 1 else None)
+        out[qid] = {"teile": teile, "fremd": qid in fremd,
+                    "legierung": qid in legierungen}
+    return out
+
+
+_BESTANDTEIL_CACHE = {}
+# Wieviele Items eine Abfrage abdeckt. 200 VALUES sind fuer den Endpunkt
+# unkritisch und sparen gegenueber einer Abfrage je Item Hunderte Anfragen.
+BESTANDTEIL_CHARGE = 200
+
+
+def bestandteile_vorladen(qids: list) -> None:
+    """Bestandteile fuer viele Items auf einmal holen und merken."""
+    offen = [q for q in qids if q not in _BESTANDTEIL_CACHE]
+    for start in range(0, len(offen), BESTANDTEIL_CHARGE):
+        _BESTANDTEIL_CACHE.update(
+            fetch_bestandteile(offen[start:start + BESTANDTEIL_CHARGE]))
+
+
+def bestandteile(qid: str) -> dict:
+    """Bestandteile EINES Items, aus dem Zwischenspeicher oder frisch."""
+    if qid not in _BESTANDTEIL_CACHE:
+        _BESTANDTEIL_CACHE.update(fetch_bestandteile([qid]))
+    return _BESTANDTEIL_CACHE.get(qid, {"teile": {}, "fremd": False,
+                                        "legierung": False})
+
+
+def legierungsformel_proposals_for_item(wd_match: dict,
+                                        skip_pids: Optional[set] = None) -> list:
+    """P274-Vorschlag aus den Bestandteilen (P527) einer Legierung.
+
+    Nur fuer Legierungen: bei einem Mineral waere die Elementaufzaehlung die
+    schlechtere Formel, dort steht die richtige ohnehin meist schon am Item.
+
+    Wie die P527-Ableitung geht auch diese Aussage OHNE S-Beleg raus - sie
+    ist aus dem Item selbst abgeleitet und dort nachpruefbar.
+    """
+    skip_pids = skip_pids or set()
+    prop_info = PROPERTY_MAP["chemical_formula"]
+    if prop_info["pid"] in skip_pids:
+        return []
+
+    info = bestandteile(wd_match["qid"])
+    if not info["legierung"] or info["fremd"]:
+        return []
+    formel = legierungsformel(info["teile"])
+    if formel is None:
+        return []
+
+    teile = ", ".join(hill_reihenfolge(info["teile"]))
+    hinweis = ("" if MITTELPUNKT not in formel else
+               f" - Mischungsverhaeltnis unbestimmt, deshalb mit "
+               f"Mittelpunkt ({MITTELPUNKT}) statt mit Ziffern")
+    vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
+    return [make_row(
+        "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
+        "P527", wd_match, prop_info, formel, formel,
+        Reference(
+            url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P527",
+            note=f"aus 'besteht aus' (P527 am Item): {teile}; "
+                 f"Hill-Reihenfolge{hinweis}",
+        ),
+        formula=formel, entry_id="p527-formel", ohne_beleg=True,
+    )]
+
+
+# ---------------------------------------------------------------------------
+# Punktgruppe (P589) aus der Raumgruppe (P690) am Item
+# ---------------------------------------------------------------------------
+#
+# Dieselbe Bauart wie die beiden Ableitungen davor: der Wert steht schon am
+# Item, nur in einer anderen Property. Jede der 230 Raumgruppen gehoert zu
+# genau einer der 32 kristallographischen Punktgruppen, und Wikidata fuehrt
+# diese Zuordnung bereits an den Raumgruppen-Items selbst (230 von 236 tragen
+# P589). Es ist also nichts abzuleiten, sondern nur nachzuschlagen.
+#
+# Warum das lohnt (gemessen 2026-08-19): 2876 Items tragen eine Raumgruppe,
+# aber nur 18 davon auch eine Punktgruppe. Fuer 2851 laesst sie sich
+# nachschlagen, darunter 2602 Mineralarten. Zahlen und Grenzen: README,
+# "Punktgruppe (P589) aus der Raumgruppe".
+
+_ITEM_RAUMGRUPPE_CACHE = {}
+# Wie bei den Bestandteilen: eine Abfrage je 200 Items statt je Item.
+RAUMGRUPPE_CHARGE = 200
+
+
+def fetch_item_raumgruppen(qids: list) -> dict:
+    """{QID: [Raumgruppen-QID, ...]} - die P690-Werte der Items."""
+    if not qids:
+        return {}
+    werte = " ".join(f"wd:{q}" for q in qids)
+    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT ?i ?sg WHERE {{
+      VALUES ?i {{ {werte} }}
+      ?i wdt:P690 ?sg .
+    }}
+    """})
+    out = {q: [] for q in qids}
+    for b in resp.json()["results"]["bindings"]:
+        qid = b["i"]["value"].rsplit("/", 1)[-1]
+        sg = b["sg"]["value"].rsplit("/", 1)[-1]
+        if sg not in out[qid]:
+            out[qid].append(sg)
+    return out
+
+
+def item_raumgruppen_vorladen(qids: list) -> None:
+    """Raumgruppen vieler Items auf einmal holen und merken."""
+    offen = [q for q in qids if q not in _ITEM_RAUMGRUPPE_CACHE]
+    for start in range(0, len(offen), RAUMGRUPPE_CHARGE):
+        _ITEM_RAUMGRUPPE_CACHE.update(
+            fetch_item_raumgruppen(offen[start:start + RAUMGRUPPE_CHARGE]))
+
+
+def item_raumgruppen(qid: str) -> list:
+    """Raumgruppen EINES Items, aus dem Zwischenspeicher oder frisch."""
+    if qid not in _ITEM_RAUMGRUPPE_CACHE:
+        _ITEM_RAUMGRUPPE_CACHE.update(fetch_item_raumgruppen([qid]))
+    return _ITEM_RAUMGRUPPE_CACHE.get(qid, [])
+
+
+def punktgruppe_proposals_for_item(wd_match: dict,
+                                   skip_pids: Optional[set] = None) -> list:
+    """P589-Vorschlag aus der Raumgruppe (P690), die am Item schon steht.
+
+    Holt nichts von aussen ausser dem Nachschlagewerk selbst und geht deshalb
+    - wie die uebrigen abgeleiteten Aussagen - OHNE S-Beleg raus.
+
+    Traegt das Item MEHRERE Raumgruppen (56 Items am Bestand, meist mehrere
+    Modifikationen an einem Item), wird nichts vorgeschlagen: welche gemeint
+    ist, entscheidet die Fachfrage, nicht das Skript.
+    """
+    skip_pids = skip_pids or set()
+    prop_info = PROPERTY_MAP["point_group"]
+    if prop_info["pid"] in skip_pids:
+        return []
+
+    raumgruppen = item_raumgruppen(wd_match["qid"])
+    if not raumgruppen:
+        return []
+    tabelle = raumgruppen_nach_qid()
+
+    if len(raumgruppen) > 1:
+        namen = ", ".join(
+            tabelle[q]["label"] if q in tabelle else q for q in raumgruppen)
+        return [make_row(
+            f"MANUELLE_KLAERUNG_NOETIG (mehrere Raumgruppen am Item: {namen} "
+            f"- welche Modifikation gemeint ist, entscheidet die Fachfrage)",
+            "Raumgruppe", wd_match, prop_info, "", namen,
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P690",
+                note=f"mehrere Raumgruppen am Item ({namen}) - Punktgruppe "
+                     f"nicht eindeutig",
+            ),
+            entry_id="punktgruppe", qualifiers=[], ohne_beleg=True,
+        )]
+
+    sg = tabelle.get(raumgruppen[0])
+    if sg is None or not sg["pg_qid"]:
+        return []  # Raumgruppe ohne Punktgruppe am Item - nicht raten
+
+    vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
+    return [make_row(
+        "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
+        "Raumgruppe", wd_match, prop_info, sg["pg_qid"], sg["pg_label"],
+        Reference(
+            url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P690",
+            note=f"aus der Raumgruppe {sg['label']} (P690 am Item); die "
+                 f"Punktgruppe steht am Raumgruppen-Item selbst (P589)",
+        ),
+        entry_id="punktgruppe", qualifiers=[], ohne_beleg=True,
+    )]
+
+
+# ---------------------------------------------------------------------------
 # Schritt 2b: Bestehendes Wikidata-Item ueber Formel finden
 # ---------------------------------------------------------------------------
 
@@ -2788,7 +3370,8 @@ def item_has_statement(qid: str, pid: str) -> bool:
 # Schallgeschwindigkeit und COD-ID BEWUSST fehlen: README, "Keine
 # Festkoerper-Kennwerte an Gasen".
 NUR_FESTKOERPER = ("bulk_modulus", "shear_modulus", "poisson_ratio",
-                   "density", "crystal_system", "space_group")
+                   "density", "crystal_system", "space_group", "point_group",
+                   "linear_thermal_expansion")
 RAUMTEMPERATUR_K = 293.15
 
 # P2102 wird in Wikidata in drei Einheiten gefuehrt (am Bestand: 32x Celsius,
@@ -3081,10 +3664,19 @@ def proposals_for_material(material: dict, wd_match: dict,
             # Raumtemperatur ist die Zelle thermisch geweitet.
             # MP fuehrt ausschliesslich kristalline Festkoerper, "fest" ist
             # hier also keine Annahme.
-            qualifiers += [
-                (TEMPERATUR_PID, f"0U{KELVIN_QID[1:]}", "0 K (DFT-Grundzustand)"),
-                (AGGREGAT_PID, AGGREGAT_FEST, "fest"),
-            ]
+            qualifiers += [DFT_TEMPERATUR, (AGGREGAT_PID, AGGREGAT_FEST, "fest")]
+
+        if internal_key == "poisson_ratio":
+            # Die Poissonzahl haengt an der Temperatur - bei Stahl steigt sie
+            # zwischen Raumtemperatur und 500 °C messbar an -, und der
+            # Elastizitaetsdatensatz (de Jong et al. 2015) ist wie alles bei
+            # MP bei 0 K gerechnet. Ohne Qualifikator stuende in Wikidata eine
+            # temperaturlose Zahl, die stillschweigend als Raumtemperaturwert
+            # gelesen wuerde - gerade hier weicht die Rechnung aber am
+            # staerksten ab (17-41 %, siehe oben).
+            # P5593 kennt keinen Qualifikator-Constraint; am Bestand tragen 4
+            # der 226 Aussagen bereits P2076 (gemessen 2026-08-19).
+            qualifiers.append(DFT_TEMPERATUR)
 
         pid = prop_info["pid"]
         value_label = ""
@@ -3139,8 +3731,8 @@ def round_significant(value: float, digits: int = 6) -> float:
     """Auf signifikante Stellen runden, nicht auf Nachkommastellen.
 
     Die Groessen hier reichen von 1e-8 (spezifischer Widerstand in Ohm*m)
-    bis 2e4 (Dichte in kg/m^3). round(x, 6) wuerde den Widerstand zu 0.0
-    machen.
+    bis 1e11 (Kompressionsmodul in Pascal). round(x, 6) wuerde den
+    Widerstand zu 0.0 machen.
     """
     return float(f"{value:.{digits}g}")
 
@@ -3425,7 +4017,7 @@ def quickstatements_value(row: dict) -> str:
     Mengenwerte MUESSEN ihre Einheit tragen: QuickStatements erwartet
     "<zahl>U<QID-Nummer>", also z. B. "1357.77U11579" fuer Kelvin (Q11579).
     Ohne das "U..." landet der Wert als einheitenlose Zahl in Wikidata -
-    eine Dichte stuende dann als blosse 8935 da.
+    eine Dichte stuende dann als blosse 8.96 da.
 
     Ausserdem wird die Exponentialschreibweise aufgeloest: Python schreibt
     den spezifischen Widerstand als "1.678e-08", QuickStatements liest das
@@ -3730,6 +4322,8 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
             charge, args.wikipedia, args.cod,
             args.experimentell, args.stabil, args.max,
             nummer_ab=erstes, gesamt=gesamt, formel=args.formel,
+            legierungsformel_an=args.legierungsformel,
+            punktgruppe_an=args.punktgruppe,
         )
         try:
             zeilen = write_csv_streaming(zeilen_gen, csv_pfad)
@@ -3787,9 +4381,9 @@ def main():
         help="Vorschlaege fuer eine ganze Werkstoffgruppe erzeugen. "
         "'minerale' ist mit Abstand die ergiebigste (6301 Arten, 5694 mit "
         "Summenformel, KEINE EINZIGE mit COD-ID); 'oxide' umfasst die 154 "
-        "Oxide mit Summenformel; 'legierungen' liefert kaum etwas, weil nur "
-        "10 von 568 eine Formel tragen und Legierungsartikel in der "
-        "Wikipedia keine Infobox haben",
+        "Oxide mit Summenformel; bei 'legierungen' laufen COD und MP mangels "
+        "Formel weitgehend leer (nur 10 von 568 tragen eine), dafuer baut die "
+        "Stufe --legierungsformel dort die Formel aus den Bestandteilen",
     )
     parser.add_argument(
         "--limit", type=int, default=None,
@@ -3866,6 +4460,27 @@ def main():
         "sondern zur Klaerung ausgewiesen. Default: an",
     )
     parser.add_argument(
+        "--legierungsformel",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="der umgekehrte Weg fuer Items OHNE Summenformel: aus 'besteht "
+        "aus' (P527) eine chemische Formel (P274) bauen, in Hill-Reihenfolge "
+        "und - weil das Mischungsverhaeltnis einer Legierung unbestimmt ist - "
+        "mit Mittelpunkt verbunden ('Cu·Sn', 'C·Fe'). Nur fuer Items, die "
+        "wirklich als Legierung eingeordnet sind und deren Bestandteile "
+        "samt und sonders chemische Elemente sind. Default: an",
+    )
+    parser.add_argument(
+        "--punktgruppe",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Punktgruppe (P589) aus der Raumgruppe (P690) nachschlagen, die "
+        "am Item schon steht - jede der 230 Raumgruppen gehoert zu genau "
+        "einer der 32 Punktgruppen, und Wikidata fuehrt die Zuordnung an den "
+        "Raumgruppen-Items. Traegt ein Item mehrere Raumgruppen, wird nichts "
+        "vorgeschlagen. Default: an",
+    )
+    parser.add_argument(
         "--nur-metalle",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -3897,6 +4512,8 @@ def main():
         proposals = build_group_proposals(
             args.group, args.limit, args.wikipedia, args.cod,
             args.experimentell, args.stabil, args.max, formel=args.formel,
+            legierungsformel_an=args.legierungsformel,
+            punktgruppe_an=args.punktgruppe,
         )
     elif args.periodic_table:
         proposals = build_periodic_table_proposals(

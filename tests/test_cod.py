@@ -129,7 +129,8 @@ EINTRAG_KUPFER = {
 
 RAUMGRUPPEN = {
     225: {"qid": "Q15041891", "label": "Raumgruppe 225",
-          "cs_qid": "Q473227", "cs_label": "Kubisches Kristallsystem"},
+          "cs_qid": "Q473227", "cs_label": "Kubisches Kristallsystem",
+          "pg_qid": "Q13359931", "pg_label": "kubisch-hexakisoktaedrisch"},
 }
 
 
@@ -142,10 +143,34 @@ def cod_zeilen(monkeypatch):
     return cod_proposals_for_item(wd, [EINTRAG_KUPFER])
 
 
-def test_cod_liefert_cod_id_raumgruppe_und_kristallsystem(cod_zeilen):
+def test_cod_liefert_cod_id_raumgruppe_punktgruppe_und_kristallsystem(cod_zeilen):
     pids = [z["_pid"] for z in cod_zeilen]
-    assert pids == ["P9824", "P690", "P556"]
+    assert pids == ["P9824", "P690", "P589", "P556"]
     assert all(z["source"] == "COD" for z in cod_zeilen)
+
+
+def test_punktgruppe_wird_am_raumgruppen_item_abgelesen(cod_zeilen):
+    """Jede der 230 Raumgruppen gehoert zu genau einer der 32 Punktgruppen,
+    und Wikidata weiss das am Raumgruppen-Item bereits. Belegt wird sie
+    deshalb mit derselben Originalarbeit wie die Raumgruppe."""
+    punktgruppe = [z for z in cod_zeilen if z["_pid"] == "P589"][0]
+    assert punktgruppe["value"] == "Q13359931"
+    assert punktgruppe["ref_doi"] == "10.1021/ja9052569"
+
+
+def test_ohne_punktgruppe_am_raumgruppen_item_wird_nichts_behauptet(monkeypatch):
+    """Sechs der 236 Raumgruppen-Items fuehren keine Punktgruppe. Dann faellt
+    die Zeile weg - geraten wird nicht."""
+    from materialswiki import cli
+    monkeypatch.setattr(cli, "fetch_space_group_qids", lambda: {
+        225: {"qid": "Q15041891", "label": "Raumgruppe 225",
+              "cs_qid": "Q473227", "cs_label": "kubisch",
+              "pg_qid": "", "pg_label": ""},
+    })
+    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    zeilen = cod_proposals_for_item({"qid": "Q753", "label": "Kupfer"},
+                                    [EINTRAG_KUPFER])
+    assert "P589" not in [z["_pid"] for z in zeilen]
 
 
 def test_kristallsystem_wird_auf_fcc_verfeinert(cod_zeilen):
@@ -184,7 +209,7 @@ def test_skip_pids_unterdrueckt_bereits_belegte_properties(monkeypatch):
     monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
     zeilen = cod_proposals_for_item(
         {"qid": "Q753", "label": "Kupfer"}, [EINTRAG_KUPFER],
-        skip_pids={"P690", "P556"},
+        skip_pids={"P690", "P556", "P589"},
     )
     assert [z["_pid"] for z in zeilen] == ["P9824"]
 
@@ -245,14 +270,15 @@ def test_uneindeutige_modifikation_wird_zur_klaerung_markiert(monkeypatch):
     from materialswiki import cli
     monkeypatch.setattr(cli, "fetch_space_group_qids", lambda: {
         136: {"qid": "Q1", "label": "Raumgruppe 136",
-              "cs_qid": "Q503601", "cs_label": "tetragonal"},
+              "cs_qid": "Q503601", "cs_label": "tetragonal",
+              "pg_qid": "Q13363960", "pg_label": "Ditetragonal-dipyramidal"},
     })
     monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
     zeilen = cod_proposals_for_item(
         {"qid": "Q0", "label": "TiO2"}, _eintraege((136, 12), (141, 11)))
 
-    struktur = [z for z in zeilen if z["_pid"] in ("P690", "P556")]
-    assert struktur, "Raumgruppe und Kristallsystem muessen auftauchen"
+    struktur = [z for z in zeilen if z["_pid"] in ("P690", "P556", "P589")]
+    assert struktur, "Raumgruppe, Punktgruppe und Kristallsystem muessen auftauchen"
     for z in struktur:
         assert z["status"].startswith("MANUELLE_KLAERUNG_NOETIG")
         assert "12 von 23" in z["status"]

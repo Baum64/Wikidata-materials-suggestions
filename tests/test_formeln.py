@@ -103,11 +103,11 @@ def test_unsichere_temperatur_wird_verworfen(roh):
 
 def test_chembox_einheit_steckt_im_feldnamen():
     """Kelvin-Feld schlaegt Celsius-Feld, damit nicht umgerechnet werden muss;
-    die Dichte kommt in g/cm³ und muss nach kg/m³."""
+    die Dichte steht schon in der Zieleinheit g/cm³."""
     werte = wikipedia_en_chem_values(
         {"MeltingPtK": "2116", "MeltingPtC": "1843", "Density": "4.23 g/cm3"})
     assert werte["melting_point"][0] == pytest.approx(2116.0)
-    assert werte["density"][0] == pytest.approx(4230.0)
+    assert werte["density"][0] == pytest.approx(4.23)
 
 
 def test_chembox_unsinnige_cas_wird_verworfen():

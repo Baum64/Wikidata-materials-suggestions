@@ -104,7 +104,7 @@ Geprüft wird deshalb gegen physikalische Schranken, in Wikidata-Einheiten:
 |---|---|---|
 | Kompressions-/Schubmodul | 0,001 … 1000 GPa | müssen positiv sein; Diamant liegt bei 443 bzw. 535 GPa |
 | Poissonzahl | −1 … 0,5 | thermodynamische Grenze für isotrope lineare Elastizität |
-| Dichte | 10 … 30 000 kg/m³ | Lithium 534, Osmium 22 590 |
+| Dichte | 0,01 … 30 g/cm³ | Lithium 0,534, Osmium 22,59 |
 
 Unplausible Werte werden **nicht still verworfen**, sondern als
 `MANUELLE_KLAERUNG_NOETIG` ausgewiesen — sonst fiele nie auf, dass die
@@ -251,6 +251,23 @@ Weitere Größen lassen sich genauso umstellen; die Zuordnung steht in
 Literaturwerte, und mit welcher Methode sie bestimmt wurden, steht in der
 Infobox nicht — eine Methode zu behaupten wäre geraten.
 
+### Die Dichte steht in g/cm³
+
+`P2054` lässt laut Constraint vier Einheiten zu (`Q844211` kg/m³,
+`Q13147228` g/cm³, dazu g/l und g/m³). Genommen wird **g/cm³**, aus zwei
+Gründen:
+
+- **Der Bestand ist eindeutig.** Von 2476 Dichteangaben in Wikidata stehen
+  2015 in g/cm³ und nur 461 in kg/m³ (gemessen 2026-08-19). Wer die Werte
+  eines Items vergleicht, soll nicht zwischen zwei Einheiten umrechnen müssen.
+- **Alle hiesigen Quellen liefern g/cm³** — das Materials Project ebenso wie
+  beide Wikipedia-Infoboxen. Die Umrechnung entfällt damit ersatzlos, und mit
+  ihr der Faktor 1000, der bisher an vier Stellen im Code stand und an jeder
+  einzeln danebengehen konnte.
+
+Die Plausibilitätsschranken laufen entsprechend in g/cm³ (0,01 … 30, siehe
+oben).
+
 ### Die Dichte trägt ihre Messbedingungen
 
 Die Nutzungsanweisung von `P2054` verlangt zwei Qualifikatoren, und beide sind
@@ -276,10 +293,10 @@ Schmelzpunkt abgeleitet; fehlt er, wird gar nichts behauptet — lieber kein
 Qualifikator als ein falscher:
 
 ```
-Titan    4500 kg/m³   P2076=25 °C   P515=Q11438 (fest)
-Eisen    7874 kg/m³   P2076=20 °C   P515=Q11438 (fest)
-Brom     3120 kg/m³   P2076=20 °C   P515=Q11435 (flüssig)
-Quecks. 13546 kg/m³   P2076=20 °C   P515=Q11435 (flüssig)
+Titan    4,50 g/cm³   P2076=25 °C   P515=Q11438 (fest)
+Eisen    7,874 g/cm³  P2076=20 °C   P515=Q11438 (fest)
+Brom     3,12 g/cm³   P2076=20 °C   P515=Q11435 (flüssig)
+Quecks. 13,546 g/cm³  P2076=20 °C   P515=Q11435 (flüssig)
 ```
 
 #### MP-Dichten stehen bei 0 K, nicht bei 20 °C
@@ -291,12 +308,39 @@ systematische Abweichung von den Handbuchwerten — bei Raumtemperatur ist die
 Zelle thermisch geweitet.
 
 ```
-Q716	P2054	4670.17U844211	P459	Q1048589	P2076	0U11579	P515	Q11438	S356	"10.1063/1.4812323"
+Q716	P2054	4.67017U13147228	P459	Q1048589	P2076	0U11579	P515	Q11438	S356	"10.1063/1.4812323"
 ```
 
-Ein angenehmer Nebeneffekt: Kupfer bekommt aus MP 9219 kg/m³, die Literatur
-nennt 8960. Mit den Qualifikatoren widersprechen sich beide Werte am Item
+Ein angenehmer Nebeneffekt: Kupfer bekommt aus MP 9,219 g/cm³, die Literatur
+nennt 8,96. Mit den Qualifikatoren widersprechen sich beide Werte am Item
 nicht mehr — der eine gilt bei 0 K, der andere bei 20 °C.
+
+#### Auch die Poissonzahl steht bei 0 K
+
+Dieselbe Überlegung greift bei `P5593`. Die Poissonzahl ist
+temperaturabhängig, und der Elastizitätsdatensatz (de Jong et al. 2015) ist
+wie alles bei MP bei 0 K gerechnet. Ohne Qualifikator stünde in Wikidata eine
+temperaturlose Zahl, die stillschweigend als Raumtemperaturwert gelesen würde
+— und gerade hier weicht die Rechnung am stärksten ab (−16,6 % bis +21,7 %,
+siehe oben). Sie bekommt deshalb `P2076 = 0 K`, aber **keinen**
+Aggregatzustand: den verlangt nur `P2054`, an einer Materialkonstante wäre er
+bloßes Beiwerk.
+
+```
+Q320603	P5593	0.28	P459	Q1048589	P2076	0U11579	S356	"10.1063/1.4812323"	S356	"10.1038/sdata.2015.9"
+```
+
+Geprüft am 2026-08-19: `P5593` trägt **keinen** Qualifikator-Constraint,
+`P2076` ist dort also zulässig; 4 der 226 bestehenden Aussagen führen ihn
+bereits (3 weitere den Druck `P2077`).
+
+**Aus den Infoboxen kommt keine Temperatur.** Weder die deutsche
+Elementinfobox (`| Poissonzahl = 0,34<ref …>`) noch die englische Vorlage
+(`| Poisson ratio = 0.34`) nennt eine — geprüft an Titan, Kupfer, Eisen,
+Aluminium und Wolfram (2026-08-19). Dort wird deshalb nichts behauptet;
+20 °C zu unterstellen wäre geraten. Kompressionsmodul und Schubmodul bleiben
+vorerst ebenfalls ohne Temperatur — sie stammen aus demselben 0-K-Datensatz,
+die Erweiterung wäre einzeilig.
 
 Verifiziert am 2026-08-15: `P2076` ist mengenwertig, `P515` itemwertig, beide
 laut Property-Scope-Constraint als Qualifikator zugelassen (`P515` sogar
@@ -489,7 +533,14 @@ Formel (ohne Netzzugriff)     →  COD (DOI der Originalarbeit)
 
 Die Stufe **Formel** steht vorn, weil sie ohne eine einzige Netzanfrage
 auskommt und eine Property liefert, die keine der externen Quellen führt —
-siehe [„besteht aus" (P527)](#besteht-aus-p527-aus-der-summenformel).
+siehe [„besteht aus" (P527)](#besteht-aus-p527-aus-der-summenformel). Wo gar
+keine Formel dasteht, läuft dieselbe Ableitung **rückwärts**: aus den
+Bestandteilen wird eine Formel gebaut, siehe [Summenformel (P274) aus
+„besteht aus" (P527)](#summenformel-p274-aus-besteht-aus-p527). Das greift
+praktisch nur bei Legierungen — genau dort, wo alle übrigen Stufen mangels
+Formel leerlaufen. Ebenso wird die **Punktgruppe** (`P589`) aus der
+Raumgruppe nachgeschlagen, die am Item schon steht — siehe [Punktgruppe
+(P589) aus der Raumgruppe](#punktgruppe-p589-aus-der-raumgruppe).
 
 Die **[Crystallography Open Database](https://www.crystallography.net/cod/)**
 steht vorn und ist die primäre Quelle für Raumgruppe (P690), Kristallsystem
@@ -606,6 +657,172 @@ Modellierungen zu vermischen wäre schlechter als eine Lücke.
 
 Abschaltbar mit `--no-formel`.
 
+### Summenformel (P274) aus „besteht aus" (P527)
+
+Für Legierungen läuft die Ableitung **andersherum**. Eine Formel zum Zerlegen
+gibt es dort fast nie — 10 von 568 Items —, die Bestandteile stehen aber
+vielfach schon da. Aus ihnen lässt sich die Formel *zusammensetzen*.
+
+**Die Konvention.** [[Wikidata:WikiProject Chemistry]] empfiehlt primär die
+**Hill-Formel**: Kohlenstoff zuerst, dann Wasserstoff, dann alphabetisch. Für
+Legierungen fällt das meist mit der alphabetischen Reihenfolge zusammen; wo
+Kohlenstoff dabei ist, wirkt es sichtbar — Stahl wird `C·Fe`, nicht `Fe·C`.
+Das **unbestimmte Mischungsverhältnis** schreibt das Projekt mit dem
+Mittelpunkt `·` (U+00B7), wie bei Hydraten. In Wikidata steht es bereits so:
+Elektron (`Q239481`) trägt `Au·Ag`. Bei einer Legierung ist das Verhältnis
+der Regelfall des Unbestimmten — `CuSn` ohne Ziffern würde Gleichteiligkeit
+behaupten, was schlicht falsch wäre.
+
+| Fall | Ergebnis |
+|---|---|
+| alle Teile Elemente, ≥ 2 verschiedene, `P1114` überall | `AuCu₃` |
+| alle Teile Elemente, ≥ 2 verschiedene, `P1114` fehlt | `Cu·Sn` |
+| ein Teil ist kein Element, oder nur ein Element | nichts |
+
+Erzeugt wird nur, was auch trägt (gemessen 2026-08-18):
+
+| | Items |
+|---|---|
+| Legierungen mit `P527`, ohne `P274` | 219 |
+| davon: alle Bestandteile sind chemische Elemente | 180 |
+| davon: mindestens zwei verschiedene | 130 |
+| davon: wirklich als Legierung eingeordnet | **125** |
+
+Die drei Schnitte sind je ein Fehler, der sonst entstünde:
+
+- **Kein Element als Bestandteil.** Rostfreier Stahl „besteht aus" Stahl und
+  Chrom, Nikasil aus Nickel, Silicium und Carbiden. Eine Elementformel daraus
+  ließe den Nicht-Element-Bestandteil stillschweigend unter den Tisch fallen.
+- **Nur ein Element.** Items mit genau einem Bestandteil sind Legierungs-
+  *Klassen* („Nickelbasislegierung", „Aluminiumlegierung", „Amalgam"); die
+  „Formel" wäre das Elementsymbol und damit die des reinen Elements.
+- **Nicht wirklich Legierung.** Wegen `Q11426 "Metalle" → P279 → Q37756`
+  (siehe [Werkstoffgruppen](#werkstoffgruppen---group)) hängt auch jeder
+  *Sammelbegriff* für Metalle unter der Legierung. Deren `P527` ist eine
+  **Aufzählung**, keine Zusammensetzung: „Platinmetalle" → Ir, Os, Pd, Pt,
+  Rh, Ru; „metals of antiquity" → Ag, Au, Cu, Fe, Hg, Pb, Sn. Daraus eine
+  Formel zu bauen wäre Unsinn. Geprüft wird deshalb, ob das Item die
+  Legierung **ohne den Umweg über `Q11426`** erreicht. Ein simples „hat gar
+  keinen Metall-Weg" reicht nicht: Stahl hat einen, kommt aber außerdem über
+  Ferrolegierung an die Legierung heran. Da SPARQL einen *ausgesparten
+  Knoten* in einem Pfad nicht ausdrücken kann, werden die Oberklassenkanten
+  geholt und der Rest des Wegs im Code durchlaufen. Der Schnitt trifft genau
+  die fünf: Platinmetalle, active metal, metals of antiquity, vergoldetes
+  Silber, Kongsbergit.
+
+Alle 125 erzeugten Formeln erfüllen den **Format-Constraint** von P274
+(`Q21502404`, am 2026-08-18 aus der Property ausgelesen) — der Mittelpunkt
+ist dort ausdrücklich vorgesehen. Der Test hält die Regex fest
+([../tests/test_legierungsformel.py](../tests/test_legierungsformel.py)).
+
+**Was die Formel *nicht* auslöst.** Sie wird bewusst **nicht** an COD und
+Materials Project weitergereicht: `Cu·Sn` ist keine Stöchiometrie, eine
+Strukturdatenbank kann damit nichts Richtiges finden.
+
+**Warum kein Anteil in Ziffern.** 29 der Items führen Mengenanteile als
+Qualifikator `P1107`. Die sind Massen- oder Volumenanteile, keine
+Stöchiometrie; sie in Indizes umzurechnen verlangte molare Massen und eine
+Rundung — also eine Erfindung. Sie bleiben deshalb außen vor. `P1114`
+(stöchiometrische Anzahl) würde genutzt, trägt am Bestand aber **kein**
+einziges dieser Items.
+
+**Der zweite Weg wurde gemessen und verworfen.** Naheliegend wäre, die Formel
+stattdessen aus der Wikipedia-Infobox zu holen. 470 Legierungen ohne `P274`
+und ohne `P527` haben einen Artikel; an einer Stichprobe von 50 (2026-08-18)
+nennt **einer** eine Summenformel — Kamacit, und der als
+`α-(Fe,Ni); Fe<sup>0</sup><sub>0.9</sub>…` mit HTML-Markup. Legierungsartikel
+tragen schlicht keine Chemikalien-Infobox. Für diesen Weg wurde deshalb kein
+Code geschrieben.
+
+**Beleg.** Wie bei P527 aus der Formel: aus dem Item selbst abgeleitet, also
+**ohne S-Beleg**, mit der Herkunft samt Bestandteilsliste in `ref_note`.
+Trägt das Item schon eine Formel, wird nichts ergänzt.
+
+Abschaltbar mit `--no-legierungsformel`.
+
+### Punktgruppe (P589) aus der Raumgruppe
+
+Dieselbe Bauart, dritter Fall: der Wert steht schon am Item, nur in einer
+anderen Property. Jede der 230 Raumgruppen gehört zu genau **einer** der 32
+kristallographischen Punktgruppen, und Wikidata führt diese Zuordnung bereits
+an den Raumgruppen-Items selbst — **230 der 236** tragen `P589` (gemessen
+2026-08-19). Es ist also nichts abzuleiten, nur nachzuschlagen.
+
+Warum es lohnt (gemessen 2026-08-19):
+
+| | Items |
+|---|---|
+| tragen eine Raumgruppe (`P690`) | 2876 |
+| davon **ohne** Punktgruppe | 2858 |
+| davon über das Raumgruppen-Item auflösbar | **2851** |
+| darunter Mineralarten | 2602 |
+
+Zum Vergleich: von 6301 Mineralarten führen bisher **19** eine Punktgruppe.
+
+**Mehrere Raumgruppen am Item → nichts.** 56 Items tragen mehr als eine
+`P690`, meist weil mehrere Modifikationen an einem Item hängen. Welche gemeint
+ist, entscheidet die Fachfrage; die Zeile geht als
+`MANUELLE_KLAERUNG_NOETIG` heraus, mit beiden Raumgruppen im Status. Sechs
+Raumgruppen-Items führen selbst keine Punktgruppe — dort entsteht gar keine
+Zeile.
+
+**Zweiter Weg: frisch aus der COD.** Schlägt die COD-Stufe eine Raumgruppe
+vor, kommt die Punktgruppe in derselben Zeilengruppe mit — belegt mit
+*derselben* Originalarbeit und mit demselben Klärungsvermerk: ist die
+Modifikation offen, ist es die Punktgruppe auch.
+
+**Was am Item steht, gewinnt.** Beide Wege können sich widersprechen: Graphit
+trägt Raumgruppe 194, die COD-Suche nach `C` findet aber überwiegend Diamant
+(225). Dann gilt der Befund am Item; die abweichende COD-Raumgruppe bleibt als
+eigene Zeile sichtbar und damit prüfbar.
+
+**Beleg.** Der Weg über `P690` am Item geht **ohne S-Beleg** raus (wie die
+beiden anderen Ableitungen), der Weg über die COD mit dem DOI der
+Originalarbeit.
+
+Abschaltbar mit `--no-punktgruppe`.
+
+### Längenausdehnungskoeffizient (P5672)
+
+Die einzige Größe, die **nur** aus der englischen Elementinfobox kommt: die
+deutsche Infobox hat kein solches Feld (an Kupfer, Titan und Eisen geprüft),
+die Chembox auch nicht, und das Materials Project rechnet keine thermische
+Ausdehnung. Sie fällt damit ausschließlich im Periodensystem-Modus an.
+
+Das Feld heißt `thermal expansion comment` und steht in der Form
+
+```
+{{val|16.64|e=−6}}/K (at&nbsp;20&nbsp;°C)<ref name="Arblaster 2018" />
+```
+
+also 16,64 µm/(m·K) — genau die einzige laut Constraint erlaubte Einheit
+(`Q56025776`) — **mit ausdrücklicher Temperatur**, die als `P2076` mitgeht.
+Ältere Vorlagen führen stattdessen `thermal expansion at 25` als bloße Zahl,
+die dort bereits in µm/(m·K) steht.
+
+An allen 118 Elementvorlagen gemessen (2026-08-19):
+
+| Fall | Zahl | Ergebnis |
+|---|---|---|
+| isotroper Wert mit Temperatur | 38 | `VORSCHLAG` (33 davon mit eigenem `<ref>`, meist Arblaster 2018 → ISBN-Beleg statt Import) |
+| anisotrop | 24 | `MANUELLE_KLAERUNG_NOETIG` |
+| unbrauchbar | 11 | nichts |
+| ohne Angabe | 45 | nichts |
+
+**Anisotrope Elemente werden nicht vorgeschlagen.** Bei Titan, Zink oder
+Beryllium hängt der Koeffizient von der Kristallachse ab; die Infobox nennt
+als Hauptwert das Mittel α_V/3 und die Achsenwerte in einer Fußnote. Ein
+einzelner Wert ohne Achsenangabe wäre in Wikidata eine Halbwahrheit — das
+entscheidet niemand nebenbei, also geht die Zeile zur Klärung.
+
+**Unbrauchbar** heißt hier: „at r.t." statt einer Zahl (Holmium, Erbium,
+Thulium …) und Werte, die sich auf eine Modifikation beziehen
+(`diamond: 0.8`, `β form: 5–7`, `amorphous: 37`). Beides wäre geraten.
+
+**Die Property ist noch leer.** Am 2026-08-19 trägt in ganz Wikidata **keine
+einzige** Aussage `P5672`. Die 38 Vorschläge wären die ersten — ein Grund
+mehr, sie einzeln durchzusehen.
+
 ### Die drei Wikipedia-Stufen und ihre Fallstricke
 
 Welche Infobox gelesen wird, entscheidet sich am Artikel. Alle drei Stufen
@@ -676,6 +893,9 @@ Wikidata-Items durchgehen. Wie ergiebig das ist, hängt stark an der Gruppe
 Subtree unter `Q7946` „Mineral", der auch Gruppen und Sammelbegriffe enthält.
 Bei den Legierungen ist die Summenformel dagegen die Ausnahme (Stahl hat
 keine), weshalb COD und Materials Project dort kaum etwas beitragen können.
+Dafür greift dort die umgekehrte Ableitung: aus den Bestandteilen (`P527`)
+entstehen 125 neue Formeln, siehe [Summenformel (P274) aus „besteht aus"
+(P527)](#summenformel-p274-aus-besteht-aus-p527).
 
 **`legierungen` braucht einen Filter, sonst ist die Grundgesamtheit Müll.**
 Die naheliegende Abfrage — alles unter Legierung (`Q37756`) — liefert 3718
@@ -769,7 +989,7 @@ aus den Infoboxen** vorgeschlagen:
 | Größe | Warum nicht |
 |---|---|
 | Kompressionsmodul, Schubmodul, Poissonzahl | am Gas nicht definiert |
-| Dichte (P2054) | die des Festkörpers — für Neon 1815 kg/m³ statt 0,9 kg/m³ |
+| Dichte (P2054) | die des Festkörpers — für Neon 1,815 g/cm³ statt 0,0009 g/cm³ |
 | Kristallsystem (P556), Raumgruppe (P690) | ein Gas hat bei Raumtemperatur keine Kristallstruktur |
 
 Nicht gesperrt sind die **Schallgeschwindigkeit** (in Gasen sauber definiert und
@@ -872,7 +1092,7 @@ Properties:
 
 | Größe | Property | Einheit / Typ |
 |---|---|---|
-| Dichte | `P2054` | kg/m³ |
+| Dichte | `P2054` | g/cm³ |
 | Schmelzpunkt | `P2101` | Kelvin |
 | Siedepunkt | `P2102` | Kelvin |
 | Kristallsystem | `P556` | Item (7 Werte, 1:1 zum MP-Vokabular) |
@@ -885,6 +1105,12 @@ Properties:
 | Schallgeschwindigkeit | `P2075` | m/s |
 | Poissonzahl | `P5593` | dimensionslos |
 | CAS-Nummer | `P231` | external-id |
+| besteht aus | `P527` | Item (Element, Anzahl als `P1114`) |
+| Raumgruppe | `P690` | Item (230 Raumgruppen über `P9733`) |
+| Punktgruppe | `P589` | Item (32 Punktgruppen, am Raumgruppen-Item abgelesen) |
+| COD-ID | `P9824` | external-id |
+| chemische Formel | `P274` | string (Hill, `·` bei unbestimmtem Verhältnis) |
+| Längenausdehnungskoeffizient | `P5672` | µm/(m·K), **mit Temperatur** |
 
 Wichtig: **Ein Eintrag in `PROPERTY_MAP` allein erzeugt noch keine
 Vorschläge.** Aus dem Materials Project kommen nur Größen, die auch in
@@ -892,21 +1118,24 @@ Vorschläge.** Aus dem Materials Project kommen nur Größen, die auch in
 
 | Wikidata | MP-Feld | Umrechnung |
 |---|---|---|
-| Dichte `P2054` | `density` | g/cm³ → kg/m³ (×1000); **mit Messbedingungen**, siehe unten |
+| Dichte `P2054` | `density` | keine — g/cm³ ist schon die Zieleinheit; **mit Messbedingungen**, siehe unten |
 | Kristallsystem `P556` | `symmetry.crystal_system` + `symmetry.symbol` | Groß-/Kleinschreibung, dann `value_map`; Zentrierung → fcc/bcc; **Beleg aus Literatur** |
 | Kompressionsmodul `P5668` | `bulk_modulus.vrh` | GPa → Pa (×10⁹) |
 | Schubmodul `P5673` | `shear_modulus.vrh` | GPa → Pa (×10⁹) |
-| Poissonzahl `P5593` | `homogeneous_poisson` | keine |
+| Poissonzahl `P5593` | `homogeneous_poisson` | keine; **mit Temperatur** (0 K), siehe unten |
 
-Die **Einheiten sind der Fallstrick**: MP rechnet in g/cm³ und GPa, Wikidata
-erwartet kg/m³ und Pascal. Die Faktoren stehen in `MP_FIELD_MAP` und sind
+Die **Einheiten sind der Fallstrick**: MP rechnet in GPa, Wikidata erwartet
+Pascal. Bei der Dichte fällt die Umrechnung weg, seit sie in g/cm³ nach
+Wikidata geht. Die Faktoren stehen in `MP_FIELD_MAP` und sind
 einzeln getestet ([../tests/test_mp.py](../tests/test_mp.py)). Die Moduln
 kommen als Voigt-Reuss-Hill-Mittel (`vrh`), das übliche Mittel für
 polykristalline Werkstoffe — nicht als `voigt` oder `reuss`.
 
-Alles Übrige stammt aus den Wikipedia-Infoboxen: bei Elementen alle 13
-Properties, bei Verbindungen Dichte, Schmelz- und Siedepunkt sowie die
-CAS-Nummer.
+`P527` und `P274` entstehen ohne externe Quelle aus dem Item selbst, `P690`
+und `P9824` liefert die COD, `P589` beide Wege. Alles Übrige stammt aus den
+Wikipedia-Infoboxen:
+bei Elementen alle 13 Kennwerte der Tabelle oben, bei Verbindungen Dichte,
+Schmelz- und Siedepunkt sowie die CAS-Nummer.
 
 Feldnamen und Einheiten stammen aus dem öffentlichen OpenAPI-Schema
 (<https://api.materialsproject.org/openapi.json>, `SummaryDoc`, 69 Felder,

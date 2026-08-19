@@ -43,8 +43,8 @@ def nach_pid(rows):
 # --- Einheitenumrechnung, der eigentliche Fallstrick ----------------------
 
 @pytest.mark.parametrize("pid, erwartet, einheit", [
-    # g/cm³ -> kg/m³
-    ("P2054", 4240.0, "Q844211"),
+    # g/cm³ bleibt g/cm³ - die Zieleinheit ist dieselbe
+    ("P2054", 4.24, "Q13147228"),
     # GPa -> Pa, und zwar das vrh-Mittel (213), nicht voigt (216)/reuss (210)
     ("P5668", 213.0e9, "Q44395"),
     ("P5673", 102.0e9, "Q44395"),
@@ -210,7 +210,7 @@ def test_qualifikator_landet_vor_dem_beleg_in_quickstatements(tmp_path):
     aussage = [z for z in pfad.read_text(encoding="utf-8").splitlines()
                if z.startswith("Q320603")][0]
     felder = aussage.split("\t")
-    assert felder[:3] == ["Q320603", "P2054", "4240.0U844211"]
+    assert felder[:3] == ["Q320603", "P2054", "4.24U13147228"]
     # Erst alle Qualifikatoren (P...), dann der Beleg (S...)
     assert felder[3:9] == ["P459", "Q1048589",
                            "P2076", "0U11579",
@@ -225,7 +225,7 @@ def test_wikipedia_werte_bekommen_keine_methode():
 
     zeile = make_row(
         "VORSCHLAG", "Wikipedia (de)", WD, PROPERTY_MAP["density"],
-        4230.0, "", Reference(imported_from="Q48183",
+        4.23, "", Reference(imported_from="Q48183",
                               import_url="https://de.wikipedia.org/x"),
     )
     assert zeile["_qualifiers"] == []
@@ -433,7 +433,7 @@ def test_unplausible_werte_werden_ausgewiesen_statt_verworfen():
 def test_die_gesunden_groessen_desselben_materials_bleiben():
     """Ein kaputter Kennwert darf die uebrigen nicht mitreissen."""
     zeilen = nach_pid(proposals_for_material(ZINK_KAPUTT, WD))
-    assert zeilen["P2054"]["status"] == "VORSCHLAG"   # Dichte 7530 kg/m^3
+    assert zeilen["P2054"]["status"] == "VORSCHLAG"   # Dichte 7,53 g/cm^3
     assert zeilen["P5668"]["status"] == "VORSCHLAG"   # Kompressionsmodul
     assert zeilen["P556"]["status"] == "VORSCHLAG"    # hexagonal
 
@@ -447,8 +447,9 @@ def test_die_gesunden_groessen_desselben_materials_bleiben():
     ("poisson_ratio", -0.5, True),        # auxetisch, aber moeglich
     ("poisson_ratio", 0.51, False),
     ("poisson_ratio", -1.153, False),
-    ("density", 22590.0, True),           # Osmium
-    ("density", 534.0, True),             # Lithium
+    ("density", 22.59, True),             # Osmium
+    ("density", 0.534, True),             # Lithium
+    ("density", 31.0, False),             # dichter als jedes Element
     ("density", -1.0, False),
     ("crystal_system", "hexagonal", True),  # keine Schranken definiert
 ])
@@ -497,11 +498,25 @@ def test_mp_dichte_traegt_null_kelvin_und_fest():
     assert qual[AGGREGAT_PID] == "Q11438"      # Festkoerper
 
 
-def test_nur_die_dichte_bekommt_messbedingungen():
-    """Ein Schubmodul braucht keinen Aggregatzustand."""
+def test_poissonzahl_traegt_die_rechentemperatur():
+    """Die Poissonzahl haengt an der Temperatur; der Elastizitaetsdatensatz
+    ist wie alles bei MP bei 0 K gerechnet. Ohne Qualifikator laese man die
+    Zahl stillschweigend als Raumtemperaturwert."""
     from materialswiki.cli import AGGREGAT_PID, TEMPERATUR_PID
 
-    for pid in ("P5668", "P5673", "P5593", "P556"):
+    zeile = nach_pid(proposals_for_material(RUTIL, WD))["P5593"]
+    qual = {pid: wert for pid, wert, _ in zeile["_qualifiers"]}
+    assert qual[TEMPERATUR_PID] == "0U11579"   # 0 Kelvin
+    # Ein Aggregatzustand gehoert nur an die Dichte, deren Property ihn
+    # verlangt - an einer Materialkonstante waere er blosses Beiwerk.
+    assert AGGREGAT_PID not in qual
+
+
+def test_nur_dichte_und_poissonzahl_bekommen_messbedingungen():
+    """Ein Schubmodul braucht weder Temperatur noch Aggregatzustand."""
+    from materialswiki.cli import AGGREGAT_PID, TEMPERATUR_PID
+
+    for pid in ("P5668", "P5673", "P556"):
         zeile = nach_pid(proposals_for_material(RUTIL, WD))[pid]
         pids = {p for p, _, _ in zeile["_qualifiers"]}
         assert TEMPERATUR_PID not in pids and AGGREGAT_PID not in pids, pid
