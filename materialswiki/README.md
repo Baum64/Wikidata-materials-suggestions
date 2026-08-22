@@ -533,7 +533,7 @@ Formel (ohne Netzzugriff)     →  COD (DOI der Originalarbeit)
 
 Die Stufe **Formel** steht vorn, weil sie ohne eine einzige Netzanfrage
 auskommt und eine Property liefert, die keine der externen Quellen führt —
-siehe [„besteht aus" (P527)](#besteht-aus-p527-aus-der-summenformel). Wo gar
+siehe [„enthält Elemente von" (P2670)](#enthält-elemente-von-p2670-aus-der-summenformel). Wo gar
 zwei weitere Aussagen entstehen ebenso aus dem Item selbst: die **chemische
 Metaklasse** (`P31`) für Legierungen, siehe [Chemische Metaklasse (P31) für
 Legierungen](#chemische-metaklasse-p31-für-legierungen), und die
@@ -585,24 +585,48 @@ Zwei weitere Eigenheiten der COD-Abfrage, beide im Code behandelt:
   Publikationstitel sagt daher nichts über den Stoff — der beste Kupfertreffer
   steht in einer Arbeit über Ammoniak-Monohydrat.
 
-### „besteht aus" (P527) aus der Summenformel
+### „enthält Elemente von" (P2670) aus der Summenformel
 
 Welche Elemente ein Stoff enthält, steht bereits in seiner Summenformel — es
-braucht dafür keine externe Quelle. Deshalb lohnt die Stufe: P527 ist bei
-Mineralarten nahezu leer (249 von 6301, gemessen 2026-08-17), während 5694
+braucht dafür keine externe Quelle. Deshalb lohnt die Stufe: die Angabe ist
+bei Mineralarten nahezu leer (249 von 6301, gemessen 2026-08-17), während 5694
 eine Formel tragen.
 
-Das Modellvorbild ist Wasser (Q283), am 2026-08-17 abgefragt: `P527 → Q556`
-(Wasserstoff) mit `P1114 = 2` und `P527 → Q629` (Sauerstoff) mit `P1114 = 1`.
-Also **Element plus stöchiometrischer Anzahl** als Qualifikator. Genau diese
-Form wird erzeugt.
+**Warum P2670 und nicht P527.** Das Item eines chemischen Elements ist die
+**Klasse seiner Atome**, kein einzelnes Stück Materie. „Wasser *besteht aus*
+Wasserstoff" (`P527`) ist deshalb mereologisch falsch — ein Teil-Ganzes-Bezug
+zwischen einem Stoff und einer Klasse. `P2670` „hat Teil(e) der Klasse" sagt
+genau das Gemeinte: *„the subject has one or more parts of the object class"*.
+
+Erzeugt wird **Element plus stöchiometrischer Anzahl** (`P1114`) als
+Qualifikator. Vorbild im Bestand sind Kohlenstoffdioxid (`Q1997`) und
+Kohlenstoffmonoxid (`Q2025`), die genau diese Form tragen.
+
+**Der Bestand ist mehrheitlich anders modelliert** — das sollte man wissen,
+bevor man einspielt (gemessen 2026-08-21):
+
+| | Aussagen | Items |
+|---|---|---|
+| `P527 → chemisches Element` | 24 538 | 10 095 |
+| `P2670 → chemisches Element` | 28 | 14 |
+
+Wasser (`Q283`) selbst steht bis heute auf `P527`. Die Mehrheit ist also
+nicht auf unserer Seite, die Definition der beiden Properties schon — und
+`P2670` mit `P1114` ist mit 36 201 Aussagen insgesamt gut eingeführt, nur
+eben meist mit anderen Wertklassen. Wer das anders sieht, ändert eine Zeile
+in `PROPERTY_MAP`.
+
+**Ein Constraint bleibt offen:** `P2670` verlangt am *Wert* eine
+`P279`-Aussage. 77 der 118 Elemente haben eine, 41 nicht (Rhenium, Uran,
+Barium …). Das ist eine weiche Beanstandung am Elementitem, nicht an unserer
+Aussage — behoben wird sie dort, nicht hier.
 
 **Warum ein zweiter Parser neben `parse_formula`.** `parse_formula` ist für
 den Item-*Abgleich* gebaut und deshalb bewusst streng: es braucht die exakte
 Stöchiometrie, um `TiO₂` gegen Wikidata zu suchen, und lehnt alles ab, was
 daran zweifeln lässt. An echten Mineralformeln scheitert es dadurch in
 **61,8 %** der Fälle (3524 von 5700, gemessen 2026-08-17) — an Hydratpunkten,
-Ladungen, eckigen Klammern, Leerstellen. Für P527 ist die Anforderung aber
+Ladungen, eckigen Klammern, Leerstellen. Für P2670 ist die Anforderung aber
 schwächer: gebraucht wird, *welche* Elemente vorkommen, nicht in welchem
 Verhältnis. `Co₃(AsO₄)₂·8H₂O` ist stöchiometrisch unbequem, aber dass Cobalt,
 Arsen, Sauerstoff und Wasserstoff darin stecken, ist eindeutig. Der Abgleich
@@ -618,8 +642,8 @@ ein Fehler wäre also nicht die Ausnahme. Unterschieden wird dreifach:
 
 | Fall | Ergebnis |
 |---|---|
-| Element sicher, Menge sicher | `P527` **mit** `P1114` |
-| Element sicher, Menge offen | `P527` **ohne** `P1114` |
+| Element sicher, Menge sicher | `P2670` **mit** `P1114` |
+| Element sicher, Menge offen | `P2670` **ohne** `P1114` |
 | Element nur eine Möglichkeit | nichts, nur `MANUELLE_KLAERUNG_NOETIG` |
 
 Ein Element gilt als sicher, wenn es mindestens einmal **außerhalb** jeder
@@ -639,7 +663,7 @@ Abdeckung an 5700 echten Formeln (2026-08-17):
 | nicht deutbar | 5,2 % |
 | kein sicheres Element | 0,3 % |
 
-Macht rund **22 970 P527-Aussagen, davon 22 195 mit Anzahl**. Nicht deutbar
+Macht rund **22 970 P2670-Aussagen, davon 22 195 mit Anzahl**. Nicht deutbar
 bleiben Variablen im Index (`Cu₂₋ₓAlₓ…`) und Bereichsangaben
 (`·(10-12)H₂O`) — dort wird bewusst nichts behauptet.
 
@@ -649,11 +673,56 @@ Heuristik-Item für P887 existiert nicht. Die Aussagen gehen deshalb **ohne
 S-Beleg** raus — dieselbe Überlegung wie bei den Identifikatoren (siehe
 [Identifikatoren bekommen gar keinen Beleg](#identifikatoren-bekommen-gar-keinen-beleg)).
 Die Herkunft samt Formel bleibt in der CSV-Spalte `ref_note` nachprüfbar.
-Trägt ein Item bereits P527, wird **nichts ergänzt**: manche Items sind mit
-Verbindungen statt Elementen modelliert (Quarz → Siliciumdioxid), und beide
-Modellierungen zu vermischen wäre schlechter als eine Lücke.
+Trägt ein Item bereits `P2670`, wird **nichts ergänzt** — wer die
+Zusammensetzung von Hand gepflegt hat, weiß mehr als diese Ableitung. Ein
+bestehendes `P527` blockiert dagegen nicht mehr: zeigt es auf Elemente,
+stellt die Umstellung es um (siehe unten); zeigt es auf *Verbindungen*
+(Quarz → Siliciumdioxid), ist es eine andere Aussage und bleibt unberührt.
 
-Abschaltbar mit `--no-formel`.
+#### Umstellung bestehender P527-Aussagen
+
+Was schon als `P527 → Element` am Item steht, wird nicht daneben noch einmal
+behauptet, sondern **umgehängt**. Je Aussage entstehen zwei Zeilen, die
+zusammengehören:
+
+```
+Q283	P2670	Q556	P1114	2
+-Q283	P527	Q556
+```
+
+Das führende `-` ist QuickStatements-Syntax für *entfernen*. Es ist die
+**einzige Stelle im ganzen Werkzeug, die etwas wegnimmt** — der Kopf von
+Abschnitt 1 im Entwurf weist eigens darauf hin und zählt diese Zeilen. Wer
+nur eine der beiden einspielt, hinterlässt eine Dublette oder eine Lücke.
+
+**Was nicht umgestellt wird.** QuickStatements kann Belege und Qualifikatoren
+einer bestehenden Aussage nicht mitnehmen; eine Umstellung würde sie
+verlieren. Solche Aussagen gehen deshalb zur Klärung statt zur Umstellung
+(gemessen 2026-08-21, über alle 24 538 Elementaussagen):
+
+| | Aussagen |
+|---|---|
+| mit Beleg | 318 |
+| mit `P1114` (wird mit umgehängt) | 515 |
+| mit anderen Qualifikatoren (`P1107` Anteil, `P1121` Oxidationszahl …) | 302 |
+
+Die Zahl 302 stand zwischenzeitlich bei 1101 — der Wertknoten jeder
+Mengenangabe hängt zusätzlich unter `.../qualifier/value/P1114` und zählte
+als fremder Qualifikator. An genau dieser Stelle scheiterte zuerst die
+Umstellung von Wasser, dessen einziger Qualifikator `P1114` ist.
+
+**Umgestellt wird nur an Stoffen** — erkennbar an einer Summenformel oder an
+der Einordnung als Legierung. Der Grund steht im Bestand: `Q19557`
+„Alkalimetalle" führt mit `P527` seine **Mitglieder** auf (Caesium, Lithium
+…). Dort ist `P527` die richtige Aussage, „Alkalimetalle enthält Teile der
+Klasse Caesium" wäre es nicht. Solche Sammelbegriffe hängen wegen des
+bekannten Modellierungsfehlers mitten in der Legierungsgruppe und wären sonst
+mit umgestellt worden.
+
+Trägt ein Item beide Aussagen bereits (ein Fall im Bestand), bleibt nur die
+Löschzeile übrig.
+
+Abschaltbar mit `--no-formel` — die Umstellung hängt an derselben Stufe.
 
 ### Chemische Metaklasse (P31) für Legierungen
 
@@ -1093,7 +1162,7 @@ Properties:
 | Schallgeschwindigkeit | `P2075` | m/s |
 | Poissonzahl | `P5593` | dimensionslos |
 | CAS-Nummer | `P231` | external-id |
-| besteht aus | `P527` | Item (Element, Anzahl als `P1114`) |
+| enthält Elemente von | `P2670` | Item (Element, Anzahl als `P1114`) |
 | Raumgruppe | `P690` | Item (230 Raumgruppen über `P9733`) |
 | Punktgruppe | `P589` | Item (32 Punktgruppen, am Raumgruppen-Item abgelesen) |
 | COD-ID | `P9824` | external-id |
@@ -1119,7 +1188,7 @@ einzeln getestet ([../tests/test_mp.py](../tests/test_mp.py)). Die Moduln
 kommen als Voigt-Reuss-Hill-Mittel (`vrh`), das übliche Mittel für
 polykristalline Werkstoffe — nicht als `voigt` oder `reuss`.
 
-`P527` und `P31` entstehen ohne externe Quelle aus dem Item selbst, `P690`
+`P2670` und `P31` entstehen ohne externe Quelle aus dem Item selbst, `P690`
 und `P9824` liefert die COD, `P589` beide Wege. Alles Übrige stammt aus den
 Wikipedia-Infoboxen:
 bei Elementen alle 13 Kennwerte der Tabelle oben, bei Verbindungen Dichte,

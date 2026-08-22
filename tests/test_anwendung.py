@@ -345,3 +345,143 @@ def test_vorsichtig_laesst_keine_ausfuehrbare_zeile_uebrig(tmp_path):
                                        {}, vorsichtig=True)
     text = pfad.read_text(encoding="utf-8")
     assert [z for z in text.splitlines() if z and not z.startswith("#")] == []
+
+
+# --- P2079 aus der Wikipedia ----------------------------------------------
+
+WIKITEXT = """
+Ein Beispielwerkstoff.
+
+== Eigenschaften ==
+Sehr [[Härte|hart]] und zäh.
+
+== Herstellung ==
+Der Werkstoff entsteht durch [[Sintern]] bei 1400 °C.<ref>Quelle</ref>
+
+=== Nachbehandlung ===
+Anschließend wird im [[Vakuumtrocknung|Vakuum]] getrocknet.
+
+== Hersteller ==
+Geliefert von [[Beispiel AG]] und [[Zweite GmbH]].
+
+== Produktionsmengen ==
+Größter Erzeuger ist [[Volksrepublik China]].
+"""
+
+
+def test_nur_herstellungsabschnitte_inklusive_unterabschnitt():
+    teile = anwendung.herstellungsabschnitte(WIKITEXT, "de")
+    assert [t for t, _ in teile] == ["Herstellung"]
+    text = teile[0][1]
+    # Der Unterabschnitt gehoert dazu ...
+    assert "Vakuumtrocknung" in text
+    # ... der naechste Abschnitt gleicher Ebene nicht mehr.
+    assert "Beispiel AG" not in text
+
+
+def test_hersteller_und_mengen_sind_keine_herstellung():
+    """'Hersteller' sind Firmen, 'Produktionsmengen' eine Statistik - beide
+    treffen das Suchmuster und enthalten kein Verfahren."""
+    ueberschriften = [t for t, _ in anwendung.herstellungsabschnitte(
+        WIKITEXT, "de")]
+    assert "Hersteller" not in ueberschriften
+    assert "Produktionsmengen" not in ueberschriften
+
+
+def test_links_kommen_mit_ihrem_satz():
+    text = anwendung.herstellungsabschnitte(WIKITEXT, "de")[0][1]
+    links = anwendung.verfahrenslinks(text)
+    assert "Sintern" in links
+    # Der Satz ist entschaerft: keine Fussnote, keine Klammern, kein Markup.
+    assert links["Sintern"] == ("Der Werkstoff entsteht durch Sintern bei "
+                                "1400 °C.")
+
+
+def test_dateien_und_kategorien_sind_keine_verfahren():
+    links = anwendung.verfahrenslinks(
+        "Siehe [[Datei:X.jpg]] und [[Kategorie:Y]] sowie [[Sintern]].")
+    assert list(links) == ["Sintern"]
+
+
+def _wiki_lauf(monkeypatch, wikitext, vokabular, rollen, p2079=None,
+               hinweis=""):
+    monkeypatch.setattr(
+        anwendung, "hole_wikitext",
+        lambda s, t: (("", "", hinweis) if hinweis
+                      else (wikitext, f"https://{s}.example/{t}", "")))
+    monkeypatch.setattr(anwendung, "loese_links",
+                        lambda s, titel: {"Sintern": "QSintern",
+                                          "Vakuumtrocknung": "QTrocknen"})
+    return anwendung.pruefe_p2079_wikipedia(
+        {"QWerkstoff": "Testlegierung"}, {"QWerkstoff": {"de": "Test"}},
+        p2079 or {}, vokabular, rollen, ["de"])
+
+
+def test_vorschlag_traegt_beleg_und_satz(monkeypatch):
+    befunde, zahlen = _wiki_lauf(
+        monkeypatch, WIKITEXT, {"QSintern": 9, "QTrocknen": 4},
+        {"QSintern": {"Q1914636"}, "QTrocknen": {"Q1914636"}})
+    zeilen = {b["ziel_qid"]: b["quickstatements"] for b in befunde}
+    assert set(zeilen) == {"QSintern", "QTrocknen"}
+    # S143 = importiert aus, S4656 = Permalink auf die Artikelversion.
+    assert zeilen["QSintern"].startswith("QWerkstoff\tP2079\tQSintern\tS143\t")
+    assert "S4656\t\"https://de.example/Test\"" in zeilen["QSintern"]
+    assert "S813\t+" in zeilen["QSintern"]
+    sintern = [b for b in befunde if b["ziel_qid"] == "QSintern"][0]
+    assert "Der Werkstoff entsteht durch Sintern" in sintern["begruendung"]
+    assert 'Abschnitt "Herstellung"' in sintern["begruendung"]
+
+
+def test_nur_was_im_p2079_vokabular_steht(monkeypatch):
+    """Das Vokabular ist der scharfe Filter: 1991 Werte, die Wikidata
+    tatsaechlich als Fertigungsverfahren fuehrt."""
+    befunde, _ = _wiki_lauf(monkeypatch, WIKITEXT, {"QSintern": 9},
+                            {"QSintern": {"Q1914636"},
+                             "QTrocknen": {"Q1914636"}})
+    assert [b["ziel_qid"] for b in befunde] == ["QSintern"]
+
+
+def test_geraete_und_gesteine_aus_dem_vokabular_fallen_raus(monkeypatch):
+    """Im Vokabular stehen auch 'Hochofen' und 'Kalkstein' - Fehlgriffe
+    einzelner Aussagen, die hier nicht weitergetragen werden."""
+    befunde, zahlen = _wiki_lauf(
+        monkeypatch, WIKITEXT, {"QSintern": 9, "QTrocknen": 4},
+        {"QSintern": {"Q1914636"}, "QTrocknen": {"Q223557"}})
+    assert [b["ziel_qid"] for b in befunde] == ["QSintern"]
+    assert zahlen["kein_verfahren"] == 1
+
+
+def test_werkstoff_mit_eigenem_p2079_wird_uebersprungen(monkeypatch):
+    """Der Artikelabruf ist der teuerste Teil des Laufs - wo nichts fehlt,
+    wird nichts geholt."""
+    befunde, zahlen = _wiki_lauf(
+        monkeypatch, WIKITEXT, {"QSintern": 9}, {"QSintern": {"Q1914636"}},
+        p2079={"QWerkstoff": {"QIrgendwas"}})
+    assert befunde == []
+    assert zahlen["artikel"] == 0
+
+
+def test_p2079_aus_wikipedia_bleibt_auskommentiert(tmp_path, monkeypatch):
+    """Belegt, aber nicht einspielbar: ein Herstellungsabschnitt beschreibt
+    auch die Bearbeitung, und das trennt keine Regel."""
+    befunde, _ = _wiki_lauf(monkeypatch, WIKITEXT, {"QSintern": 9},
+                            {"QSintern": {"Q1914636"}})
+    pfad = tmp_path / "entwurf.txt"
+    anwendung.schreibe_quickstatements(befunde, str(pfad), "legierungen", 3,
+                                       {}, vorsichtig=False)
+    text = pfad.read_text(encoding="utf-8")
+    assert [z for z in text.splitlines() if z and not z.startswith("#")] == []
+    assert "P2079 AUS DER WIKIPEDIA" in text
+
+
+def test_weiterleitung_auf_ein_anderes_lemma_wird_verworfen(monkeypatch):
+    """Der Sitelink von Grüngold heisst "Grüngold", die Seite leitet aber auf
+    "Gold" weiter. Ohne diese Pruefung wird der ganze Goldartikel
+    ausgewertet und der Legierung zugeschrieben - so kam im Lauf vom
+    2026-08-22 "Grüngold P2079 Kernspaltung" zustande."""
+    befunde, zahlen = _wiki_lauf(
+        monkeypatch, WIKITEXT, {"QSintern": 9}, {"QSintern": {"Q1914636"}},
+        hinweis="Weiterleitung auf 'Gold'")
+    assert befunde == []
+    assert zahlen["weiterleitung"] == 1
+    assert zahlen["artikel"] == 0

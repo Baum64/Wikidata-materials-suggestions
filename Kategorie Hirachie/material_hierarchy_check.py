@@ -25,15 +25,16 @@ Property:P186 "made from material" abgeleitet):
 
 Ausgabe
 -------
-  - subclass_tree_material.png   : Graph der Subclass-Hierarchie unter Q214609,
-                                    begrenzt auf --depth Ebenen und --max-nodes
-                                    Knoten (der volle Baum umfasst rund 936.000
-                                    Klassen - nicht in einer Abfrage holbar und
-                                    als Bild ohnehin nicht lesbar)
   - werkstoff_check.csv          : Tabelle je geprueftem Werkstoff
   - werkstoff_graph.png          : Graph mit den geprueften Werkstoffen und
                                     ihrer tatsaechlichen Anbindung (rot = kein
                                     Pfad zu Q214609, gruen = Pfad vorhanden)
+  - trace_<gruppe>_<achse>.png   : Pfade der Gruppen aus TRACE_GROUPS hinauf zu
+                                    den Achsen aus TRACE_ROOTS
+  - subclass_tree_material.png   : nur mit --tree. Der volle Baum umfasst rund
+                                    936.000 Klassen; der zeichenbare Ausschnitt
+                                    daraus ist willkuerlich und beantwortet die
+                                    eigentliche Frage nicht - deshalb Opt-in.
 
 Nutzung
 -------
@@ -70,7 +71,59 @@ ROOT_LABEL = "material"
 DEFAULT_MATERIALS = [
     "Stahl", "Edelstahl", "Titan", "Aluminium", "Beton", "Glas",
     "Diamant", "Polyethylen", "PVC", "Siliciumcarbid", "Holz", "Kupfer",
+    # zweite Gruppe: bewusst so gewaehlt, dass moeglichst viele der
+    # parallelen P186-Werttypen abgedeckt sind - Legierungen (Messing,
+    # Bronze, Gusseisen), Elemente (Magnesium, Graphit als Modifikation),
+    # Verbindungen (Wolframcarbid), Polymere (Polyamid, Epoxidharz,
+    # Naturkautschuk) und ein Sammelbegriff (Keramik).
+    "Messing", "Bronze", "Gusseisen", "Keramik", "Graphit", "Magnesium",
+    "Wolframcarbid", "Polyamid", "Epoxidharz", "Naturkautschuk",
 ]
+
+# Die trace_*.png-Graphen entstanden urspruenglich aus Hand-Aufrufen von
+# --trace/--trace-out; die QID-Listen dazu waren nirgends festgehalten, also
+# veralteten die Bilder still, sobald jemand nur den Standardlauf startete.
+# Beides steht jetzt hier und wird vom Standardlauf mit erzeugt.
+#
+# Bewusst QIDs statt Labels: die Labelsuche loest z. B. "Stahl" auf Q1236029
+# (Familienname) auf statt auf den Werkstoff Q11427.
+TRACE_GROUPS = {
+    "werkstoffe": [
+        "Q11427",   # Stahl
+        "Q172587",  # rostfreier Stahl
+        "Q39782",   # Messing
+        "Q34095",   # Bronze
+        "Q483269",  # Gusseisen
+        "Q22657",   # Beton
+        "Q11469",   # Glas
+        "Q45621",   # Keramik
+        "Q412356",  # Siliciumcarbid
+        "Q146368",  # Polyvinylchlorid
+        "Q287",     # Holz
+        "Q5283",    # Diamant
+    ],
+    "elemente": [
+        "Q677",     # Eisen
+        "Q753",     # Kupfer
+        "Q663",     # Aluminium
+        "Q716",     # Titan
+        "Q660",     # Magnesium
+        "Q623",     # Kohlenstoff
+        "Q670",     # Silicium
+        "Q744",     # Nickel
+        "Q725",     # Chrom
+        "Q743",     # Wolfram
+    ],
+}
+
+# Die beiden konkurrierenden Achsen aus dem Kopf-Docstring: derselbe Werkstoff
+# wird einmal gegen die Werkstoff- und einmal gegen die Stoffhierarchie
+# geprueft. Erst der Vergleich zeigt, ob ein fehlender Pfad ein Modellierungs-
+# loch ist oder nur der andere Zweig.
+TRACE_ROOTS = {
+    "material": ROOT_QID,  # Q214609
+    "chemie": "Q79529",    # chemischer Stoff
+}
 
 
 # ---------------------------------------------------------------------------
@@ -570,22 +623,86 @@ def plot_material_check(rows: list, path: str = "werkstoff_graph.png") -> None:
 
 
 # ---------------------------------------------------------------------------
+# 4) Trace-Laeufe
+# ---------------------------------------------------------------------------
+
+def run_trace(qids: list, root: str, out_png: str, title: str = "") -> int:
+    """Verfolgt alle `qids` hinauf zu `root` und zeichnet sie in EINEN Graphen.
+
+    Rueckgabe: Anzahl der Startpunkte OHNE Pfad - genau die interessanten
+    Faelle, in denen ein Werkstoff nur am parallelen Zweig haengt.
+    """
+    root_label = fetch_labels([root]).get(root, root)
+    traces, all_labels, ohne_pfad = [], {}, 0
+
+    for qid in qids:
+        paths, labels = trace_to_root(qid, root_qid=root)
+        all_labels.update(labels)
+        name = f"{labels.get(qid, qid)} ({qid})"
+        if not paths:
+            ohne_pfad += 1
+            print(f"  KEIN Pfad: {name} -> {root_label} ({root}) "
+                  f"- paralleler Zweig.", file=sys.stderr)
+            continue
+        print(f"\n{name}: {len(paths)} Pfad(e), "
+              f"Laenge {len(paths[0])}-{len(paths[-1])}")
+        for path in paths:
+            print("  " + format_path(path, qid, labels))
+        traces.append((qid, paths))
+
+    print()
+    if traces:
+        all_labels[root] = root_label
+        plot_trace(traces, all_labels, root_qid=root, path_png=out_png,
+                   title=title or f"Pfade zu {root_label} ({root})")
+    else:
+        print(f"Kein einziger Pfad gefunden - {out_png} nicht geschrieben.",
+              file=sys.stderr)
+    return ohne_pfad
+
+
+def run_default_traces(out_dir: str = ".") -> None:
+    """Erzeugt die trace_<gruppe>_<achse>.png-Matrix aus TRACE_GROUPS x
+    TRACE_ROOTS - dieselben vier Dateien, die frueher von Hand entstanden."""
+    for gruppe, qids in TRACE_GROUPS.items():
+        for achse, root in TRACE_ROOTS.items():
+            out_png = os.path.join(out_dir, f"trace_{gruppe}_{achse}.png")
+            root_label = fetch_labels([root]).get(root, root)
+            print(f"\n=== {gruppe} -> {root_label} ({root}) ===",
+                  file=sys.stderr)
+            ohne = run_trace(qids, root, out_png,
+                             title=f"{gruppe.capitalize()}: Pfade zu "
+                                   f"{root_label} ({root})")
+            print(f"  {len(qids) - ohne}/{len(qids)} mit Pfad, "
+                  f"{ohne} ohne.", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--materials", nargs="+", default=DEFAULT_MATERIALS)
-    parser.add_argument("--skip-tree", action="store_true",
-                         help="vollen Subclass-Baum ueberspringen (nur Werkstoff-Check)")
+    parser.add_argument("--tree", action="store_true",
+                         help="zusaetzlich subclass_tree_material.png zeichnen. "
+                              "Standardmaessig AUS: der Ausschnitt, der sich aus "
+                              "~936.000 Klassen zeichnen laesst, ist willkuerlich "
+                              "und traegt nichts zur Frage bei, wie ein einzelner "
+                              "Werkstoff an der Wurzel haengt - dafuer sind die "
+                              "Trace-Graphen da")
+    parser.add_argument("--skip-traces", action="store_true",
+                         help="die trace_<gruppe>_<achse>.png-Matrix aus "
+                              "TRACE_GROUPS x TRACE_ROOTS ueberspringen")
     parser.add_argument("--depth", type=int, default=1,
-                         help="Tiefe des Subclass-Baums (Default 1: 413 direkte "
+                         help="nur mit --tree: Tiefe des Subclass-Baums (Default 1: 413 direkte "
                               "Subklassen, vollstaendig. Der volle Baum hat "
                               "~936.000 Klassen und ist weder in einer Abfrage "
                               "holbar noch zeichenbar - ab Tiefe 2 liefert "
                               "--max-nodes zwangslaeufig einen Ausschnitt)")
     parser.add_argument("--max-nodes", type=int, default=500,
-                         help="Obergrenze fuer Knoten im Subclass-Baum (Default 500)")
+                         help="nur mit --tree: Obergrenze fuer Knoten im "
+                              "Subclass-Baum (Default 500)")
     parser.add_argument("--trace", metavar="QID", nargs="+",
                          help="statt des Standardlaufs: die Pfade von einer oder "
                               "mehreren QIDs hinauf zur Wurzel zeigen, alle in "
@@ -600,33 +717,10 @@ def main():
     # QID direkt angeben umgeht die Labelsuche - wbsearchentities loest z. B.
     # "Stahl" auf Q1236029 (Familienname) statt auf den Werkstoff Q11427 auf.
     if args.trace:
-        root = args.trace_root
-        root_label = fetch_labels([root]).get(root, root)
-        traces, all_labels = [], {}
-        for qid in args.trace:
-            paths, labels = trace_to_root(qid, root_qid=root)
-            all_labels.update(labels)
-            name = f"{labels.get(qid, qid)} ({qid})"
-            if not paths:
-                print(f"  KEIN Pfad: {name} -> {root_label} ({root}) "
-                      f"- paralleler Zweig.", file=sys.stderr)
-                continue
-            print(f"\n{name}: {len(paths)} Pfad(e), "
-                  f"Laenge {len(paths[0])}-{len(paths[-1])}")
-            for path in paths:
-                print("  " + format_path(path, qid, labels))
-            traces.append((qid, paths))
-        print()
-        if traces:
-            all_labels[root] = root_label
-            plot_trace(traces, all_labels, root_qid=root, path_png=args.trace_out,
-                       title=f"Pfade zu {root_label} ({root})")
-        else:
-            print("Kein einziger Pfad gefunden - kein Graph geschrieben.",
-                  file=sys.stderr)
+        run_trace(args.trace, args.trace_root, args.trace_out)
         return
 
-    if not args.skip_tree:
+    if args.tree:
         print("Lade Subclass-Baum unter Q214609 ...", file=sys.stderr)
         edges = fetch_subclass_tree(ROOT_QID, depth=args.depth,
                                     max_nodes=args.max_nodes)
@@ -641,6 +735,11 @@ def main():
     print("\n--- Kurzuebersicht ---", file=sys.stderr)
     for row in rows:
         print(f"  {row['input']:20s} -> {row.get('status')}", file=sys.stderr)
+
+    # frueher nur von Hand aufgerufen - dadurch veralteten die Bilder still
+    if not args.skip_traces:
+        print("\nZeichne Trace-Graphen ...", file=sys.stderr)
+        run_default_traces(os.path.dirname(os.path.abspath(__file__)))
 
 
 if __name__ == "__main__":

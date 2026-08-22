@@ -128,17 +128,93 @@ Die drei letzten Filter laufen **vor** der Überdeckung, damit eine
 aussortierte Klasse nie eine gute verdrängt: sonst nähme die Brücke
 (Verbund, viele Belege) die Glocke mit.
 
-## P2079 ist fast leer — und das ist das Ergebnis
+## P2079: in Wikidata fast leer, in der Wikipedia nicht
 
-Unter den 1082 Legierungen tragen **12** überhaupt ein `P2079`. Damit gibt
-es für diese Property keine Datenbasis, aus der sich etwas aggregieren
-ließe. Bleibt die Vererbung entlang `P279` (die Unterklasse eines Stahls
-wird wie der Stahl erzeugt) — und die ist eine Behauptung, keine Ableitung:
-legierter Stahl entsteht anders als Roheisen. Sie geht deshalb vollständig
-auskommentiert raus (77 Zeilen).
+Unter den 1082 Legierungen tragen **12** überhaupt ein `P2079`. In Wikidata
+gibt es dafür also nichts zu aggregieren. In der Wikipedia steht die Angabe
+sehr wohl — nur in Fließtext statt in einer Infobox.
 
-Für `P2079` ist die Zahl selbst das Ergebnis: hier fehlt nicht ein
-Vorschlag, hier fehlt die Grundgesamtheit.
+### Der Weg dorthin: Wikilinks, nicht Textsuche
+
+`[[Sintern]]` im Herstellungsabschnitt ist bereits eine aufgelöste Entität,
+während eine Textsuche nach „gesintert" raten müsste. Drei Filter
+hintereinander:
+
+1. **Abschnitt** — nur Überschriften, die die Herstellung meinen
+   (`Herstellung`, `Gewinnung`, `Erzeugung`, `Production`, `Smelting` …).
+   *Hersteller* (Firmen), *Produktionsmengen* und *Staaten mit der größten
+   Erzeugung* treffen das Muster ebenfalls und sind ausgeschlossen. Der Text
+   reicht bis zur nächsten Überschrift gleicher Ebene, schließt
+   Unterabschnitte also ein — ohne das bleibt bei *Stahl* und *Hartmetall*
+   nichts übrig, weil dort unter „Herstellung" nur weitere Überschriften
+   stehen.
+2. **Auflösung** — Linkziel → QID über die Seiten-API mit `redirects=1`.
+   Für den Artikel des Werkstoffs selbst gilt das Gegenteil: landet die
+   Anfrage auf einem anderen Lemma, wird er verworfen. Der Sitelink von
+   *Grüngold* heißt „Grüngold", die Seite leitet aber auf *Gold* weiter —
+   ohne diese Prüfung wird der ganze Goldartikel ausgewertet und der
+   Legierung zugeschrieben, was im ersten Lauf „Grüngold `P2079`
+   Kernspaltung" ergab. 42 der 645 Sitelinks sind solche Weiterleitungen.
+3. **Vokabular** — nur Items, die in Wikidata **schon als `P2079`-Wert
+   benutzt werden**: 1991 verschiedene Werte in 361 825 Aussagen.
+
+Von 645 Werkstoffen mit Artikel haben nur **108 überhaupt einen
+Herstellungsabschnitt**; daraus werden 1153 Links, davon 105 im Vokabular
+und am Ende 82 Vorschläge.
+
+Filter 3 ist der eigentliche Trick. Er ersetzt eine geratene Ontologie durch
+beobachteten Gebrauch. Der Versuch über Klassenwurzeln ist daran
+gescheitert, dass *Prozess* (Q3249551) auch Oxidation, Glut und
+„elektrischer Strom" einschließt und *Technik* (Q2695280) die
+Härteprüfverfahren: von 72 Links aus sieben Artikeln hätten die Wurzeln 24
+durchgelassen, das Vokabular lässt 11 durch — und die sind brauchbar. Dazu
+muss der Wert eine Tätigkeit sein, denn im Vokabular stehen auch *Hochofen*
+(ein Gerät) und *Kalkstein* (ein Gestein).
+
+### Der Beleg
+
+Jede Zeile ist fertig belegt, in derselben Form wie in materialswiki:
+
+```
+Q307036	P2079	Q131172	S143	Q48183	S4656	"https://de.wikipedia.org/w/index.php?title=Mu-Metall&oldid=266222783"	S813	+2026-08-22T00:00:00Z/11
+```
+
+`S143` = importiert aus der deutschsprachigen Wikipedia, `S4656` =
+Permalink auf **die konkrete Artikelversion**, `S813` = Abrufdatum. Darunter
+steht als Kommentar der Satz, in dem der Link stand.
+
+### Warum die Zeilen trotzdem auskommentiert bleiben
+
+Weil die Trefferquote es nicht hergibt. Ein Herstellungsabschnitt
+beschreibt nicht nur, wie der Werkstoff **entsteht**, sondern auch, wie man
+ihn **bearbeitet** — und beides steht in denselben Sätzen. Der Artikel
+*Mu-Metall* hat einen Abschnitt schlicht namens „Herstellung" und darin den
+Satz:
+
+> Mu-Metall lässt sich stanzen, ätzen, tiefziehen, biegen, löten, schweißen,
+> laserschneiden und galvanisch beschichten.
+
+Acht Verfahren, alle korrekt verlinkt, alle im `P2079`-Vokabular — und
+keines stellt Mu-Metall her. Im Probelauf waren das 8 von 9 Zeilen.
+
+Trennen lässt sich das nicht:
+
+* **Nicht über die Überschrift.** Die heißt hier „Herstellung", nicht
+  „Herstellung und Verarbeitung".
+* **Nicht über die Verfahrensart.** Die DIN-8580-Hauptgruppen wären genau
+  das richtige Raster — Urformen ja, Umformen und Fügen nein —, aber sie
+  sind in Wikidata zu dünn besetzt: *Walzen* hängt dort unter Urformen,
+  *Sintern* nicht, *Spritzgießen* und *Schweißen* unter keiner der beiden.
+
+Also liest ein Mensch den Satz und nimmt das `# ` weg. Die Frage dabei ist
+immer dieselbe: **entsteht der Werkstoff so, oder wird er nur so
+verarbeitet?**
+
+### Vererbung entlang P279
+
+Bleibt daneben bestehen, ebenfalls auskommentiert: dass die Unterklasse
+eines Stahls wie der Stahl erzeugt wird, ist eine Behauptung und keine
+Ableitung — legierter Stahl entsteht anders als Roheisen.
 
 ## Die Prüfungen
 
@@ -149,9 +225,10 @@ Vorschlag, hier fehlt die Grundgesamtheit.
 | — (`p366-ueberdeckt`) | von einer allgemeineren Klasse abgedeckt | Abschnitt 2 | 524 |
 | — (`p366-verbund`) | Gegenstand besteht nur zum Teil aus dem Werkstoff | Abschnitt 3 | 331 |
 | — (`p366-zu-speziell`) | Klasse in < `--min-sprachen` Wikipedias | Abschnitt 4 | 440 |
-| `p186-klasse` | wie oben, aber das Anwendungsitem ist eine Klasse | Abschnitt 5 | 58 |
-| `p2079-vererbt` | Werkstoff ohne `P2079`, eine Oberklasse hat eines | Abschnitt 6 | 77 |
-| `p366-verfahren` | `P366` zeigt auf ein Fertigungsverfahren | Abschnitt 7 | 5 |
+| `p2079-wikipedia` | Verfahren im Herstellungsabschnitt des Artikels, belegt | Abschnitt 5 | 82 |
+| `p186-klasse` | wie oben, aber das Anwendungsitem ist eine Klasse | Abschnitt 6 | 58 |
+| `p2079-vererbt` | Werkstoff ohne `P2079`, eine Oberklasse hat eines | Abschnitt 7 | 77 |
+| `p366-verfahren` | `P366` zeigt auf ein Fertigungsverfahren | Abschnitt 8 | 5 |
 
 Was Abschnitt 1 danach enthält, sind Gebrauchsklassen: Münze, Skulptur,
 Glocke, Werkzeug, Astrolabium, Leuchter, Löffel, Schnalle, Axt, Schwert,
@@ -165,6 +242,7 @@ Aus dem Repo-Wurzelverzeichnis:
 python "Anwendung/Anwendung.py"
 python "Anwendung/Anwendung.py" --population metallischer-werkstoff
 python "Anwendung/Anwendung.py" --min-belege 5 --pruefungen p366-aus-p186
+python "Anwendung/Anwendung.py" --pruefungen p2079-wikipedia --sprachen de
 python "Anwendung/Anwendung.py" --vorsichtig    # nichts einspielbar
 ```
 
@@ -174,6 +252,7 @@ python "Anwendung/Anwendung.py" --vorsichtig    # nichts einspielbar
 | `--pruefungen` | Auswahl aus der Tabelle oben (Vorgabe: alle) |
 | `--min-belege` | Belegschwelle für `P366` (Vorgabe 3). Kleiner heißt mehr Vorschläge und mehr Zufallstreffer. |
 | `--min-sprachen` | wie viele Wikipedia-Sprachversionen die Klasse haben muss (Vorgabe 10). `0` schaltet den Filter ab. Über 10 trifft er gute Verwendungen. |
+| `--sprachen` | welche Wikipedias nach einem Herstellungsabschnitt durchsucht werden (Vorgabe `de en`). Der teuerste Teil des Laufs: ein Artikelabruf je Werkstoff und Sprache bei einer Anfrage pro Sekunde — 317 deutsche und 539 englische Artikel. |
 | `--limit` | nur die ersten N Werkstoffe, für Probeläufe |
 | `--vorsichtig` | auch die abgeleiteten Zeilen auskommentieren — dann enthält die Datei keine ausführbare Zeile |
 | `--csv`, `--qs-out` | Ziel und Namen der Ausgabedateien |
@@ -193,10 +272,11 @@ anwendungen_befunde_<Zeitstempel>.csv          alle Befunde, eine Zeile je Befun
 quickstatements_anwendungen_<Zeitstempel>.txt  Entwurf, nur Abschnitt 1 einspielbar
 ```
 
-Keine Zeile trägt einen Beleg (`S…`). Alle Aussagen sind aus Wikidata selbst
-abgeleitet, und ein Import kann sich nicht auf sich selbst berufen. Der
-Kommentar unter jeder Zeile nennt stattdessen die Items, die sie tragen —
-damit ist jede Zeile in einer Minute nachprüfbar.
+Die `P2079`-Zeilen aus der Wikipedia tragen einen Beleg (`S143`+`S4656`,
+siehe oben). Die `P366`- und `P186`-Zeilen tragen keinen: sie sind aus
+Wikidata selbst abgeleitet, und ein Import kann sich nicht auf sich selbst
+berufen. Ihr Kommentar nennt stattdessen die Items, die sie tragen — damit
+ist jede Zeile in einer Minute nachprüfbar.
 
 ## Grenzen
 
@@ -207,6 +287,11 @@ damit ist jede Zeile in einer Minute nachprüfbar.
   führt, weil Museen Bronzeskulpturen katalogisieren, nicht weil Bronze
   hauptsächlich für Skulpturen verwendet würde. Für `P366` („eine
   Verwendung") ist das richtig, für „die Hauptverwendung" wäre es falsch.
+* Die Grundgesamtheit `legierungen` enthält auch Elementgruppen
+  (*Alkalimetalle*, *2. Hauptgruppe des Periodensystems*) — sie tragen
+  selbst keine Ordnungszahl und rutschen deshalb durch den Elementfilter.
+  Bekannte Eigenheit der Grundgesamtheit, siehe
+  [P279-structure/](../P279-structure/).
 * Der Anteil, zu dem ein Gegenstand aus dem Werkstoff besteht, ist in
   Wikidata nicht erfasst (`P518`: 0 von 127 000). Der Verbund-Filter ersetzt
   ihn durch eine Klassenaussage — das ist gröber und liegt bei *Flurkreuz*

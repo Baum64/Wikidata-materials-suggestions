@@ -13,7 +13,8 @@ Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
 
 Zwei weitere Aussagen entstehen aus dem Item selbst: die chemische
 Metaklasse (P31) fuer Legierungen und die Punktgruppe (P589) aus einer
-Raumgruppe (P690) am Item.
+Raumgruppe (P690) am Item. Bestehende Aussagen "Stoff P527 Element" werden
+auf P2670 umgestellt - die einzige Stufe, die auch Loeschzeilen erzeugt.
 
 Abschaltbar mit --no-formel, --no-metaklasse, --no-punktgruppe,
 --no-cod, --no-wikipedia.
@@ -433,14 +434,24 @@ PROPERTY_MAP = {
         "unit_qid": "",
         "label": "COD-ID",
     },
-    # "besteht aus": die chemischen Elemente der Summenformel, je Element
-    # eine Aussage. Itemwertig, aufgeloest ueber fetch_element_qids - eine
-    # value_map waere hier eine zweite Elementtabelle.
+    # Die chemischen Elemente eines Stoffs, je Element eine Aussage.
+    # Itemwertig, aufgeloest ueber fetch_element_qids - eine value_map waere
+    # hier eine zweite Elementtabelle.
     #
-    # Das Vorbild ist Wasser (Q283), am 2026-08-17 abgefragt: P527 -> Q556
-    # (Wasserstoff) mit P1114 = 2 und P527 -> Q629 (Sauerstoff) mit P1114 = 1,
-    # also Element plus stoechiometrischer Anzahl. Genau diese Form wird hier
-    # erzeugt.
+    # P2670 "enthaelt Elemente von", NICHT P527 "besteht aus": das Item eines
+    # Elements ist die KLASSE seiner Atome, kein einzelnes Stueck Materie.
+    # "Wasser besteht aus Wasserstoff" waere mereologisch falsch, "Wasser
+    # enthaelt Teile der Klasse Wasserstoff" trifft es. Vorbild im Bestand
+    # sind Kohlenstoffdioxid (Q1997) und Kohlenstoffmonoxid (Q2025): P2670 ->
+    # Element mit P1114 als Anzahl. Genau diese Form wird erzeugt.
+    "has_part_of_class": {
+        "pid": "P2670",
+        "datatype": "item",
+        "unit_qid": "",
+        "label": "enthaelt Elemente von",
+    },
+    # Nur fuer die UMSTELLUNG gebraucht: die alte, mereologisch falsche
+    # Aussage wird damit zum Entfernen ausgewiesen. Erzeugt wird P527 nie.
     "has_part": {
         "pid": "P527",
         "datatype": "item",
@@ -2253,12 +2264,23 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
     # Die Metaklassen-Lage aller Items auf einmal holen: eine Abfrage je 200
     # Items statt je Item. Scheitert das, laeuft der Rest trotzdem - die Stufe
     # fragt dann eben einzeln nach.
-    if metaklasse_an:
+    # Auch die Umstellung braucht die Klassenlage: sie stellt nur an Stoffen
+    # um, und ein Item ohne Summenformel gilt nur als Stoff, wenn es eine
+    # Legierung ist.
+    if metaklasse_an or formel:
         try:
             metaklassen_vorladen([e["qid"] for e in items])
-            melde_metaklassen_luecke(items, metaklasse_auch_mit_p31)
+            if metaklasse_an:
+                melde_metaklassen_luecke(items, metaklasse_auch_mit_p31)
         except (RuntimeError, ValueError, requests.RequestException) as fehler:
             print(f"  Metaklassen nicht vorgeladen - {fehler}",
+                  file=sys.stderr)
+    # Und die bestehenden P527-Elementaussagen, die umgestellt werden.
+    if formel:
+        try:
+            p527_vorladen([e["qid"] for e in items])
+        except (RuntimeError, ValueError, requests.RequestException) as fehler:
+            print(f"  P527-Aussagen nicht vorgeladen - {fehler}",
                   file=sys.stderr)
     # Dasselbe fuer die Raumgruppen am Item, aus denen die Punktgruppe folgt.
     if punktgruppe_an:
@@ -2292,9 +2314,22 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                 print(f"  {eintrag['qid']}: Metaklasse uebersprungen - "
                       f"{fehler}", file=sys.stderr)
 
-        # Zuerst die Ableitung aus der Formel: sie kostet keine Anfrage nach
+        # Vor der Ableitung die Umstellung: was am Item schon als P527 ->
+        # Element steht, wird auf P2670 umgehaengt statt daneben noch einmal
+        # behauptet.
+        if formel:
+            try:
+                for zeile in umstellung_proposals_for_item(
+                        wd_match, eintrag["formula"]):
+                    n_formel += 1
+                    yield zeile
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {eintrag['qid']}: Umstellung uebersprungen - "
+                      f"{fehler}", file=sys.stderr)
+
+        # Dann die Ableitung aus der Formel: sie kostet keine Anfrage nach
         # aussen und liefert eine Property, die keine der externen Quellen
-        # hergibt - COD und MP kennen kein P527.
+        # hergibt - COD und MP kennen kein P2670.
         if formel and eintrag["formula"]:
             try:
                 for zeile in formel_proposals_for_item(
@@ -2583,20 +2618,20 @@ def formula_candidates(zusammensetzung: dict) -> list:
 
 
 # ---------------------------------------------------------------------------
-# "besteht aus" (P527) aus der Summenformel ableiten
+# "enthaelt Elemente von" (P2670) aus der Summenformel ableiten
 # ---------------------------------------------------------------------------
 #
 # Welche Elemente ein Stoff enthaelt, steht schon in seiner Summenformel - es
 # braucht dafuer keine externe Quelle. Erzeugt wird Element + Anzahl (P1114),
-# nach dem Vorbild von Wasser (Q283).
+# nach dem Vorbild von Kohlenstoffdioxid (Q1997).
 #
 # Warum dafuer ein ZWEITER Parser neben parse_formula noetig ist, wie
 # Mischreihen behandelt werden und wie weit das traegt (gemessen an 5700
-# Formeln): README, "besteht aus (P527) aus der Summenformel".
+# Formeln): README, "enthaelt Elemente von (P2670) aus der Summenformel".
 #
 # Kurzfassung der Regel, die der Code unten umsetzt:
-#   Element sicher, Menge sicher  -> P527 mit P1114
-#   Element sicher, Menge offen   -> P527 ohne P1114
+#   Element sicher, Menge sicher  -> P2670 mit P1114
+#   Element sicher, Menge offen   -> P2670 ohne P1114
 #   Element nur eine Moeglichkeit -> nichts, nur Klaerungsvermerk
 # Sicher ist ein Element, wenn es mindestens einmal AUSSERHALB jeder
 # Kommagruppe steht - oder in JEDEM Zweig einer Kommagruppe vorkommt.
@@ -2832,7 +2867,7 @@ def element_qids() -> dict:
 
 def formel_proposals_for_item(wd_match: dict, formel: str,
                               skip_pids: Optional[set] = None) -> list:
-    """P527-Vorschlaege aus der Summenformel des Items.
+    """P2670-Vorschlaege aus der Summenformel des Items.
 
     Anders als alle uebrigen Stufen holt diese NICHTS von aussen: der Wert
     wird aus einer Angabe abgeleitet, die am Item schon steht. Deshalb geht
@@ -2846,7 +2881,7 @@ def formel_proposals_for_item(wd_match: dict, formel: str,
     haengt es vom Glied der Reihe ab, ob Eisen oder Magnesium drinsteckt.
     """
     skip_pids = skip_pids or set()
-    prop_info = PROPERTY_MAP["has_part"]
+    prop_info = PROPERTY_MAP["has_part_of_class"]
     if prop_info["pid"] in skip_pids:
         return []
 
@@ -2858,16 +2893,23 @@ def formel_proposals_for_item(wd_match: dict, formel: str,
         return []
 
     symbole = element_qids()
-    # Das Item traegt die Property schon (etwa Quarz -> Siliciumdioxid): dann
-    # wird nichts ergaenzt. Eine bestehende P527-Modellierung mit Verbindungen
-    # statt Elementen zu vermischen, waere schlechter als eine Luecke.
+    # Das Item traegt P2670 schon: dann wird nichts ergaenzt - wer die
+    # Zusammensetzung dort von Hand gepflegt hat, weiss mehr als diese
+    # Ableitung. Ein bestehendes P527 blockiert dagegen NICHT mehr: zeigt es
+    # auf Elemente, stellt die Umstellungsstufe es um (siehe
+    # umstellung_proposals_for_item); zeigt es auf Verbindungen (Quarz ->
+    # Siliciumdioxid), ist es eine andere Aussage und steht daneben.
     vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
+    # Was die Umstellungsstufe schon aus P527 uebernimmt, hier nicht doppeln.
+    schon_umgestellt = {e for e in p527_elemente(wd_match["qid"])}
     proposals = []
 
     for symbol in sorted(sicher):
         element = symbole.get(symbol)
         if element is None:
             continue  # Elementsymbol ohne Wikidata-Item - nicht raten
+        if element["qid"] in schon_umgestellt:
+            continue
         anzahl = sicher[symbol]
         qualifiers = ([("P1114", str(anzahl), f"Anzahl {anzahl}")]
                       if anzahl is not None else [])
@@ -2900,6 +2942,171 @@ def formel_proposals_for_item(wd_match: dict, formel: str,
             ),
             formula=formel, entry_id="formel-mischreihe",
             qualifiers=[], ohne_beleg=True,
+        ))
+    return proposals
+
+
+# ---------------------------------------------------------------------------
+# Umstellung P527 -> P2670 an bestehenden Aussagen
+# ---------------------------------------------------------------------------
+#
+# 24538 Aussagen im Bestand sagen "Stoff P527 Element" (gemessen 2026-08-21).
+# Sie meinen die Zusammensetzung, sagen aber mereologisch etwas anderes: das
+# Item eines Elements ist die KLASSE seiner Atome. Richtig ist P2670. Diese
+# Stufe stellt bestehende Aussagen um - als EINZIGE im ganzen Werkzeug
+# erzeugt sie dabei auch Loeschzeilen.
+#
+# Uebernommen wird nur, was QuickStatements verlustfrei umsetzen kann:
+# Anzahl (P1114) ja, Belege und andere Qualifikatoren nein - die liessen sich
+# nicht mitnehmen, deshalb gehen solche Aussagen zur Klaerung statt zur
+# Umstellung. Zahlen: README, "Umstellung P527 -> P2670".
+
+_P527_CACHE = {}
+P527_CHARGE = 200
+
+
+def fetch_p527_elemente(qids: list) -> dict:
+    """{QID: {Element-QID: {anzahl, beleg, andere, schon_p2670}}}.
+
+    Nur Werte, die ein chemisches Element sind - ein P527 auf eine Verbindung
+    (Quarz -> Siliciumdioxid) ist eine andere Aussage und bleibt unberuehrt.
+    """
+    if not qids:
+        return {}
+    nach_qid = {info["qid"] for info in element_qids().values()}
+    werte = " ".join(f"wd:{q}" for q in qids)
+    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT ?i ?e ?anzahl ?beleg ?anderer ?p2670 WHERE {{
+      VALUES ?i {{ {werte} }}
+      {{
+        ?i p:P527 ?st . ?st ps:P527 ?e .
+        OPTIONAL {{ ?st pq:P1114 ?anzahl }}
+        OPTIONAL {{ ?st prov:wasDerivedFrom ?beleg }}
+        OPTIONAL {{
+          ?st ?q ?qv .
+          FILTER(STRSTARTS(STR(?q), "http://www.wikidata.org/prop/qualifier/"))
+          # Ohne diese Zeile zaehlt der Wertknoten JEDER Mengenangabe als
+          # fremder Qualifikator: P1114 haengt zusaetzlich unter
+          # .../qualifier/value/P1114, und daran ist die Umstellung von
+          # Wasser (Q283) zuerst gescheitert.
+          FILTER(!STRSTARTS(STR(?q), "http://www.wikidata.org/prop/qualifier/value"))
+          FILTER(?q != pq:P1114)
+          BIND(?q AS ?anderer)
+        }}
+      }} UNION {{
+        ?i wdt:P2670 ?e . BIND(true AS ?p2670)
+      }}
+    }}
+    """})
+    out = {q: {} for q in qids}
+    for b in resp.json()["results"]["bindings"]:
+        qid = b["i"]["value"].rsplit("/", 1)[-1]
+        element = b["e"]["value"].rsplit("/", 1)[-1]
+        if element not in nach_qid:
+            continue  # keine Elementaussage - geht diese Stufe nichts an
+        eintrag = out[qid].setdefault(
+            element, {"anzahl": None, "beleg": False, "andere": False,
+                      "schon_p2670": False, "p527": False})
+        if "p2670" in b:
+            eintrag["schon_p2670"] = True
+            continue
+        eintrag["p527"] = True
+        if "anzahl" in b:
+            eintrag["anzahl"] = b["anzahl"]["value"]
+        eintrag["beleg"] = eintrag["beleg"] or "beleg" in b
+        eintrag["andere"] = eintrag["andere"] or "anderer" in b
+    return out
+
+
+def p527_vorladen(qids: list) -> None:
+    """Elementaussagen vieler Items auf einmal holen und merken."""
+    offen = [q for q in qids if q not in _P527_CACHE]
+    for start in range(0, len(offen), P527_CHARGE):
+        _P527_CACHE.update(
+            fetch_p527_elemente(offen[start:start + P527_CHARGE]))
+
+
+def p527_elemente(qid: str) -> dict:
+    """Elementaussagen EINES Items, aus dem Zwischenspeicher oder frisch."""
+    if qid not in _P527_CACHE:
+        _P527_CACHE.update(fetch_p527_elemente([qid]))
+    return _P527_CACHE.get(qid, {})
+
+
+def umstellung_proposals_for_item(wd_match: dict, formel: str = "",
+                                  skip_pids: Optional[set] = None) -> list:
+    """Bestehende P527-Elementaussagen auf P2670 umstellen.
+
+    Je Aussage zwei Zeilen: die neue P2670-Aussage samt Anzahl und die
+    Loeschzeile fuer die alte. Beide gehoeren zusammen - wer nur die eine
+    einspielt, hat entweder eine Dublette oder eine Luecke.
+
+    Umgestellt wird nur an STOFFEN, erkennbar an einer Summenformel oder an
+    der Einordnung als Legierung. Der Grund steht im Bestand: "Alkalimetalle"
+    (Q19557) fuehrt seine MITGLIEDER mit P527 - Caesium, Lithium und so fort.
+    Das ist dort die richtige Aussage; "Alkalimetalle enthaelt Teile der
+    Klasse Caesium" waere es nicht. Solche Sammelbegriffe haengen wegen des
+    bekannten Modellierungsfehlers mitten in der Legierungsgruppe.
+    """
+    skip_pids = skip_pids or set()
+    if not formel and not metaklassen(wd_match["qid"])["legierung"]:
+        return []
+    neu_info = PROPERTY_MAP["has_part_of_class"]
+    alt_info = PROPERTY_MAP["has_part"]
+    if neu_info["pid"] in skip_pids:
+        return []
+
+    symbole = {info["qid"]: info for info in element_qids().values()}
+    proposals = []
+    for element, lage in sorted(p527_elemente(wd_match["qid"]).items()):
+        if not lage["p527"]:
+            continue
+        name = symbole.get(element, {}).get("label", element)
+        beleg = Reference(
+            url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P527",
+            note=f"Umstellung der bestehenden Aussage P527 -> {name} auf "
+                 f"P2670; das Element-Item ist die Klasse seiner Atome",
+        )
+
+        if lage["beleg"] or lage["andere"]:
+            # QuickStatements kann Belege und Qualifikatoren einer
+            # bestehenden Aussage nicht mitnehmen. Umstellen hiesse hier,
+            # sie zu verlieren - das entscheidet ein Mensch.
+            fehlt = " und ".join(
+                t for t in (("Beleg" if lage["beleg"] else ""),
+                            ("weitere Qualifikatoren" if lage["andere"] else ""))
+                if t)
+            proposals.append(make_row(
+                f"MANUELLE_KLAERUNG_NOETIG (P527 -> {name} traegt {fehlt}; "
+                f"eine Umstellung per QuickStatements wuerde das verlieren - "
+                f"von Hand umhaengen)",
+                "Umstellung", wd_match, alt_info, element, name, beleg,
+                entry_id=f"umstellung-{element}", qualifiers=[],
+                ohne_beleg=True,
+            ))
+            continue
+
+        if not lage["schon_p2670"]:
+            anzahl = lage["anzahl"]
+            qualifiers = ([("P1114", str(int(float(anzahl))),
+                            f"Anzahl {int(float(anzahl))}")]
+                          if anzahl and re.fullmatch(r"\d+(\.0*)?", anzahl)
+                          else [])
+            proposals.append(make_row(
+                "VORSCHLAG", "Umstellung", wd_match, neu_info, element, name,
+                beleg, entry_id=f"umstellung-{element}",
+                qualifiers=qualifiers, ohne_beleg=True,
+            ))
+
+        proposals.append(make_row(
+            "VORSCHLAG", "Umstellung", wd_match, alt_info, element, name,
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P527",
+                note=f"ERSETZT durch P2670 -> {name}; diese Zeile ENTFERNT "
+                     f"die alte Aussage",
+            ),
+            entry_id=f"umstellung-{element}", qualifiers=[], ohne_beleg=True,
+            entfernen=True,
         ))
     return proposals
 
@@ -3755,7 +3962,7 @@ def round_significant(value: float, digits: int = 6) -> float:
 
 def make_row(status, source, wd_match, prop_info, value, value_label,
              reference, formula="", entry_id="", qualifiers=None,
-             ohne_beleg=False):
+             ohne_beleg=False, entfernen=False):
     """Baut eine Vorschlagszeile - einheitlich fuer alle Quellen.
 
     qualifiers ist eine Liste (pid, quickstatements_wert, klartext). Der Wert
@@ -3766,8 +3973,13 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
 
     ohne_beleg erzwingt den belegfreien Modus auch fuer Datentypen, die nicht
     in OHNE_BELEG_DATENTYPEN stehen. Gebraucht wird das fuer AUS DEM ITEM
-    ABGELEITETE Aussagen (P527 aus der Summenformel): dort gibt es keine
+    ABGELEITETE Aussagen (P2670 aus der Summenformel): dort gibt es keine
     externe Quelle, die man zitieren koennte.
+
+    entfernen macht aus der Zeile eine LOESCHZEILE: im Entwurf steht sie mit
+    fuehrendem "-", QuickStatements nimmt die Aussage damit vom Item. Das
+    braucht genau eine Stufe - die Umstellung P527 -> P2670 -, und nur dort
+    darf es gesetzt werden.
     """
     qualifiers = qualifiers or []
     datentyp = prop_info.get("datatype", "quantity")
@@ -3808,6 +4020,12 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
     row["_pid"] = prop_info["pid"]
     row["_qualifiers"] = qualifiers
     row["_ohne_beleg"] = ohne_beleg
+    row["_entfernen"] = entfernen
+    if entfernen:
+        # Der Status bleibt "VORSCHLAG" - die Zeile ist einspielbar und
+        # gehoert in Abschnitt 1. Dass hier etwas WEGGEHT, steht in der
+        # Property-Spalte, im Entwurf am fuehrenden "-" und in der Notiz.
+        row["property"] = f"{prop_info['pid']} ({prop_info['label']}) - ENTFERNEN"
     return row
 
 
@@ -4180,10 +4398,21 @@ def write_quickstatements_draft(proposals: list, path: str = "quickstatements_en
         _TRENNER,
     ]
 
+    geloescht = [r for r in vorschlaege if r.get("_entfernen")]
+    erklaerung = ["Nur diese Zeilen sind QuickStatements-Syntax. Trotzdem gilt:",
+                  "erst nach zeilenweiser Pruefung einspielen."]
+    if geloescht:
+        # Eine Loeschzeile nimmt etwas vom Item. Das muss im Kopf stehen,
+        # nicht nur am unscheinbaren Minuszeichen der Zeile selbst.
+        erklaerung += [
+            "",
+            f"ACHTUNG: {len(geloescht)} dieser Zeilen beginnen mit '-' und",
+            "ENTFERNEN eine bestehende Aussage (Umstellung P527 -> P2670).",
+            "Sie gehoeren mit der zugehoerigen P2670-Zeile zusammen - nur",
+            "eine von beiden einzuspielen hinterlaesst Dublette oder Luecke.",
+        ]
     lines += _abschnitt_kopf(
-        "ABSCHNITT 1: EINSPIELBAR", len(vorschlaege),
-        ["Nur diese Zeilen sind QuickStatements-Syntax. Trotzdem gilt:",
-         "erst nach zeilenweiser Pruefung einspielen."],
+        "ABSCHNITT 1: EINSPIELBAR", len(vorschlaege), erklaerung,
         einheit=("Aussage", "Aussagen"),
     )
     ohne_einheit = []
@@ -4207,9 +4436,14 @@ def write_quickstatements_draft(proposals: list, path: str = "quickstatements_en
         # Identifikatoren gehen ohne S-Angabe raus - siehe
         # OHNE_BELEG_DATENTYPEN. Die Herkunft steht trotzdem im Kommentar.
         beleg = "" if row.get("_ohne_beleg") else ref.as_quickstatements()
-        lines.append(
-            f"{row['qid']}\t{row['_pid']}\t{wert}{qual}{beleg}"
-        )
+        if row.get("_entfernen"):
+            # Loeschzeile: fuehrendes "-", und ohne Qualifikatoren und Beleg -
+            # QuickStatements sucht die Aussage ueber Property und Wert.
+            lines.append(f"-{row['qid']}\t{row['_pid']}\t{wert}")
+        else:
+            lines.append(
+                f"{row['qid']}\t{row['_pid']}\t{wert}{qual}{beleg}"
+            )
         klartext = f" ({row['value_label']})" if row.get("value_label") else ""
         if not row.get("_ohne_beleg"):
             modus = ref.mode

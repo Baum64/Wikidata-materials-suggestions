@@ -1,4 +1,4 @@
-"""Formeln: Normalisierung fuer den Abgleich, Zerlegung fuer P527,
+"""Formeln: Normalisierung fuer den Abgleich, Zerlegung fuer P2670,
 Infobox-Parser. Alles netzwerkfrei."""
 import pytest
 
@@ -115,7 +115,7 @@ def test_chembox_unsinnige_cas_wird_verworfen():
 
 
 # ===========================================================================
-# elemente_aus_formel: Elementmenge fuer P527 (toleranter, siehe README)
+# elemente_aus_formel: Elementmenge fuer P2670 (toleranter, siehe README)
 # ===========================================================================
 
 @pytest.mark.parametrize("formel, erwartet", [
@@ -204,6 +204,9 @@ def elementtabelle(monkeypatch):
 
 @pytest.fixture
 def item():
+    # Leerer P527-Zwischenspeicher: das Item traegt keine Altaussage, die
+    # umgestellt werden muesste. Ohne den Eintrag ginge die Stufe ins Netz.
+    cli._P527_CACHE["Q283"] = {}
     return {"qid": "Q283", "label": "Wasser", "ambiguous": False,
             "title_de": "Wasser", "title_en": "Water"}
 
@@ -214,7 +217,8 @@ def test_vorschlag_je_element_mit_anzahl(monkeypatch, elementtabelle, item):
 
     assert [z["value"] for z in zeilen] == ["Q556", "Q629"]  # sortiert: H, O
     assert all(z["status"] == "VORSCHLAG" for z in zeilen)
-    assert all(z["_pid"] == "P527" for z in zeilen)
+    # P2670, nicht P527: das Element-Item ist die Klasse seiner Atome
+    assert all(z["_pid"] == "P2670" for z in zeilen)
     assert all(z["source"] == "Formel" for z in zeilen)
     # Anzahl als Qualifikator P1114 - wie am Vorbild Q283.
     assert zeilen[0]["_qualifiers"] == [("P1114", "2", "Anzahl 2")]
@@ -247,8 +251,8 @@ def test_entwurf_enthaelt_keine_s_angabe(monkeypatch, elementtabelle, item,
                 if z.startswith("Q283")]
 
     assert aussagen == [
-        "Q283\tP527\tQ556\tP1114\t2",
-        "Q283\tP527\tQ629\tP1114\t1",
+        "Q283\tP2670\tQ556\tP1114\t2",
+        "Q283\tP2670\tQ629\tP1114\t1",
     ]
 
 
@@ -275,10 +279,10 @@ def test_mischreihe_wird_zur_klaerung_ausgewiesen(monkeypatch, elementtabelle,
     assert "Magnesium" in klaerung[0]["status"]
 
 
-def test_bestehende_p527_wird_nicht_ergaenzt(monkeypatch, elementtabelle,
-                                              item):
-    """Quarz traegt P527 -> Siliciumdioxid. Elemente danebenzusetzen wuerde
-    zwei Modellierungen vermischen."""
+def test_bestehendes_p2670_wird_nicht_ergaenzt(monkeypatch, elementtabelle,
+                                                item):
+    """Wer die Zusammensetzung von Hand gepflegt hat, weiss mehr als diese
+    Ableitung."""
     monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: True)
     zeilen = formel_proposals_for_item(item, "H₂O")
 
@@ -291,5 +295,5 @@ def test_keine_zeile_wo_nichts_zu_behaupten_ist(monkeypatch, elementtabelle,
     frueheren Stufe belegt, oder das Elementsymbol hat kein Wikidata-Item -
     dann wird nicht geraten."""
     monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
-    assert formel_proposals_for_item(item, "H₂O", skip_pids={"P527"}) == []
+    assert formel_proposals_for_item(item, "H₂O", skip_pids={"P2670"}) == []
     assert formel_proposals_for_item(item, "NaCl") == []  # Na/Cl fehlen

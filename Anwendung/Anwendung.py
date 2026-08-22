@@ -47,17 +47,29 @@ Zwei weitere Faelle faengt die Vorpruefung ab:
     P2079 gemeint und nicht P366. Das ist eine Frage, keine Aussage, und
     landet im Klaerungsabschnitt.
 
-P2079 ist fast leer
--------------------
-Unter den Legierungen tragen 13 Items ueberhaupt ein P2079 (gemessen
-2026-08-22). Damit gibt es fuer P2079 keine Datenbasis, aus der sich etwas
-aggregieren liesse - nur die Vererbung entlang P279 (die Unterklasse eines
-Stahls wird wie der Stahl erzeugt), und die ist eine Behauptung, keine
-Ableitung. Sie geht deshalb vollstaendig auskommentiert raus. Die Zahl
-selbst ist das eigentliche Ergebnis fuer P2079: hier fehlt nicht ein
-Vorschlag, hier fehlt die Grundgesamtheit.
+P2079 ist in Wikidata fast leer - in der Wikipedia nicht
+--------------------------------------------------------
+Unter den Legierungen tragen 12 Items ueberhaupt ein P2079 (gemessen
+2026-08-22). In Wikidata gibt es dafuer also nichts zu aggregieren. In der
+Wikipedia steht die Angabe dagegen sehr wohl - nur in Fliesstext statt in
+einer Infobox. Der Zugriff darauf laeuft ueber die Wikilinks im
+Herstellungsabschnitt und ueber das P2079-Vokabular als Filter; die Details
+stehen bei WIKIPEDIA und pruefe_p2079_wikipedia.
 
-Die fuenf Pruefungen
+Diese Zeilen sind vollstaendig belegt (S143+S4656 auf die Artikelversion)
+und stehen trotzdem auskommentiert, weil die Trefferquote es nicht hergibt:
+ein Herstellungsabschnitt beschreibt auch, wie man den Werkstoff BEARBEITET
+("Mu-Metall laesst sich stanzen, aetzen, tiefziehen, biegen ..." - acht
+korrekt verlinkte Verfahren, keines stellt Mu-Metall her). Trennen laesst
+sich das weder ueber die Ueberschrift noch ueber die Verfahrensart, siehe
+den Abschnittskopf in der Entwurfsdatei. Also liest dort ein Mensch einen
+Satz und nimmt das '# ' weg.
+
+Die Vererbung entlang P279 (die Unterklasse eines Stahls wird wie der Stahl
+erzeugt) bleibt daneben bestehen - auch auskommentiert, denn sie ist eine
+Behauptung, keine Ableitung.
+
+Die sechs Pruefungen
 --------------------
   1. p366-aus-p186   Objekte mit P186 -> Werkstoff, gruppiert nach ihrer
                      Klasse (P31). Ab --min-belege Objekten wird die Klasse
@@ -88,9 +100,12 @@ Die fuenf Pruefungen
                      und das Anwendungsitem ist ein Einzelding. EINSPIELBAR.
   3. p186-klasse     dasselbe, aber das Anwendungsitem ist eine Klasse.
                      Auskommentiert - siehe Quantoren oben.
-  4. p2079-vererbt   Werkstoff ohne P2079, eine P279-Oberklasse hat eines.
+  4. p2079-wikipedia Verfahren, die im Herstellungsabschnitt des de- oder
+                     en-Artikels verlinkt sind und in Wikidata schon als
+                     P2079-Wert benutzt werden. Belegt, aber auskommentiert.
+  5. p2079-vererbt   Werkstoff ohne P2079, eine P279-Oberklasse hat eines.
                      Auskommentiert.
-  5. p366-verfahren  P366 zeigt auf ein Fertigungsverfahren. Klaerung:
+  6. p366-verfahren  P366 zeigt auf ein Fertigungsverfahren. Klaerung:
                      vielleicht war P2079 gemeint.
 
 Zusaetzlich zaehlt der Bericht die Werkstoffe ohne jede Anwendungsangabe -
@@ -108,6 +123,7 @@ Aufruf
   python "Anwendung/Anwendung.py"
   python "Anwendung/Anwendung.py" --population metallischer-werkstoff
   python "Anwendung/Anwendung.py" --min-belege 5 --pruefungen p366-aus-p186
+  python "Anwendung/Anwendung.py" --pruefungen p2079-wikipedia --sprachen de
   python "Anwendung/Anwendung.py" --vorsichtig    # nichts einspielbar
 """
 
@@ -116,6 +132,7 @@ import collections
 import csv
 import datetime as dt
 import os
+import re
 import sys
 import time
 from typing import Optional
@@ -129,7 +146,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import konfig  # noqa: E402
 from materialswiki.cli import (  # noqa: E402
-    LEGIERUNG_OHNE_ELEMENTE, LEGIERUNG_PATTERN,
+    LEGIERUNG_OHNE_ELEMENTE, LEGIERUNG_PATTERN, Reference,
+    WIKIPEDIA_DE_QID, WIKIPEDIA_EN_QID,
 )
 
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
@@ -273,7 +291,69 @@ POPULATIONEN = {
 }
 
 PRUEFUNGEN = ["p366-aus-p186", "p186-einzelding", "p186-klasse",
-              "p2079-vererbt", "p366-verfahren"]
+              "p2079-wikipedia", "p2079-vererbt", "p366-verfahren"]
+
+# ---------------------------------------------------------------------------
+# P2079 aus dem Herstellungsabschnitt der Wikipedia
+# ---------------------------------------------------------------------------
+#
+# Fuer P2079 gibt es in Wikidata nichts zu aggregieren (12 von 1082
+# Legierungen tragen eines). Die Angabe steht aber in der Wikipedia - nur
+# eben in Fliesstext, nicht in einer Infobox. Der Zugriff darauf laeuft
+# deshalb ueber die WIKILINKS im Herstellungsabschnitt: "[[Sintern]]" ist
+# bereits eine aufgeloeste Entitaet, waehrend eine Textsuche nach
+# "gesintert" raten muesste.
+#
+# Drei Filter hintereinander, und der dritte ist der eigentliche Trick:
+#   1. nur Abschnitte, deren Ueberschrift die Herstellung meint
+#   2. nur Links, die zu einem Wikidata-Item aufloesen
+#   3. nur Items, die in Wikidata SCHON ALS P2079-WERT benutzt werden
+#
+# Filter 3 ersetzt eine geratene Ontologie durch beobachteten Gebrauch:
+# 1991 verschiedene Werte in 361.825 P2079-Aussagen (gemessen 2026-08-22)
+# sagen, was die Gemeinschaft als Fertigungsverfahren fuehrt. Der Versuch,
+# das ueber Klassenwurzeln zu bestimmen, ist daran gescheitert, dass
+# "Prozess" (Q3249551) auch Oxidation, Glut und "elektrischer Strom"
+# einschliesst und "Technik" (Q2695280) die Haerteprueferfahren - von 72
+# Links aus sieben Artikeln haetten die Wurzeln 24 durchgelassen, das
+# Vokabular laesst 11 durch, und die sind brauchbar.
+# Zusaetzlich muss der Wert eine TAETIGKEIT sein: im Vokabular stehen auch
+# "Hochofen" (ein Geraet) und "Kalkstein" (ein Gestein), beides Fehlgriffe
+# einzelner Aussagen.
+
+WIKIPEDIA = {
+    "de": {
+        "api": "https://de.wikipedia.org/w/api.php",
+        "site": "https://de.wikipedia.org",
+        "projekt": WIKIPEDIA_DE_QID,
+        "treffer": re.compile(
+            r"herstellung|gewinnung|erzeugung|verhüttung|darstellung|"
+            r"produktion|synthese", re.I),
+        # "Hersteller" sind Firmen, "Produktionsmengen" eine Statistik, und
+        # "Staaten mit der groessten Erzeugung" eine Landerliste - alle drei
+        # treffen das Muster oben und enthalten kein Verfahren.
+        "sperr": re.compile(
+            r"hersteller\b|produzent|produktionsmenge|produktionszahl|"
+            r"staaten|länder|größte|weltweit|statistik|geschichte", re.I),
+    },
+    "en": {
+        "api": "https://en.wikipedia.org/w/api.php",
+        "site": "https://en.wikipedia.org",
+        "projekt": WIKIPEDIA_EN_QID,
+        "treffer": re.compile(
+            r"production|manufactur|fabricat|smelting|synthesis", re.I),
+        "sperr": re.compile(
+            r"producers?\b|manufacturers\b|output|statistic|history|"
+            r"largest|countries", re.I),
+    },
+}
+
+_UEBERSCHRIFT = re.compile(r"^(={2,6})\s*(.+?)\s*\1\s*$", re.M)
+_WIKILINK = re.compile(r"\[\[([^\]|#<>\[]+)(?:\|([^\]]*))?\]\]")
+# Dateien, Kategorien und Interwikis sind keine Verfahren.
+_KEIN_ARTIKEL = re.compile(
+    r"^\s*(datei|file|image|bild|kategorie|category|vorlage|template|"
+    r"wikipedia|hilfe|help|:)", re.I)
 
 # VALUES-Bloecke. 150 QIDs sind der Kompromiss aus P279-structure: gross
 # genug, dass die Zahl der Anfragen ertraeglich bleibt, klein genug, dass
@@ -516,6 +596,165 @@ def hole_oberklassen(qids: list) -> dict:
     return huelle
 
 
+def hole_artikel_titel(qids: list, sprachen: list) -> dict:
+    """{qid: {sprache: Artikeltitel}} aus den Sitelinks."""
+    treffer = collections.defaultdict(dict)
+    for sprache in sprachen:
+        for teil in bloecke(qids):
+            for b in sparql(f"""SELECT ?i ?titel WHERE {{
+              {values(teil)}
+              ?a schema:about ?i ;
+                 schema:isPartOf <https://{sprache}.wikipedia.org/> ;
+                 schema:name ?titel .
+            }}"""):
+                treffer[qid_aus(b, "i")][sprache] = b["titel"]["value"]
+    return treffer
+
+
+def hole_wikitext(sprache: str, titel: str) -> tuple:
+    """(Wikitext, Permalink, Hinweis) eines Artikels.
+
+    Der Permalink zeigt auf die konkrete Version (oldid) - genauso wie in
+    materialswiki. Ein Beleg auf "die Seite" waere wertlos, sobald sie sich
+    aendert, und genau das ist bei einem Fliesstextabschnitt die Regel.
+
+    Landet die Anfrage auf einer ANDEREN Seite, wird nichts geliefert. Der
+    uebergebene Titel kommt aus dem Sitelink und ist damit ein echter
+    Seitenname - weicht die Antwort davon ab, war die Seite eine
+    Weiterleitung auf ein umfassenderes Lemma. Genau das passiert bei
+    Legierungsvarianten reihenweise: "Grueungold" leitet auf "Gold" weiter,
+    "Dilithium" auf "Lithium". Ohne diese Pruefung wird der ganze
+    Elementartikel ausgewertet und der Legierung zugeschrieben - im Lauf vom
+    2026-08-22 stand deshalb "Grueungold P2079 Kernspaltung" im Entwurf.
+    """
+    konf = WIKIPEDIA[sprache]
+    resp = request_with_retry("GET", konf["api"], params={
+        "action": "parse", "page": titel, "prop": "wikitext|revid",
+        "format": "json", "formatversion": "2", "redirects": "1",
+    })
+    daten = resp.json()
+    if "error" in daten or "parse" not in daten:
+        return "", "", "kein Artikel"
+    parse = daten["parse"]
+    geliefert = parse.get("title", titel)
+    if geliefert.replace("_", " ") != titel.replace("_", " "):
+        return "", "", f"Weiterleitung auf '{geliefert}'"
+    permalink = (f"{konf['site']}/w/index.php"
+                 f"?title={geliefert.replace(' ', '_')}"
+                 f"&oldid={parse.get('revid')}")
+    return parse.get("wikitext", ""), permalink, ""
+
+
+def herstellungsabschnitte(wikitext: str, sprache: str) -> list:
+    """[(Ueberschrift, Text)] der Abschnitte ueber die Herstellung.
+
+    Der Text reicht bis zur naechsten Ueberschrift GLEICHER ODER HOEHERER
+    Ebene, schliesst die Unterabschnitte also ein. Ohne das bleibt bei
+    "Stahl" und "Hartmetall" genau nichts uebrig: dort steht unter der
+    Ueberschrift "Herstellung" kein Satz, sondern nur weitere Ueberschriften.
+    """
+    konf = WIKIPEDIA[sprache]
+    koepfe = [(m.start(), m.end(), len(m.group(1)), m.group(2))
+              for m in _UEBERSCHRIFT.finditer(wikitext)]
+    treffer = []
+    for i, (_, ende_kopf, tiefe, titel) in enumerate(koepfe):
+        sauber = re.sub(r"\{\{.*?\}\}", "", titel)
+        if not konf["treffer"].search(sauber) or konf["sperr"].search(sauber):
+            continue
+        ende = len(wikitext)
+        for (start2, _, tiefe2, _) in koepfe[i + 1:]:
+            if tiefe2 <= tiefe:
+                ende = start2
+                break
+        treffer.append((sauber.strip(), wikitext[ende_kopf:ende]))
+    return treffer
+
+
+def _klartext(wikitext: str) -> str:
+    """Wikitext so weit entschaerfen, dass ein zitierfaehiger Satz bleibt."""
+    text = re.sub(r"<ref[^>]*/>", "", wikitext)
+    text = re.sub(r"<ref.*?</ref>", "", text, flags=re.S)
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    text = re.sub(r"\{\|.*?\|\}", "", text, flags=re.S)      # Tabellen
+    text = re.sub(r"\{\{[^{}]*\}\}", "", text)               # Vorlagen
+    text = re.sub(r"\[\[([^\]|]*\|)?([^\]]*)\]\]", r"\2", text)
+    text = re.sub(r"'{2,}", "", text)                        # Fett/Kursiv
+    text = re.sub(r"<[^>]+>", "", text)
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def verfahrenslinks(text: str) -> dict:
+    """{Linkziel: Satz, in dem der Link steht}.
+
+    Der Satz ist der Beleg fuer die Durchsicht: er zeigt, ob das Verfahren
+    den Werkstoff herstellt oder nur nebenbei erwaehnt wird.
+    """
+    # Fussnoten zuerst weg: "1400 °C.<ref>Quelle</ref>" hat hinter dem
+    # Punkt kein Leerzeichen, dort wuerde sonst nicht getrennt und der Satz
+    # liefe in den naechsten Abschnitt hinein.
+    text = re.sub(r"<ref[^>]*/>", "", text)
+    text = re.sub(r"<ref.*?</ref>", "", text, flags=re.S)
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.S)
+    # Ueberschriften, Absaetze und Listenpunkte sind ebenfalls Satzgrenzen.
+    text = _UEBERSCHRIFT.sub("\n\n", text)
+
+    treffer = {}
+    for satz in re.split(r"(?<=[.!?])\s+|\n{2,}|\n\s*[*#:;|]", text):
+        for m in _WIKILINK.finditer(satz):
+            ziel = m.group(1).strip()
+            if not ziel or _KEIN_ARTIKEL.match(ziel):
+                continue
+            treffer.setdefault(ziel, _klartext(satz)[:300])
+    return treffer
+
+
+def loese_links(sprache: str, titel: list) -> dict:
+    """{Artikeltitel: QID} - mit Aufloesung von Weiterleitungen.
+
+    Ueber die Seiten-API und nicht ueber SPARQL, weil Artikel einander
+    massenhaft ueber Weiterleitungen verlinken. Dieselbe Erfahrung wie in
+    P279-structure: ohne redirects=1 gelten laengst vorhandene Items als
+    nicht vorhanden.
+    """
+    aufloesung = {}
+    for teil in bloecke(titel, 50):
+        resp = request_with_retry("GET", WIKIPEDIA[sprache]["api"], params={
+            "action": "query", "titles": "|".join(teil), "redirects": "1",
+            "prop": "pageprops", "ppprop": "wikibase_item",
+            "format": "json", "formatversion": "2",
+        })
+        daten = resp.json().get("query", {})
+        # Der Weg zurueck zum Eingabetitel fuehrt ueber zwei Umleitungen,
+        # die die API getrennt meldet: Normalisierung (Unterstrich, erster
+        # Buchstabe) und Weiterleitung.
+        weg = {}
+        for art in ("normalized", "redirects"):
+            for eintrag in daten.get(art, []):
+                weg[eintrag["to"]] = eintrag["from"]
+
+        def urspruenglich(name):
+            gesehen = set()
+            while name in weg and name not in gesehen:
+                gesehen.add(name)
+                name = weg[name]
+            return name
+
+        for seite in daten.get("pages", []):
+            qid = (seite.get("pageprops") or {}).get("wikibase_item")
+            if qid:
+                aufloesung[urspruenglich(seite["title"])] = qid
+                aufloesung[seite["title"]] = qid
+    return aufloesung
+
+
+def hole_p2079_vokabular() -> dict:
+    """{QID: Zahl der P2079-Aussagen mit diesem Wert}."""
+    return {qid_aus(b, "v"): int(b["n"]["value"])
+            for b in sparql("""SELECT ?v (COUNT(*) AS ?n) WHERE {
+              ?x wdt:P2079 ?v .
+            } GROUP BY ?v""")}
+
+
 def hole_labels(qids: list) -> dict:
     labels = {}
     for teil in bloecke(qids):
@@ -709,6 +948,81 @@ def pruefe_p186_rueckkante(p366: dict, rollen: dict, klassen: set,
     return einzeln, klassenfall, taetigkeiten
 
 
+def pruefe_p2079_wikipedia(items: dict, artikel: dict, p2079: dict,
+                           vokabular: dict, rollen: dict, sprachen: list,
+                           fortschritt=None) -> tuple:
+    """(Befunde, Kennzahlen) aus den Herstellungsabschnitten der Wikipedia.
+
+    Ein Werkstoff mit eigenem P2079 wird uebersprungen - dort ist nichts zu
+    ergaenzen, und der Artikelabruf ist der teuerste Teil des Laufs.
+    """
+    befunde, zaehler = [], collections.Counter()
+    offen = [q for q in sorted(items) if not p2079.get(q) and artikel.get(q)]
+    zaehler["werkstoffe_mit_artikel"] = len(offen)
+
+    roh = []          # (werkstoff, sprache, linkziel, satz, permalink)
+    nach_sprache = collections.defaultdict(set)
+    for nummer, werkstoff in enumerate(offen, 1):
+        for sprache in sprachen:
+            titel = artikel[werkstoff].get(sprache)
+            if not titel:
+                continue
+            wikitext, permalink, hinweis = hole_wikitext(sprache, titel)
+            if hinweis.startswith("Weiterleitung"):
+                zaehler["weiterleitung"] += 1
+                continue
+            if not wikitext:
+                continue
+            zaehler["artikel"] += 1
+            abschnitte = herstellungsabschnitte(wikitext, sprache)
+            if not abschnitte:
+                continue
+            zaehler["mit_abschnitt"] += 1
+            for ueberschrift, text in abschnitte:
+                for ziel, satz in verfahrenslinks(text).items():
+                    roh.append((werkstoff, sprache, ziel, satz, permalink,
+                                ueberschrift))
+                    nach_sprache[sprache].add(ziel)
+        if fortschritt and nummer % 25 == 0:
+            fortschritt(nummer, len(offen))
+
+    zaehler["links"] = len(roh)
+    aufloesung = {sprache: loese_links(sprache, sorted(ziele))
+                  for sprache, ziele in nach_sprache.items()}
+
+    gesehen = set()
+    for werkstoff, sprache, ziel, satz, permalink, ueberschrift in roh:
+        verfahren = aufloesung.get(sprache, {}).get(ziel)
+        if not verfahren:
+            continue
+        zaehler["aufgeloest"] += 1
+        if verfahren not in vokabular:
+            continue
+        zaehler["im_vokabular"] += 1
+        rolle = rollen.get(verfahren, set())
+        if not rolle & (set(AKTIVITAET_WURZELN) | set(VERFAHREN_WURZELN)):
+            # Im Vokabular stehen auch "Hochofen" (ein Geraet) und
+            # "Kalkstein" (ein Gestein) - Fehlgriffe einzelner Aussagen,
+            # die hier nicht weitergetragen werden.
+            zaehler["kein_verfahren"] += 1
+            continue
+        if (werkstoff, verfahren) in gesehen:
+            continue
+        gesehen.add((werkstoff, verfahren))
+        beleg = Reference(imported_from=WIKIPEDIA[sprache]["projekt"],
+                          import_url=permalink)
+        befunde.append(befund(
+            "p2079-wikipedia", werkstoff, verfahren, vokabular[verfahren],
+            f"{werkstoff}\tP2079\t{verfahren}{beleg.as_quickstatements()}",
+            f'im Abschnitt "{ueberschrift}" des {sprache}-Artikels '
+            f'verlinkt ({vokabular[verfahren]} P2079-Aussagen nutzen den '
+            f'Wert) - "{satz}"',
+            "manuell: sagt der Satz, wie der WERKSTOFF entsteht (P2079), "
+            "oder wie man ihn bearbeitet (dann gar nichts)?"))
+    befunde.sort(key=lambda b: (b["qid"], -b["kennzahl"], b["ziel_qid"]))
+    return befunde, zaehler
+
+
 def pruefe_p2079_vererbt(qids: list, p2079: dict, eltern: dict) -> list:
     """Werkstoff ohne P2079, aber eine direkte P279-Oberklasse hat eines."""
     treffer = []
@@ -771,6 +1085,27 @@ MELDE_ABSCHNITTE = [
       "Carteluhren' beschreibt einen Einzelfall, nicht einen Gebrauch.",
       "Oft waere die Oberklasse richtig; die steht hier aber nur, wenn sie",
       "selbst genug Belege hat."]),
+    ("p2079-wikipedia", "P2079 AUS DER WIKIPEDIA - PRUEFLISTE",
+     ["Fertig belegte Zeilen: S143+S4656 verweisen auf die Artikelversion,",
+      "der Kommentar zitiert den Satz. Wer den Satz gelesen hat und ihn",
+      "traegt, nimmt das '# ' weg - mehr ist nicht zu tun.",
+      "",
+      "Warum trotzdem nicht in Abschnitt 1? Weil die Trefferquote es nicht",
+      "hergibt. Ein Herstellungsabschnitt beschreibt nicht nur, wie der",
+      "Werkstoff ENTSTEHT, sondern auch, wie man ihn BEARBEITET, und beides",
+      "steht dort in denselben Saetzen: der Artikel Mu-Metall hat einen",
+      "Abschnitt schlicht namens 'Herstellung', und darin den Satz",
+      "'Mu-Metall laesst sich stanzen, aetzen, tiefziehen, biegen, loeten,",
+      "schweissen ...'. Acht Verfahren, alle richtig verlinkt, alle im",
+      "P2079-Vokabular - und keines stellt Mu-Metall her.",
+      "",
+      "Nach Ueberschriften trennen laesst sich das nicht (siehe oben), und",
+      "nach der Verfahrensart auch nicht: die DIN-8580-Hauptgruppen sind in",
+      "Wikidata zu duenn besetzt, um Urformen von Umformen zu scheiden -",
+      "'Walzen' haengt dort unter Urformen, 'Sintern' nicht, 'Spritzgiessen'",
+      "und 'Schweissen' unter keiner der beiden. Deshalb liest hier ein",
+      "Mensch den Satz. Die Frage dabei ist immer dieselbe: entsteht der",
+      "WERKSTOFF so, oder wird er nur so verarbeitet?"]),
     ("p186-klasse", "P186 AN EINER KLASSE",
      ["Aus 'mancher X ist aus M' folgt nicht 'jedes X ist aus M'. P186 an",
       "der Klasse behauptet das Zweite. Richtig ist die Zeile nur, wenn der",
@@ -829,10 +1164,15 @@ def schreibe_quickstatements(befunde: list, pfad: str, population: str,
         "#",
         "# Ausserhalb von Abschnitt 1 beginnt jede Zeile mit '#'.",
         "#",
-        "# Keine Zeile traegt einen Beleg (S...). Alle Aussagen sind aus",
-        "# Wikidata selbst abgeleitet - aus P186 an den Objekten - und ein",
-        "# Import kann sich nicht auf sich selbst berufen. Der Kommentar",
-        "# unter jeder Zeile nennt stattdessen die Items, die sie tragen.",
+        "# Belege: die P2079-Zeilen aus der Wikipedia tragen S143+S4656,",
+        "# also den Import mit Permalink auf die Artikelversion, dazu den",
+        "# Satz als Kommentar - sie stehen fertig belegt in ihrem Abschnitt",
+        "# und brauchen nur das '# ' weg. Die P366- und P186-Zeilen in",
+        "# Abschnitt 1 tragen KEINEN Beleg -",
+        "# sie sind aus Wikidata selbst abgeleitet (aus P186 an den",
+        "# Objekten), und ein Import kann sich nicht auf sich selbst",
+        "# berufen. Ihr Kommentar nennt stattdessen die Items, die sie",
+        "# tragen.",
         "#",
         f"# P366 wird ab {min_belege} belegenden Objekten vorgeschlagen",
         "# (--min-belege). Darunter ist eine Klasse nicht die Verwendung",
@@ -956,6 +1296,13 @@ def main(argv: Optional[list] = None) -> int:
                              "(Default 10). 0 schaltet den Filter ab. Ueber "
                              "10 faengt er an, gute Verwendungen zu treffen "
                              "- 'Skulptur' hat nur 26.")
+    parser.add_argument("--sprachen", nargs="+", choices=sorted(WIKIPEDIA),
+                        default=sorted(WIKIPEDIA),
+                        help="Pruefung 'p2079-wikipedia': welche Wikipedias "
+                             "nach einem Herstellungsabschnitt durchsucht "
+                             "werden (Default: de en). Das ist der teuerste "
+                             "Teil des Laufs - ein Artikelabruf je Werkstoff "
+                             "und Sprache bei einer Anfrage pro Sekunde.")
     parser.add_argument("--limit", type=int, default=None,
                         help="nur die ersten N Werkstoffe (fuer Probelaeufe)")
     parser.add_argument("--vorsichtig", action="store_true",
@@ -990,11 +1337,22 @@ def main(argv: Optional[list] = None) -> int:
     print(f"  {sum(len(v) for v in objekte.values())} Objekte nennen einen "
           f"dieser Werkstoffe", file=sys.stderr)
 
+    vokabular, artikel = {}, {}
+    if "p2079-wikipedia" in args.pruefungen:
+        print("Hole das P2079-Vokabular ...", file=sys.stderr)
+        vokabular = hole_p2079_vokabular()
+        print(f"  {len(vokabular)} Werte in "
+              f"{sum(vokabular.values())} Aussagen", file=sys.stderr)
+        print(f"Hole die Artikeltitel ({', '.join(args.sprachen)}) ...",
+              file=sys.stderr)
+        artikel = hole_artikel_titel(qids, args.sprachen)
+        print(f"  {len(artikel)} Werkstoffe mit Artikel", file=sys.stderr)
+
     braucht_p2079 = {"p2079-vererbt"} & set(args.pruefungen)
     p2079, eltern = {}, {}
-    if braucht_p2079:
+    if braucht_p2079 or "p2079-wikipedia" in args.pruefungen:
         print("Hole P2079 und P279-Eltern ...", file=sys.stderr)
-        eltern = hole_p279_eltern(qids)
+        eltern = hole_p279_eltern(qids) if braucht_p2079 else {}
         # Auch die Eltern ausserhalb der Grundgesamtheit brauchen ihr P2079 -
         # sonst faellt genau die Vererbung aus, die geprueft werden soll.
         alle_eltern = sorted({p for v in eltern.values() for p in v})
@@ -1008,7 +1366,10 @@ def main(argv: Optional[list] = None) -> int:
     # eine Klassifikation fuer Zeilen, die ohnehin nicht gemeldet werden.
     kandidaten = {k for klassen in nach_klasse.values()
                   for k, obj in klassen.items() if len(obj) >= args.min_belege}
-    anwendungen = sorted(kandidaten | {a for v in p366.values() for a in v})
+    # Das Vokabular kommt mit in die Klassifikation: die Pruefung unten
+    # muss wissen, ob ein Wert eine Taetigkeit ist oder ein Geraet.
+    anwendungen = sorted(kandidaten | {a for v in p366.values() for a in v}
+                         | set(vokabular))
     print(f"Klassifiziere {len(anwendungen)} Anwendungsitems ...",
           file=sys.stderr)
     rollen = klassifiziere(anwendungen) if anwendungen else {}
@@ -1045,6 +1406,24 @@ def main(argv: Optional[list] = None) -> int:
             befunde += einzeln
         if "p186-klasse" in args.pruefungen:
             befunde += klassenfall
+    if "p2079-wikipedia" in args.pruefungen and artikel:
+        def melde(fertig, gesamt):
+            print(f"  {fertig}/{gesamt} Artikel geprueft ...", file=sys.stderr)
+
+        print("Durchsuche die Herstellungsabschnitte ...", file=sys.stderr)
+        wiki_befunde, wiki_zahlen = pruefe_p2079_wikipedia(
+            items, artikel, p2079, vokabular, rollen, args.sprachen, melde)
+        befunde += wiki_befunde
+        print(f"  {wiki_zahlen['artikel']} Artikel, davon "
+              f"{wiki_zahlen['mit_abschnitt']} mit Herstellungsabschnitt; "
+              f"{wiki_zahlen['links']} Links -> "
+              f"{wiki_zahlen['im_vokabular']} im P2079-Vokabular",
+              file=sys.stderr)
+        if wiki_zahlen["weiterleitung"]:
+            print(f"  {wiki_zahlen['weiterleitung']} Sitelinks zeigen auf "
+                  f"eine Weiterleitung zu einem anderen Lemma "
+                  f"(z. B. Grüngold -> Gold) - uebersprungen",
+                  file=sys.stderr)
     if braucht_p2079:
         befunde += pruefe_p2079_vererbt(qids, p2079, eltern)
     if "p366-verfahren" in args.pruefungen:
