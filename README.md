@@ -11,6 +11,7 @@ Wikidata geschrieben.
 | **Materials Wiki** | [materialswiki/](materialswiki/) | Leitet „besteht aus" (P527) aus der Summenformel des Items ab, holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
 | **Benchmark** | [benchmark/](benchmark/) | Misst, wie gut metallische Werkstoffe in Wikidata belegt sind — je Property aus dem WikiProject Materials. Zeigt, wo Vorschläge sich überhaupt lohnen. |
 | **P279-Struktur** | [P279-structure/](P279-structure/) | Prüft, wie `P279` („Unterklasse von") unterhalb der Werkstoffe verwendet wird — fehlende, doppelte, verkehrte und mit `P31` verwechselte Kanten — und entwirft die Änderungen als QuickStatements. Einspielbar ist nur, was mechanisch aus dem Graphen folgt. |
+| **Anwendungen** | [Anwendung/](Anwendung/) | Leitet ab, **wozu** ein Werkstoff gebraucht wird: aggregiert die `P186`-Rückverweise der Objekte (21495 Items der Klasse „Münze" nennen Bronze) zu `P366`-Vorschlägen am Werkstoff und entwirft, wo es ohne Quantorensprung geht, die Rückkante `P186` am Anwendungsitem. Filtert dabei Verbundgegenstände (Wolkenkratzer, Fahrzeuge) und zu eng gefasste Klassen heraus. Misst nebenbei, wie leer `P2079` ist. |
 | **Kategorie-Hierarchie** | [Kategorie Hirachie/](Kategorie%20Hirachie/) | Prüft und zeichnet, wie Werkstoffe in der Wikidata-Klassenhierarchie unter `material` (Q214609) hängen — und welche über einen parallelen Zweig laufen. |
 
 Details, Nutzung und Grenzen stehen jeweils im README der Anwendung:
@@ -18,6 +19,7 @@ Details, Nutzung und Grenzen stehen jeweils im README der Anwendung:
 [materialswiki/README.md](materialswiki/README.md) ·
 [benchmark/README.md](benchmark/README.md) ·
 [P279-structure/README.md](P279-structure/README.md) ·
+[Anwendung/README.md](Anwendung/README.md) ·
 [Kategorie Hirachie/README.md](Kategorie%20Hirachie/README.md)
 
 ## Repo-Aufbau
@@ -38,6 +40,8 @@ benchmark/     Abdeckungsmessung der Werkstoff-Properties in Wikidata
   properties_snapshot.json  Momentaufnahme der Property-Liste (für --offline)
 P279-structure/  P279-Struktur der Werkstoffe prüfen und Änderungen entwerfen
   P279benchmark.py   Kommandozeile (python "P279-structure/P279benchmark.py")
+Anwendung/     Anwendungen der Werkstoffe (P366/P186/P2079) entwerfen
+  Anwendung.py       Kommandozeile (python "Anwendung/Anwendung.py")
 Kategorie Hirachie/  Klassenhierarchie-Analyse (Graphen als PNG)
   material_hierarchy_check.py
 tests/         Offline-Tests (pytest)
@@ -62,6 +66,7 @@ python -m wikikg --title Holz --lang de
 python -m materialswiki --elements Ti O --max 50
 python -m benchmark.benchmark --offline
 python "P279-structure/P279benchmark.py"
+python "Anwendung/Anwendung.py"
 python "Kategorie Hirachie/material_hierarchy_check.py" --skip-tree
 ```
 
@@ -79,6 +84,7 @@ nicht ins Repo:
 | `werkstoffe_vorschlaege.csv`, `werkstoffe_quickstatements_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
 | `abdeckung.csv` (bzw. was `--csv` angibt) | [benchmark/benchmark.py](benchmark/benchmark.py) |
 | `p279_befunde_<Zeitstempel>.csv`, `quickstatements_p279_<Zeitstempel>.txt` | [P279-structure/P279benchmark.py](P279-structure/P279benchmark.py) |
+| `anwendungen_befunde_<Zeitstempel>.csv`, `quickstatements_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
 | `werkstoff_check.csv`, `werkstoff_graph.png`, `subclass_tree_material.png`, `trace_*.png` | [Kategorie Hirachie/material_hierarchy_check.py](Kategorie%20Hirachie/material_hierarchy_check.py) |
 | `output/…` (`--output`) | [wikikg/cli.py](wikikg/cli.py) |
 

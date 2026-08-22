@@ -11,12 +11,11 @@ Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
 
     Formel  ->  COD  ->  Materials Project  ->  de.wikipedia  ->  en.wikipedia
 
-Wo gar keine Formel dasteht, laeuft die erste Stufe rueckwaerts: aus
-"besteht aus" (P527) wird eine chemische Formel (P274) gebaut - das greift
-praktisch nur bei Legierungen. Aus einer Raumgruppe (P690) am Item wird
-ausserdem die Punktgruppe (P589) nachgeschlagen.
+Zwei weitere Aussagen entstehen aus dem Item selbst: die chemische
+Metaklasse (P31) fuer Legierungen und die Punktgruppe (P589) aus einer
+Raumgruppe (P690) am Item.
 
-Abschaltbar mit --no-formel, --no-legierungsformel, --no-punktgruppe,
+Abschaltbar mit --no-formel, --no-metaklasse, --no-punktgruppe,
 --no-cod, --no-wikipedia.
 
     python -m materialswiki --elements Ti O --max 50
@@ -448,15 +447,15 @@ PROPERTY_MAP = {
         "unit_qid": "",
         "label": "besteht aus",
     },
-    # Chemische Formel. Datentyp string (am 2026-08-18 abgefragt), also eine
-    # blosse Zeichenkette - die Schreibweise ist damit reine Konvention und
-    # wird nur von einem Format-Constraint bewacht. Erzeugt wird sie hier aus
-    # P527, siehe Abschnitt "Summenformel (P274) aus 'besteht aus' (P527)".
-    "chemical_formula": {
-        "pid": "P274",
-        "datatype": "string",
+    # Chemische Metaklasse. P31 steht hier AUSSCHLIESSLICH fuer die
+    # Metaklasse nach WikiProject Chemistry, nie fuer eine inhaltliche
+    # Einordnung wie "Kupferlegierung" - siehe Abschnitt "Chemische
+    # Metaklasse (P31) fuer Legierungen".
+    "metaklasse": {
+        "pid": "P31",
+        "datatype": "item",
         "unit_qid": "",
-        "label": "chemische Formel",
+        "label": "ist ein(e)",
     },
 }
 
@@ -2213,7 +2212,8 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           wikipedia: bool = True, cod: bool = True,
                           nur_experimentell: bool = True,
                           nur_stabil: bool = True, max_entries: int = 1,
-                          formel: bool = True, legierungsformel_an: bool = True,
+                          formel: bool = True, metaklasse_an: bool = True,
+                          metaklasse_auch_mit_p31: bool = False,
                           punktgruppe_an: bool = True):
     """Vorschlaege fuer eine Werkstoffgruppe (Generator).
 
@@ -2227,7 +2227,8 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
     yield from pruefe_legierungsklasse(gruppe, items)
     yield from build_proposals_for_items(
         items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries,
-        formel=formel, legierungsformel_an=legierungsformel_an,
+        formel=formel, metaklasse_an=metaklasse_an,
+        metaklasse_auch_mit_p31=metaklasse_auch_mit_p31,
         punktgruppe_an=punktgruppe_an)
 
 
@@ -2237,7 +2238,8 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                               nur_stabil: bool = True, max_entries: int = 1,
                               nummer_ab: int = 1, gesamt: Optional[int] = None,
                               formel: bool = True,
-                              legierungsformel_an: bool = True,
+                              metaklasse_an: bool = True,
+                              metaklasse_auch_mit_p31: bool = False,
                               punktgruppe_an: bool = True):
     """Vorschlaege fuer eine fertige Itemliste (Generator).
 
@@ -2248,14 +2250,15 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
     Fortschritt ueber Chargen hinweg fortlaufend gezaehlt wird.
     """
     gesamt = gesamt if gesamt is not None else len(items)
-    # Die Bestandteile aller formellosen Items auf einmal holen: eine Abfrage
-    # je 200 Items statt je Item. Scheitert das, laeuft der Rest trotzdem -
-    # die Stufe fragt dann eben einzeln nach.
-    if legierungsformel_an:
+    # Die Metaklassen-Lage aller Items auf einmal holen: eine Abfrage je 200
+    # Items statt je Item. Scheitert das, laeuft der Rest trotzdem - die Stufe
+    # fragt dann eben einzeln nach.
+    if metaklasse_an:
         try:
-            bestandteile_vorladen([e["qid"] for e in items if not e["formula"]])
+            metaklassen_vorladen([e["qid"] for e in items])
+            melde_metaklassen_luecke(items, metaklasse_auch_mit_p31)
         except (RuntimeError, ValueError, requests.RequestException) as fehler:
-            print(f"  Bestandteile nicht vorgeladen - {fehler}",
+            print(f"  Metaklassen nicht vorgeladen - {fehler}",
                   file=sys.stderr)
     # Dasselbe fuer die Raumgruppen am Item, aus denen die Punktgruppe folgt.
     if punktgruppe_an:
@@ -2271,22 +2274,22 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                     "title_en": eintrag["title_en"]}
         pids_belegt = set()
         zaehler = collections.Counter()
-        n_cod = n_mp = n_formel = n_p274 = n_p589 = 0
+        n_cod = n_mp = n_formel = n_p31 = n_p589 = 0
 
-        # Der umgekehrte Weg, nur wo gar keine Formel dasteht: aus den
-        # Bestandteilen (P527) eine Summenformel (P274) bauen. Das greift
-        # praktisch nur bei Legierungen - genau dort, wo alle uebrigen Stufen
-        # mangels Formel leerlaufen. Die so gebaute Formel wird BEWUSST nicht
-        # an COD und MP weitergereicht: "Cu·Sn" ist keine Stoechiometrie,
-        # eine Strukturdatenbank kann damit nichts Richtiges finden.
-        if legierungsformel_an and not eintrag["formula"]:
+        # Die Metaklasse: eine Aussage, die aus der Klassenzugehoerigkeit des
+        # Items folgt und keine Quelle braucht. Greift nur bei Legierungen -
+        # sie sind Gemische, und dafuer sieht die Guideline eine eigene
+        # Metaklasse vor. P31 wandert NICHT in pids_belegt: die Property
+        # steht auch fuer inhaltliche Einordnungen, und die kaemen aus ganz
+        # anderen Stufen.
+        if metaklasse_an:
             try:
-                for zeile in legierungsformel_proposals_for_item(wd_match):
-                    pids_belegt.add(zeile["_pid"])
-                    n_p274 += 1
+                for zeile in metaklasse_proposals_for_item(
+                        wd_match, auch_mit_p31=metaklasse_auch_mit_p31):
+                    n_p31 += 1
                     yield zeile
             except (RuntimeError, ValueError, requests.RequestException) as fehler:
-                print(f"  {eintrag['qid']}: P527-Formel uebersprungen - "
+                print(f"  {eintrag['qid']}: Metaklasse uebersprungen - "
                       f"{fehler}", file=sys.stderr)
 
         # Zuerst die Ableitung aus der Formel: sie kostet keine Anfrage nach
@@ -2373,7 +2376,7 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                       file=sys.stderr)
 
         print(f"  [{i}/{gesamt}] {eintrag['qid']} "
-              f"{eintrag['label'][:28]}: Formel {n_formel}, P274 {n_p274}, "
+              f"{eintrag['label'][:28]}: Formel {n_formel}, P31 {n_p31}, "
               f"P589 {n_p589}, COD {n_cod}, MP {n_mp}"
               + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
                  if wikipedia else ""),
@@ -2902,67 +2905,24 @@ def formel_proposals_for_item(wd_match: dict, formel: str,
 
 
 # ---------------------------------------------------------------------------
-# Summenformel (P274) aus "besteht aus" (P527) - der umgekehrte Weg
+# Chemische Metaklasse (P31) fuer Legierungen
 # ---------------------------------------------------------------------------
 #
-# Fuer Legierungen laeuft die Ableitung andersherum als oben: eine Formel zum
-# Zerlegen gibt es dort fast nie (10 von 568 Items), die Bestandteile stehen
-# aber vielfach schon da. Aus ihnen laesst sich die Formel ZUSAMMENSETZEN.
-# Zahlen, Konvention und die Grenzen des Verfahrens: README, "Summenformel
-# (P274) aus 'besteht aus' (P527)".
-#
-# Kurzfassung der Regel, die der Code unten umsetzt:
-#   alle Teile Elemente, >= 2 verschiedene, Anzahl ueberall  -> "AgCu₃"
-#   alle Teile Elemente, >= 2 verschiedene, Anzahl fehlt     -> "Ag·Cu"
-#   ein Teil ist keine Element-Item / nur ein Element        -> nichts
-
-# WikiProject Chemistry schreibt unbestimmte Mischungsverhaeltnisse mit dem
-# Mittelpunkt (U+00B7), wie bei Hydraten. In Wikidata steht es bereits so:
-# Elektron (Q239481) traegt "Au·Ag". Genau diese Form wird erzeugt - bei
-# einer Legierung ist das Verhaeltnis der Regelfall des Unbestimmten.
-MITTELPUNKT = "·"
+# [[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]]
+# verlangt an JEDEM Item einer chemischen Entitaet genau EINE Metaklasse ueber
+# P31 - und fuer Gemische ausdruecklich eine eigene, nicht die der reinen
+# Stoffe. Eine Legierung ist per Definition ein Gemisch (Q37756: "mixture or
+# metallic solid solution"), die Metaklasse ist damit eindeutig bestimmt und
+# muss nicht geraten werden. Zahlen, Abgrenzung und die Faelle, die bewusst
+# offenbleiben: README, "Chemische Metaklasse (P31) fuer Legierungen".
 
 # Wikidata fuehrt Q11426 "Metall" als Unterklasse von Q37756 "Legierung".
 # Ueber diesen Knoten haengt alles Metallische unter der Legierung - auch
-# Sammelbegriffe wie "Platinmetalle" oder "metals of antiquity", deren P527
-# eine AUFZAEHLUNG ist und keine Zusammensetzung. Wer daraus eine Formel
-# macht, behauptet Unsinn. Der Knoten wird deshalb beim Pruefen der
+# Sammelbegriffe wie "Platinmetalle" oder "metals of antiquity", die gar keine
+# Werkstoffe sind, sondern Aufzaehlungen. Ihnen die Gemisch-Metaklasse zu
+# geben waere schlicht falsch. Der Knoten wird deshalb beim Pruefen der
 # Klassenzugehoerigkeit ausgespart, siehe legierungs_qids.
 METALL_QID = "Q11426"
-
-
-def hill_reihenfolge(symbole) -> list:
-    """Elementsymbole in Hill-Reihenfolge: C, dann H, dann alphabetisch.
-
-    Die vom WikiProject Chemistry empfohlene Konvention. Fuer Legierungen
-    faellt sie meist mit der alphabetischen zusammen ("Cu·Sn"); wo Kohlenstoff
-    dabei ist, wirkt sie sichtbar: Stahl wird "C·Fe", nicht "Fe·C".
-    """
-    uebrige = sorted(s for s in symbole if s not in ("C", "H"))
-    vorne = [s for s in ("C", "H") if s in symbole]
-    return vorne + uebrige
-
-
-def legierungsformel(bestandteile: dict) -> Optional[str]:
-    """{Symbol: Anzahl oder None} -> Formel in Hill-Reihenfolge.
-
-    Steht die Anzahl fuer JEDEN Bestandteil fest, entsteht eine gewoehnliche
-    Summenformel mit tiefgestellten Ziffern ("AgCu₃"). Fehlt sie auch nur
-    einmal, ist das Verhaeltnis unbestimmt und die Teile werden mit dem
-    Mittelpunkt verbunden ("Ag·Cu") - eine Formel ohne Ziffern wuerde
-    Gleichteiligkeit behaupten.
-
-    None, wenn weniger als zwei verschiedene Elemente vorliegen: bei einem
-    einzigen waere die "Formel" das Elementsymbol, und ein Item mit genau
-    einem Bestandteil ist in aller Regel eine Legierungs-KLASSE
-    ("Nickelbasislegierung"), kein Werkstoff.
-    """
-    if len(bestandteile) < 2:
-        return None
-    reihenfolge = hill_reihenfolge(bestandteile)
-    if all(bestandteile[s] for s in reihenfolge):
-        return _formel_schreiben(bestandteile, reihenfolge, tiefgestellt=True)
-    return MITTELPUNKT.join(reihenfolge)
 
 
 def legierungs_qids(qids: list) -> set:
@@ -2998,6 +2958,11 @@ def legierungs_qids(qids: list) -> set:
 
     gefunden = set()
     for qid in qids:
+        if qid == METALL_QID:
+            # Der Ausgangsknoten selbst: "Metalle" haengt nur ueber die
+            # defekte Kante unter der Legierung. Ohne diesen Sonderfall
+            # bekaeme ausgerechnet Q11426 die Gemisch-Metaklasse.
+            continue
         gesehen, offen = set(), list(kanten.get(qid, ()))
         while offen:
             knoten = offen.pop()
@@ -3011,114 +2976,165 @@ def legierungs_qids(qids: list) -> set:
     return gefunden
 
 
-def fetch_bestandteile(qids: list) -> dict:
-    """{QID: {"teile": {Symbol: Anzahl oder None}, "fremd": bool,
-              "legierung": bool}} fuer die uebergebenen Items.
+# Die Metaklasse fuer Gemische. Q119896085 ("Art von Polymer") ist ihre
+# einzige Unterklasse in der Guideline und fuer Legierungen nicht gemeint.
+GEMISCH_METAKLASSE = "Q119892838"   # "definiertes Gemisch chemischer Substanzen"
 
-    "fremd" ist gesetzt, sobald ein Bestandteil KEIN chemisches Element ist
-    (rostfreier Stahl -> Stahl, Nikasil -> Carbide). Aus solchen Angaben eine
-    Elementformel zu bauen, hiesse den Bestandteil stillschweigend
-    wegzulassen - dann lieber keine Formel.
+# Alle Chemie-Metaklassen der Guideline. Traegt ein Item schon eine davon,
+# wird KEINE zweite vorgeschlagen: "Every item should have only one metaclass
+# from the above. No other chemistry-related metaclass should be present."
+CHEMIE_METAKLASSEN = {
+    "Q113145171": "definierte chemische Substanz",
+    GEMISCH_METAKLASSE: "definiertes Gemisch chemischer Substanzen",
+    "Q119896085": "Art von Polymer",
+    "Q47154513": "offene Klasse (Struktur)",
+    "Q56256173": "offene Klasse (Funktion)",
+    "Q56256178": "offene Klasse (Herkunft)",
+    "Q55640599": "geschlossene Klasse",
+    "Q15711994": "geschlossene Klasse (Summenformel)",
+    "Q59199015": "geschlossene Klasse (Stereoisomere)",
+    "Q55662456": "geschlossene Klasse (ortho/meta/para)",
+    "Q74892521": "unpraezise Klasse chemischer Substanzen",
+}
 
-    Die Anzahl kommt aus dem Qualifikator P1114. Widersprechen sich mehrere
-    Aussagen zu demselben Element, gilt die Anzahl als unbestimmt.
+# Mineralarten bleiben aussen vor: sie sind ueber die IMA modelliert
+# (P31 = Q12089225), und ob ein Mineral zusaetzlich eine Chemie-Metaklasse
+# tragen soll, ist eine Frage an das Mineralprojekt, nicht an dieses Werkzeug.
+MINERALART_QID = "Q12089225"
+
+
+def fetch_metaklassen(qids: list) -> dict:
+    """{QID: {"p31": [QID, ...], "legierung": bool}} fuer die Items.
+
+    Eine Abfrage fuer die P31-Werte, eine fuer die Klassenzugehoerigkeit -
+    beide fuer die ganze Charge statt je Item.
     """
     if not qids:
         return {}
-    nach_qid = {info["qid"]: symbol for symbol, info in element_qids().items()}
     werte = " ".join(f"wd:{q}" for q in qids)
     resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
-    SELECT ?i ?teil ?anzahl WHERE {{
+    SELECT ?i ?klasse WHERE {{
       VALUES ?i {{ {werte} }}
-      ?i p:P527 ?st . ?st ps:P527 ?teil .
-      OPTIONAL {{ ?st pq:P1114 ?anzahl }}
+      ?i wdt:P31 ?klasse .
     }}
     """})
-
-    roh = collections.defaultdict(lambda: collections.defaultdict(set))
-    fremd = set()
+    p31 = {q: [] for q in qids}
     for b in resp.json()["results"]["bindings"]:
         qid = b["i"]["value"].rsplit("/", 1)[-1]
-        teil = b["teil"]["value"].rsplit("/", 1)[-1]
-        symbol = nach_qid.get(teil)
-        if symbol is None:
-            fremd.add(qid)
-            continue
-        roh[qid][symbol].add(b.get("anzahl", {}).get("value"))
+        klasse = b["klasse"]["value"].rsplit("/", 1)[-1]
+        if klasse not in p31[qid]:
+            p31[qid].append(klasse)
 
-    legierungen = legierungs_qids([q for q in qids if q in roh])
-    out = {}
-    for qid in qids:
-        teile = {}
-        for symbol, mengen in roh.get(qid, {}).items():
-            # Genau ein ganzzahliger Wert an allen Aussagen - sonst unbestimmt.
-            zahlen = {m for m in mengen if m and re.fullmatch(r"\d+", m)}
-            teile[symbol] = (int(zahlen.pop())
-                             if len(zahlen) == 1 and len(mengen) == 1 else None)
-        out[qid] = {"teile": teile, "fremd": qid in fremd,
-                    "legierung": qid in legierungen}
-    return out
+    legierungen = legierungs_qids(qids)
+    return {q: {"p31": p31[q], "legierung": q in legierungen} for q in qids}
 
 
-_BESTANDTEIL_CACHE = {}
-# Wieviele Items eine Abfrage abdeckt. 200 VALUES sind fuer den Endpunkt
-# unkritisch und sparen gegenueber einer Abfrage je Item Hunderte Anfragen.
-BESTANDTEIL_CHARGE = 200
+_METAKLASSE_CACHE = {}
+# 200 Items je Abfrage - wie bei den Raumgruppen.
+METAKLASSE_CHARGE = 200
 
 
-def bestandteile_vorladen(qids: list) -> None:
-    """Bestandteile fuer viele Items auf einmal holen und merken."""
-    offen = [q for q in qids if q not in _BESTANDTEIL_CACHE]
-    for start in range(0, len(offen), BESTANDTEIL_CHARGE):
-        _BESTANDTEIL_CACHE.update(
-            fetch_bestandteile(offen[start:start + BESTANDTEIL_CHARGE]))
+def metaklassen_vorladen(qids: list) -> None:
+    """Metaklassen vieler Items auf einmal holen und merken."""
+    offen = [q for q in qids if q not in _METAKLASSE_CACHE]
+    for start in range(0, len(offen), METAKLASSE_CHARGE):
+        _METAKLASSE_CACHE.update(
+            fetch_metaklassen(offen[start:start + METAKLASSE_CHARGE]))
 
 
-def bestandteile(qid: str) -> dict:
-    """Bestandteile EINES Items, aus dem Zwischenspeicher oder frisch."""
-    if qid not in _BESTANDTEIL_CACHE:
-        _BESTANDTEIL_CACHE.update(fetch_bestandteile([qid]))
-    return _BESTANDTEIL_CACHE.get(qid, {"teile": {}, "fremd": False,
-                                        "legierung": False})
+def metaklassen(qid: str) -> dict:
+    """Metaklassen-Lage EINES Items, aus dem Zwischenspeicher oder frisch."""
+    if qid not in _METAKLASSE_CACHE:
+        _METAKLASSE_CACHE.update(fetch_metaklassen([qid]))
+    return _METAKLASSE_CACHE.get(qid, {"p31": [], "legierung": False})
 
 
-def legierungsformel_proposals_for_item(wd_match: dict,
-                                        skip_pids: Optional[set] = None) -> list:
-    """P274-Vorschlag aus den Bestandteilen (P527) einer Legierung.
+GUIDELINE_URL = ("https://www.wikidata.org/wiki/Wikidata:WikiProject_Chemistry/"
+                 "Guidelines/Basic_metaclasses_and_relations")
 
-    Nur fuer Legierungen: bei einem Mineral waere die Elementaufzaehlung die
-    schlechtere Formel, dort steht die richtige ohnehin meist schon am Item.
 
-    Wie die P527-Ableitung geht auch diese Aussage OHNE S-Beleg raus - sie
-    ist aus dem Item selbst abgeleitet und dort nachpruefbar.
+def melde_metaklassen_luecke(items: list, auch_mit_p31: bool) -> None:
+    """Zaehlt auf stderr, was der Standardumfang bewusst auslaesst.
+
+    Sonst sieht niemand, dass die Guideline auch an diesen Items eine
+    Metaklasse verlangt - sie faenden sich einfach nicht in der CSV wieder.
+    """
+    if auch_mit_p31:
+        return
+    offen = [
+        e for e in items
+        if metaklassen(e["qid"])["legierung"]
+        and MINERALART_QID not in metaklassen(e["qid"])["p31"]
+        and metaklassen(e["qid"])["p31"]
+        and not [k for k in metaklassen(e["qid"])["p31"]
+                 if k in CHEMIE_METAKLASSEN]
+    ]
+    if offen:
+        print(f"  {len(offen)} Legierungen tragen ein P31, aber keine "
+              f"Chemie-Metaklasse - hier wird nichts vorgeschlagen "
+              f"(--metaklasse-auch-mit-p31 nimmt sie dazu).", file=sys.stderr)
+
+
+def metaklasse_proposals_for_item(wd_match: dict,
+                                  skip_pids: Optional[set] = None,
+                                  auch_mit_p31: bool = False) -> list:
+    """P31-Vorschlag: die Gemisch-Metaklasse fuer eine Legierung.
+
+    Vorgeschlagen wird NUR die Metaklasse, nie eine inhaltliche Einordnung
+    ("Kupferlegierung", "Werkzeugstahl") - die ist eine fachliche
+    Entscheidung, siehe pruefe_legierungsklasse.
+
+    Standardmaessig nur an Items, die GAR KEIN P31 tragen. Wo schon eines
+    steht, ist es in aller Regel eine richtige Klassenzugehoerigkeit
+    ("P31 = Legierung"), und die Metaklasse waere eine ZWEITE P31-Aussage
+    daneben - fuer die spricht die Guideline, aber es ist eine Massenaenderung
+    an 565 Items, und genau dort sitzt auch der Schrott (Stahlrohr,
+    Markenzeichen). Mit auch_mit_p31=True kommen sie dazu; die Zahlen stehen
+    im README.
+
+    Traegt das Item bereits eine ANDERE Chemie-Metaklasse, wird nichts
+    vorgeschlagen, sondern zur Klaerung ausgewiesen: die Guideline laesst nur
+    eine zu, und die falsche zu entfernen ist nichts, was dieses Werkzeug
+    nebenbei tut.
     """
     skip_pids = skip_pids or set()
-    prop_info = PROPERTY_MAP["chemical_formula"]
+    prop_info = PROPERTY_MAP["metaklasse"]
     if prop_info["pid"] in skip_pids:
         return []
 
-    info = bestandteile(wd_match["qid"])
-    if not info["legierung"] or info["fremd"]:
-        return []
-    formel = legierungsformel(info["teile"])
-    if formel is None:
+    info = metaklassen(wd_match["qid"])
+    if not info["legierung"] or MINERALART_QID in info["p31"]:
         return []
 
-    teile = ", ".join(hill_reihenfolge(info["teile"]))
-    hinweis = ("" if MITTELPUNKT not in formel else
-               f" - Mischungsverhaeltnis unbestimmt, deshalb mit "
-               f"Mittelpunkt ({MITTELPUNKT}) statt mit Ziffern")
-    vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
-    return [make_row(
-        "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
-        "P527", wd_match, prop_info, formel, formel,
-        Reference(
-            url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P527",
-            note=f"aus 'besteht aus' (P527 am Item): {teile}; "
-                 f"Hill-Reihenfolge{hinweis}",
-        ),
-        formula=formel, entry_id="p527-formel", ohne_beleg=True,
-    )]
+    def zeile(status, wert, wert_label, notiz):
+        return make_row(
+            status, "Metaklasse", wd_match, prop_info, wert, wert_label,
+            Reference(url=GUIDELINE_URL, note=notiz),
+            entry_id="metaklasse", qualifiers=[], ohne_beleg=True,
+        )
+
+    vorhanden = [k for k in info["p31"] if k in CHEMIE_METAKLASSEN]
+    if GEMISCH_METAKLASSE in vorhanden:
+        return [zeile("BEREITS_VORHANDEN", GEMISCH_METAKLASSE,
+                      CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE],
+                      "Metaklasse steht bereits am Item")]
+    if vorhanden:
+        namen = ", ".join(f"{k} ({CHEMIE_METAKLASSEN[k]})" for k in vorhanden)
+        return [zeile(
+            f"MANUELLE_KLAERUNG_NOETIG (Item traegt bereits die Metaklasse "
+            f"{namen}; fuer ein Gemisch ist {GEMISCH_METAKLASSE} vorgesehen, "
+            f"und die Guideline laesst nur EINE zu - die bestehende muesste "
+            f"also weichen)",
+            "", namen, f"abweichende Chemie-Metaklasse am Item: {namen}")]
+
+    if info["p31"] and not auch_mit_p31:
+        return []   # traegt schon eine Einordnung - siehe Docstring
+
+    return [zeile(
+        "VORSCHLAG", GEMISCH_METAKLASSE,
+        CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE],
+        "Legierung, also ein Gemisch (Q37756) - Metaklasse nach "
+        "WikiProject Chemistry, Basic metaclasses and relations")]
 
 
 # ---------------------------------------------------------------------------
@@ -4322,7 +4338,8 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
             charge, args.wikipedia, args.cod,
             args.experimentell, args.stabil, args.max,
             nummer_ab=erstes, gesamt=gesamt, formel=args.formel,
-            legierungsformel_an=args.legierungsformel,
+            metaklasse_an=args.metaklasse,
+            metaklasse_auch_mit_p31=args.metaklasse_auch_mit_p31,
             punktgruppe_an=args.punktgruppe,
         )
         try:
@@ -4382,8 +4399,8 @@ def main():
         "'minerale' ist mit Abstand die ergiebigste (6301 Arten, 5694 mit "
         "Summenformel, KEINE EINZIGE mit COD-ID); 'oxide' umfasst die 154 "
         "Oxide mit Summenformel; bei 'legierungen' laufen COD und MP mangels "
-        "Formel weitgehend leer (nur 10 von 568 tragen eine), dafuer baut die "
-        "Stufe --legierungsformel dort die Formel aus den Bestandteilen",
+        "Formel weitgehend leer (nur 10 von 568 tragen eine), dafuer setzt "
+        "die Stufe --metaklasse dort die fehlende Metaklasse",
     )
     parser.add_argument(
         "--limit", type=int, default=None,
@@ -4460,15 +4477,25 @@ def main():
         "sondern zur Klaerung ausgewiesen. Default: an",
     )
     parser.add_argument(
-        "--legierungsformel",
+        "--metaklasse",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="der umgekehrte Weg fuer Items OHNE Summenformel: aus 'besteht "
-        "aus' (P527) eine chemische Formel (P274) bauen, in Hill-Reihenfolge "
-        "und - weil das Mischungsverhaeltnis einer Legierung unbestimmt ist - "
-        "mit Mittelpunkt verbunden ('Cu·Sn', 'C·Fe'). Nur fuer Items, die "
-        "wirklich als Legierung eingeordnet sind und deren Bestandteile "
-        "samt und sonders chemische Elemente sind. Default: an",
+        help="Legierungen die chemische Metaklasse (P31 = Q119892838, "
+        "'definiertes Gemisch chemischer Substanzen') geben, wo noch keine "
+        "steht - so verlangt es [[Wikidata:WikiProject Chemistry/Guidelines/"
+        "Basic metaclasses and relations]] fuer Gemische. Nur fuer Items, die "
+        "wirklich als Legierung eingeordnet sind; Mineralarten bleiben "
+        "aussen vor, und eine bereits vorhandene ANDERE Chemie-Metaklasse "
+        "wird zur Klaerung ausgewiesen statt ergaenzt. Default: an",
+    )
+    parser.add_argument(
+        "--metaklasse-auch-mit-p31",
+        action="store_true",
+        help="die Metaklasse auch dort vorschlagen, wo das Item schon ein "
+        "P31 traegt (dann steht sie als ZWEITE P31-Aussage daneben). Die "
+        "Guideline verlangt sie auch dort, es sind aber 565 statt 314 Items, "
+        "und in dieser Menge sitzen die Faelle, die gar keine Werkstoffe sind "
+        "(Stahlrohr, Markenzeichen). Default: aus",
     )
     parser.add_argument(
         "--punktgruppe",
@@ -4512,7 +4539,8 @@ def main():
         proposals = build_group_proposals(
             args.group, args.limit, args.wikipedia, args.cod,
             args.experimentell, args.stabil, args.max, formel=args.formel,
-            legierungsformel_an=args.legierungsformel,
+            metaklasse_an=args.metaklasse,
+            metaklasse_auch_mit_p31=args.metaklasse_auch_mit_p31,
             punktgruppe_an=args.punktgruppe,
         )
     elif args.periodic_table:

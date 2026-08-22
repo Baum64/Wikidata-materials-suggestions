@@ -54,6 +54,10 @@ benchmark_*.log
 # das Muster quickstatements*.txt weiter oben)
 p279_befunde*.csv
 
+# Anwendung/Anwendung.py (--csv; der Entwurf faellt schon unter
+# das Muster quickstatements*.txt weiter oben)
+anwendungen_befunde*.csv
+
 # Kategorie Hirachie/material_hierarchy_check.py (CSV + Graphen)
 werkstoff_check.csv
 werkstoff_graph.png
