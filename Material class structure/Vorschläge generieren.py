@@ -46,41 +46,46 @@ Zeilen beginnen mit '#'. Die Datei laesst sich dadurch jederzeit als GANZES
 nach QuickStatements kopieren, ohne dass eine ungepruefte Zeile zur Aussage
 wird - und im Editor findet "#!" genau die Entwuerfe.
 
-Die zehn Pruefungen
--------------------
+Die elf Pruefungen
+------------------
   1. kennzahlen        Wie wird P279 in der Grundgesamtheit ueberhaupt
                        benutzt: P279, P31, beides, keines; Mehrfacheltern;
                        Tiefe.
   2. redundant         Item hat P279 auf A UND auf B, wobei A ueber P279
                        ohnehin bei B landet -> ENTFERNEN.        [Stufe 1]
                        Aber nur, wenn der Ersatzpfad selbst haelt: laeuft er
-                       ueber eine Kante aus Pruefung 4, wird der Befund zu
+                       ueber eine Kante aus Pruefung 5, wird der Befund zu
                        'redundant-unsicher'.                     [Stufe 2]
   3. instanz-als-klasse  Item hat P31 auf eine Werkstoffklasse, ist aber
                        selbst Oberklasse von etwas.              [Stufe 2]
-  4. verkehrt          Kante n -> p, obwohl unter n mehr haengt als unter p
+  4. metaklasse        Legierung ohne chemische Metaklasse: die Guideline
+                       des WikiProject Chemistry verlangt an jedem Item einer
+                       chemischen Entitaet genau EINE, fuer Gemische
+                       Q119892838. Aus der Klassenzugehoerigkeit, nicht aus
+                       dem Namen.                                [Stufe 2]
+  5. verkehrt          Kante n -> p, obwohl unter n mehr haengt als unter p
                        ohne n - der Metall/Legierung-Fall, generisch
                        gefasst. Siehe verkehrt_kandidaten().     [Stufe 2]
-  5. zyklus            Eine Klasse ist ueber P279 ihre eigene Oberklasse.
+  6. zyklus            Eine Klasse ist ueber P279 ihre eigene Oberklasse.
                        Immer ein Fehler, nie automatisch aufloesbar. [Stufe 2]
-  6. zusammensetzung   Der Name nennt die Zusammensetzung ("Nickel brass
+  7. zusammensetzung   Der Name nennt die Zusammensetzung ("Nickel brass
                        (70% Copper, 18% Zinc, 12% Nickel)"). Das Element mit
                        dem groessten Anteil IST das Basismetall, damit steht
                        die Legierungsklasse fest - hier Kupferlegierung.
                        Diese Auswertung raet nicht, sie rechnet.  [Stufe 3]
-  7. zu-allgemein      Item haengt direkt unter einer sehr allgemeinen
+  8. zu-allgemein      Item haengt direkt unter einer sehr allgemeinen
                        Klasse, obwohl seine Bezeichnung eine speziellere
                        nennt. Aus material_subclass_check.py uebernommen,
                        mit drei Filtern, ohne die es nicht traegt - siehe
                        den Block bei ALLGEMEINE_WURZELN.         [Stufe 3]
-  8. ohne-einordnung   Benannte Legierung ohne jeden Pfad zu "Legierung".
+  9. ohne-einordnung   Benannte Legierung ohne jeden Pfad zu "Legierung".
                        Wo es fuer das Basismetall eine Klasse GIBT, wird sie
                        vorgeschlagen.                            [Stufe 3]
-  9. p31-neben-p279    Item haengt direkt unter einer allgemeinen Klasse und
+ 10. p31-neben-p279    Item haengt direkt unter einer allgemeinen Klasse und
                        hat zusaetzlich P31. Nur Meldung - siehe
                        pruefe_p31_neben_p279() dazu, warum kein Entwurf
                        daraus wird.                              [Stufe 4]
- 10. parallelzweig     Item ohne P279*-Pfad zu "material" (Q214609). Kein
+ 11. parallelzweig     Item ohne P279*-Pfad zu "material" (Q214609). Kein
                        Fehler (P186 erlaubt mehrere gleichrangige Werttypen,
                        siehe visualisierung.py daneben).        [Stufe 4]
 
@@ -116,6 +121,7 @@ Aufruf
   python "Material class structure/Vorschläge generieren.py"
   python "Material class structure/Vorschläge generieren.py" --population legierungen
   python "Material class structure/Vorschläge generieren.py" --pruefungen redundant verkehrt
+  python "Material class structure/Vorschläge generieren.py" --pruefungen metaklasse
   python "Material class structure/Vorschläge generieren.py" --tiefe 3 --beleg beides
   python "Material class structure/Vorschläge generieren.py" --vorsichtig   # nichts einspielbar
 """
@@ -185,8 +191,62 @@ POPULATIONEN = {
 }
 
 PRUEFUNGEN = ["kennzahlen", "zyklus", "redundant", "verkehrt",
-              "instanz-als-klasse", "zusammensetzung", "zu-allgemein",
-              "ohne-einordnung", "p31-neben-p279", "parallelzweig"]
+              "instanz-als-klasse", "metaklasse", "zusammensetzung",
+              "zu-allgemein", "ohne-einordnung", "p31-neben-p279",
+              "parallelzweig"]
+
+# ---------------------------------------------------------------------------
+# Chemische Metaklasse (P31) fuer Legierungen
+# ---------------------------------------------------------------------------
+#
+# [[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]]
+# verlangt an JEDEM Item einer chemischen Entitaet genau EINE Metaklasse ueber
+# P31 - und fuer Gemische ausdruecklich eine eigene, nicht die der reinen
+# Stoffe. Eine Legierung ist per Definition ein Gemisch (Q37756: "mixture or
+# metallic solid solution"), die Metaklasse ist damit eindeutig bestimmt und
+# muss nicht geraten werden.
+#
+# Diese Pruefung stand bis 2026-08-23 in materialswiki (Stufe --metaklasse)
+# und gehoert hierher: sie folgt aus der KLASSENZUGEHOERIGKEIT des Items,
+# nicht aus einer Messung. Dieses Skript hat den P279-Graphen ohnehin schon
+# im Speicher - dort kostet die Pruefung keine einzige zusaetzliche Abfrage,
+# waehrend materialswiki sie sich mit einer eigenen SPARQL-Runde je Charge
+# erkaufen musste. Zahlen und Abgrenzung: README, "Chemische Metaklasse
+# (P31) fuer Legierungen".
+
+# Die Metaklasse fuer Gemische. Q119896085 ("Art von Polymer") ist ihre
+# einzige Unterklasse in der Guideline und fuer Legierungen nicht gemeint.
+GEMISCH_METAKLASSE = "Q119892838"   # "definiertes Gemisch chemischer Substanzen"
+
+# Alle Chemie-Metaklassen der Guideline. Traegt ein Item schon eine davon,
+# wird KEINE zweite vorgeschlagen: "Every item should have only one metaclass
+# from the above. No other chemistry-related metaclass should be present."
+CHEMIE_METAKLASSEN = {
+    "Q113145171": "definierte chemische Substanz",
+    GEMISCH_METAKLASSE: "definiertes Gemisch chemischer Substanzen",
+    "Q119896085": "Art von Polymer",
+    "Q47154513": "offene Klasse (Struktur)",
+    "Q56256173": "offene Klasse (Funktion)",
+    "Q56256178": "offene Klasse (Herkunft)",
+    "Q55640599": "geschlossene Klasse",
+    "Q15711994": "geschlossene Klasse (Summenformel)",
+    "Q59199015": "geschlossene Klasse (Stereoisomere)",
+    "Q55662456": "geschlossene Klasse (ortho/meta/para)",
+    "Q74892521": "unpraezise Klasse chemischer Substanzen",
+}
+
+# Mineralarten bleiben aussen vor: sie sind ueber die IMA modelliert
+# (P31 = Q12089225), und ob ein Mineral zusaetzlich eine Chemie-Metaklasse
+# tragen soll, ist eine Frage an das Mineralprojekt, nicht an dieses Werkzeug.
+MINERALART_QID = "Q12089225"
+
+# Wikidata fuehrt Q11426 "Metall" als Unterklasse von Q37756 "Legierung" -
+# dieselbe schiefe Kante, an der sich die Pruefung 'verkehrt' abarbeitet.
+# Ueber diesen Knoten haengt alles Metallische unter der Legierung, auch
+# Sammelbegriffe wie "Platinmetalle" oder "metals of antiquity", die gar
+# keine Werkstoffe sind, sondern Aufzaehlungen. Ihnen die Gemisch-Metaklasse
+# zu geben waere schlicht falsch - siehe legierungs_items.
+METALL_QID = "Q11426"
 
 # ---------------------------------------------------------------------------
 # Label-Heuristik: haengt ein Item zu allgemein?
@@ -1237,6 +1297,115 @@ def pruefe_instanz_als_klasse(p31_kanten: list, kinder: dict, im_baum: set,
     return treffer
 
 
+def legierungs_items(graph, qids: list, p31_kanten: list) -> set:
+    """Welche der Items sind Legierungen - ohne den Umweg ueber "Metall"?
+
+    Gefragt ist nicht bloss, ob das Item irgendwie unter Q37756 haengt: das
+    tut wegen Q11426 (siehe METALL_QID) jeder Sammelbegriff fuer Metalle. Der
+    Knoten wird deshalb aus dem Graphen genommen und der Rest des
+    Klassenwegs darauf durchlaufen. Ein simples "hat gar keinen Metall-Weg"
+    reicht nicht: Stahl hat einen, kommt aber ausserdem ueber Ferrolegierung
+    an die Legierung heran und ist selbstverstaendlich eine.
+
+    P31 zaehlt als erster Schritt mit ("X ist ein/e Aluminiumlegierung") -
+    genauso wie bei `eingeordnet` in main().
+    """
+    if LEGIERUNG_QID not in graph:
+        return set()
+    ohne_metall = graph.copy()
+    if METALL_QID in ohne_metall:
+        ohne_metall.remove_node(METALL_QID)
+    erreichbar = nx.ancestors(ohne_metall, LEGIERUNG_QID)
+    menge = set(qids)
+    treffer = {q for q in menge if q in erreichbar}
+    treffer |= {i for i, k in p31_kanten
+                if i in menge and (k in erreichbar or k == LEGIERUNG_QID)}
+    # Q11426 selbst haengt NUR ueber die defekte Kante unter der Legierung.
+    # Ohne diesen Sonderfall bekaeme ausgerechnet es die Gemisch-Metaklasse.
+    return treffer - {METALL_QID, LEGIERUNG_QID}
+
+
+def pruefe_metaklasse(items: dict, legierungen: set, p31_kanten: list,
+                      labels: dict, auch_mit_p31: bool = False) -> list:
+    """P31-Vorschlag: die Gemisch-Metaklasse fuer eine Legierung.
+
+    Vorgeschlagen wird NUR die Metaklasse, nie eine inhaltliche Einordnung
+    ("Kupferlegierung", "Werkzeugstahl") - die ist eine fachliche
+    Entscheidung und faellt in die Pruefungen 'ohne-einordnung' und
+    'zusammensetzung'.
+
+    Standardmaessig nur an Items, die GAR KEIN P31 tragen. Wo schon eines
+    steht, ist es in aller Regel eine richtige Klassenzugehoerigkeit
+    ("P31 = Legierung"), und die Metaklasse waere eine ZWEITE P31-Aussage
+    daneben - fuer die spricht die Guideline, aber es ist eine
+    Massenaenderung, und genau dort sitzt auch der Schrott (Stahlrohr,
+    Markenzeichen). Mit --metaklasse-auch-mit-p31 kommen sie dazu; die Zahlen
+    stehen im README.
+
+    Traegt das Item bereits eine ANDERE Chemie-Metaklasse, wird nichts
+    entworfen, sondern gemeldet: die Guideline laesst nur eine zu, und die
+    falsche zu entfernen ist nichts, was dieses Werkzeug nebenbei tut.
+    """
+    p31 = {}
+    for item, klasse in p31_kanten:
+        p31.setdefault(item, []).append(klasse)
+
+    treffer, schon_da, ausgelassen = [], 0, 0
+    for qid in sorted(items):
+        if qid not in legierungen:
+            continue
+        werte = p31.get(qid, [])
+        if MINERALART_QID in werte:
+            continue
+        name = labels.get(qid, items[qid].get("label", qid))
+
+        vorhanden = [k for k in werte if k in CHEMIE_METAKLASSEN]
+        if GEMISCH_METAKLASSE in vorhanden:
+            schon_da += 1
+            continue
+        if vorhanden:
+            namen = ", ".join(f"{k} ({CHEMIE_METAKLASSEN[k]})"
+                              for k in vorhanden)
+            treffer.append(befund(
+                "metaklasse-konflikt", qid, name, "",
+                f"traegt bereits die Chemie-Metaklasse {namen}. Fuer ein "
+                f"Gemisch ist {GEMISCH_METAKLASSE} "
+                f"({CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE]}) vorgesehen, und "
+                f"die Guideline laesst nur EINE zu - die bestehende muesste "
+                f"also weichen.",
+                "Von Hand entscheiden. Entfernt wird hier nichts: die "
+                "bestehende Metaklasse kann auch heissen, dass das Item gar "
+                "keine Legierung ist."))
+            continue
+        if werte and not auch_mit_p31:
+            ausgelassen += 1
+            continue
+
+        treffer.append(befund(
+            "metaklasse", qid, name,
+            f"{qid}\tP31\t{GEMISCH_METAKLASSE}",
+            f"ist ueber P279/P31 als Legierung eingeordnet (Q37756, "
+            f"'mixture or metallic solid solution'), traegt aber keine "
+            f"Chemie-Metaklasse. Fuer Gemische verlangt die Guideline "
+            f"{GEMISCH_METAKLASSE} "
+            f"({CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE]})."
+            + (f" Achtung: das Item traegt bereits P31 auf "
+               f"{', '.join(werte)} - die Metaklasse kaeme als ZWEITE "
+               f"P31-Aussage daneben." if werte else ""),
+            "Ist das Item wirklich ein Werkstoff? In dieser Menge stecken "
+            "Rohre, Markenzeichen und Sammelbegriffe, die nur ueber die "
+            "schiefe Metall-Kante hier landen.",
+            ziel_qid=GEMISCH_METAKLASSE,
+            ziel_label=CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE]))
+
+    if schon_da or ausgelassen:
+        print(f"  Metaklasse: {schon_da} Items tragen sie bereits"
+              + (f", {ausgelassen} mit bestehendem P31 ausgelassen "
+                 f"(--metaklasse-auch-mit-p31 nimmt sie dazu)"
+                 if ausgelassen else ""), file=sys.stderr)
+    return treffer
+
+
 def pruefe_ohne_einordnung(items: dict, eingeordnet: set, labels: dict) -> list:
     """Benannte Legierung ohne jeden Pfad zu "Legierung" (Q37756).
 
@@ -1366,7 +1535,8 @@ STUFEN = [
       "Nichts geht verloren, alles ist umkehrbar.",
       "",
       "ZU PRUEFEN: Stimmt der angegebene Ersatzpfad? Ein Blick aufs Item."]),
-    (2, "STRUKTURELL BEGRUENDET", ["instanz-als-klasse", "verkehrt",
+    (2, "STRUKTURELL BEGRUENDET", ["instanz-als-klasse", "metaklasse",
+                                   "metaklasse-konflikt", "verkehrt",
                                    "redundant-unsicher", "zyklus"], False,
      ["Aus dem Graphen abgeleitet, aber mit einer fachlichen Entscheidung",
       "davor. Der Graph sagt, DASS etwas nicht stimmt - nicht, wie herum",
@@ -1398,6 +1568,12 @@ ART_TITEL = {
     "redundant": ("Doppelte Kante", "gilt ueber einen anderen Elter ohnehin"),
     "instanz-als-klasse": ("P31 statt P279",
                            "das Item hat selbst Unterklassen"),
+    "metaklasse": ("Chemische Metaklasse fehlt",
+                   "Legierung ohne P31-Metaklasse - die Guideline verlangt "
+                   "fuer Gemische Q119892838"),
+    "metaklasse-konflikt": ("Falsche Chemie-Metaklasse",
+                            "nur Meldung: die Guideline laesst nur EINE zu, "
+                            "die bestehende muesste weichen"),
     "verkehrt": ("Kante verkehrt herum",
                  "die weitere Klasse haengt unter der engeren"),
     "redundant-unsicher": ("Doppelt, aber Ersatzpfad wackelt",
@@ -1688,6 +1864,15 @@ def main(argv: Optional[list] = None) -> int:
                              f"Kandidatenpool geholt wird (Default "
                              f"{DEFAULT_TIEFE}). Ebene 3 findet mehr, dauert "
                              "aber deutlich laenger und raet oefter daneben.")
+    parser.add_argument("--metaklasse-auch-mit-p31", action="store_true",
+                        help="Pruefung 'metaklasse': die Metaklasse auch "
+                             "dort entwerfen, wo das Item schon ein P31 "
+                             "traegt (dann steht sie als ZWEITE P31-Aussage "
+                             "daneben). Die Guideline verlangt sie auch dort, "
+                             "es sind aber rund doppelt so viele Items, und "
+                             "in dieser Menge sitzen die Faelle, die gar "
+                             "keine Werkstoffe sind (Stahlrohr, "
+                             "Markenzeichen). Default: aus")
     parser.add_argument("--beleg", choices=["name", "beides"], default="name",
                         help="Pruefung 'zu-allgemein': ob nur die Bezeichnung "
                              "als Beleg zaehlt (Default) oder auch die "
@@ -1750,7 +1935,7 @@ def main(argv: Optional[list] = None) -> int:
     im_bereich = unter_material | unter_legierung | set(qids)
 
     braucht_p31 = {"instanz-als-klasse", "kennzahlen", "ohne-einordnung",
-                   "p31-neben-p279"}
+                   "p31-neben-p279", "metaklasse"}
     p31_kanten = (hole_p31_kanten(sorted(set(qids) | set(direkt_allgemein)))
                   if braucht_p31 & set(args.pruefungen) else [])
     # Ueber P31 eingeordnet zaehlt genauso: "X ist ein/e Legierung".
@@ -1813,6 +1998,11 @@ def main(argv: Optional[list] = None) -> int:
         befunde += pruefe_instanz_als_klasse(p31_kanten, kinder,
                                              unter_material | unter_legierung,
                                              labels)
+    if "metaklasse" in args.pruefungen:
+        # Kostet keine Abfrage: der Graph und die P31-Kanten stehen schon.
+        befunde += pruefe_metaklasse(
+            items, legierungs_items(graph, qids, p31_kanten), p31_kanten,
+            labels, args.metaklasse_auch_mit_p31)
     if "ohne-einordnung" in args.pruefungen:
         if POPULATIONEN[args.population]["pattern"] is None:
             treffer, luecken = pruefe_ohne_einordnung(items, eingeordnet, labels)

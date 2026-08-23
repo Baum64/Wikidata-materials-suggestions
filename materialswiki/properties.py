@@ -360,16 +360,6 @@ PROPERTY_MAP = {
         "unit_qid": "Q20966455",  # Joule pro Molkelvin, J/(mol*K)
         "label": "molare Standardentropie",
     },
-    # Chemische Metaklasse. P31 steht hier AUSSCHLIESSLICH fuer die
-    # Metaklasse nach WikiProject Chemistry, nie fuer eine inhaltliche
-    # Einordnung wie "Kupferlegierung" - siehe Abschnitt "Chemische
-    # Metaklasse (P31) fuer Legierungen".
-    "metaklasse": {
-        "pid": "P31",
-        "datatype": "item",
-        "unit_qid": "",
-        "label": "ist ein(e)",
-    },
 }
 
 

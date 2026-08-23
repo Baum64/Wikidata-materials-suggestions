@@ -1,21 +1,26 @@
 """Ableitungen aus dem Item selbst - ohne jede externe Quelle.
 
-Vier Stufen, die nichts holen, sondern nur umformen, was am Item schon
+Drei Stufen, die nichts holen, sondern nur umformen, was am Item schon
 steht:
 
     formel_proposals_for_item      Summenformel  -> P2670 je Element
     umstellung_proposals_for_item  P527 -> P2670 (samt Loeschzeile)
-    metaklasse_proposals_for_item  Legierung     -> P31 Gemisch-Metaklasse
     punktgruppe_proposals_for_item Raumgruppe    -> P589
 
-Alle vier gehen deshalb OHNE S-Beleg raus: es gibt keine externe Quelle zu
+Die chemische Metaklasse (P31) fuer Legierungen stand hier bis 2026-08-23
+daneben. Sie folgt nicht aus einer Quelle, sondern aus der
+Klassenzugehoerigkeit, und ist deshalb in "Material class structure/
+Vorschläge generieren.py" gewandert (Pruefung 'metaklasse') - dort liegt der
+P279-Graph ohnehin im Speicher. Die Klassenlage (metaklassen()) bleibt hier:
+die Formel-Stufe braucht sie, um Stoffe von Aufzaehlungen zu trennen.
+
+Alle drei gehen OHNE S-Beleg raus: es gibt keine externe Quelle zu
 zitieren, und die Herkunft steht in der Notiz. Begruendungen je Stufe im
 README.
 """
 
 import collections
 import re
-import sys
 from typing import Optional
 
 import requests
@@ -274,22 +279,20 @@ def umstellung_proposals_for_item(wd_match: dict, formel: str = "",
 
 
 # ---------------------------------------------------------------------------
-# Chemische Metaklasse (P31) fuer Legierungen
+# Klassenlage: ist das Item eine Legierung, und welche P31 traegt es?
 # ---------------------------------------------------------------------------
 #
-# [[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]]
-# verlangt an JEDEM Item einer chemischen Entitaet genau EINE Metaklasse ueber
-# P31 - und fuer Gemische ausdruecklich eine eigene, nicht die der reinen
-# Stoffe. Eine Legierung ist per Definition ein Gemisch (Q37756: "mixture or
-# metallic solid solution"), die Metaklasse ist damit eindeutig bestimmt und
-# muss nicht geraten werden. Zahlen, Abgrenzung und die Faelle, die bewusst
-# offenbleiben: README, "Chemische Metaklasse (P31) fuer Legierungen".
+# Kein eigener Vorschlag mehr, sondern Vorarbeit fuer die Formel-Stufe: ein
+# Item ohne Summenformel gilt nur dann als Stoff, wenn es eine Legierung ist
+# (siehe umstellung_proposals_for_item). Die Metaklasse selbst wird hier
+# nicht mehr vorgeschlagen - das tut "Material class structure/Vorschläge
+# generieren.py", Pruefung 'metaklasse'.
 
 # Wikidata fuehrt Q11426 "Metall" als Unterklasse von Q37756 "Legierung".
 # Ueber diesen Knoten haengt alles Metallische unter der Legierung - auch
 # Sammelbegriffe wie "Platinmetalle" oder "metals of antiquity", die gar keine
-# Werkstoffe sind, sondern Aufzaehlungen. Ihnen die Gemisch-Metaklasse zu
-# geben waere schlicht falsch. Der Knoten wird deshalb beim Pruefen der
+# Werkstoffe sind, sondern Aufzaehlungen. Sie als Legierung zu behandeln waere
+# schlicht falsch. Der Knoten wird deshalb beim Pruefen der
 # Klassenzugehoerigkeit ausgespart, siehe legierungs_qids.
 METALL_QID = "Q11426"
 
@@ -330,7 +333,7 @@ def legierungs_qids(qids: list) -> set:
         if qid == METALL_QID:
             # Der Ausgangsknoten selbst: "Metalle" haengt nur ueber die
             # defekte Kante unter der Legierung. Ohne diesen Sonderfall
-            # bekaeme ausgerechnet Q11426 die Gemisch-Metaklasse.
+            # gaelte ausgerechnet Q11426 als Legierung.
             continue
         gesehen, offen = set(), list(kanten.get(qid, ()))
         while offen:
@@ -343,33 +346,6 @@ def legierungs_qids(qids: list) -> set:
             gesehen.add(knoten)
             offen.extend(kanten.get(knoten, ()))
     return gefunden
-
-
-# Die Metaklasse fuer Gemische. Q119896085 ("Art von Polymer") ist ihre
-# einzige Unterklasse in der Guideline und fuer Legierungen nicht gemeint.
-GEMISCH_METAKLASSE = "Q119892838"   # "definiertes Gemisch chemischer Substanzen"
-
-# Alle Chemie-Metaklassen der Guideline. Traegt ein Item schon eine davon,
-# wird KEINE zweite vorgeschlagen: "Every item should have only one metaclass
-# from the above. No other chemistry-related metaclass should be present."
-CHEMIE_METAKLASSEN = {
-    "Q113145171": "definierte chemische Substanz",
-    GEMISCH_METAKLASSE: "definiertes Gemisch chemischer Substanzen",
-    "Q119896085": "Art von Polymer",
-    "Q47154513": "offene Klasse (Struktur)",
-    "Q56256173": "offene Klasse (Funktion)",
-    "Q56256178": "offene Klasse (Herkunft)",
-    "Q55640599": "geschlossene Klasse",
-    "Q15711994": "geschlossene Klasse (Summenformel)",
-    "Q59199015": "geschlossene Klasse (Stereoisomere)",
-    "Q55662456": "geschlossene Klasse (ortho/meta/para)",
-    "Q74892521": "unpraezise Klasse chemischer Substanzen",
-}
-
-# Mineralarten bleiben aussen vor: sie sind ueber die IMA modelliert
-# (P31 = Q12089225), und ob ein Mineral zusaetzlich eine Chemie-Metaklasse
-# tragen soll, ist eine Frage an das Mineralprojekt, nicht an dieses Werkzeug.
-MINERALART_QID = "Q12089225"
 
 
 def fetch_metaklassen(qids: list) -> dict:
@@ -416,94 +392,6 @@ def metaklassen(qid: str) -> dict:
     if qid not in _METAKLASSE_CACHE:
         _METAKLASSE_CACHE.update(fetch_metaklassen([qid]))
     return _METAKLASSE_CACHE.get(qid, {"p31": [], "legierung": False})
-
-
-GUIDELINE_URL = ("https://www.wikidata.org/wiki/Wikidata:WikiProject_Chemistry/"
-                 "Guidelines/Basic_metaclasses_and_relations")
-
-
-def melde_metaklassen_luecke(items: list, auch_mit_p31: bool) -> None:
-    """Zaehlt auf stderr, was der Standardumfang bewusst auslaesst.
-
-    Sonst sieht niemand, dass die Guideline auch an diesen Items eine
-    Metaklasse verlangt - sie faenden sich einfach nicht in der CSV wieder.
-    """
-    if auch_mit_p31:
-        return
-    offen = [
-        e for e in items
-        if metaklassen(e["qid"])["legierung"]
-        and MINERALART_QID not in metaklassen(e["qid"])["p31"]
-        and metaklassen(e["qid"])["p31"]
-        and not [k for k in metaklassen(e["qid"])["p31"]
-                 if k in CHEMIE_METAKLASSEN]
-    ]
-    if offen:
-        print(f"  {len(offen)} Legierungen tragen ein P31, aber keine "
-              f"Chemie-Metaklasse - hier wird nichts vorgeschlagen "
-              f"(--metaklasse-auch-mit-p31 nimmt sie dazu).", file=sys.stderr)
-
-
-def metaklasse_proposals_for_item(wd_match: dict,
-                                  skip_pids: Optional[set] = None,
-                                  auch_mit_p31: bool = False) -> list:
-    """P31-Vorschlag: die Gemisch-Metaklasse fuer eine Legierung.
-
-    Vorgeschlagen wird NUR die Metaklasse, nie eine inhaltliche Einordnung
-    ("Kupferlegierung", "Werkzeugstahl") - die ist eine fachliche
-    Entscheidung, siehe pruefe_legierungsklasse.
-
-    Standardmaessig nur an Items, die GAR KEIN P31 tragen. Wo schon eines
-    steht, ist es in aller Regel eine richtige Klassenzugehoerigkeit
-    ("P31 = Legierung"), und die Metaklasse waere eine ZWEITE P31-Aussage
-    daneben - fuer die spricht die Guideline, aber es ist eine Massenaenderung
-    an 565 Items, und genau dort sitzt auch der Schrott (Stahlrohr,
-    Markenzeichen). Mit auch_mit_p31=True kommen sie dazu; die Zahlen stehen
-    im README.
-
-    Traegt das Item bereits eine ANDERE Chemie-Metaklasse, wird nichts
-    vorgeschlagen, sondern zur Klaerung ausgewiesen: die Guideline laesst nur
-    eine zu, und die falsche zu entfernen ist nichts, was dieses Werkzeug
-    nebenbei tut.
-    """
-    skip_pids = skip_pids or set()
-    prop_info = PROPERTY_MAP["metaklasse"]
-    if prop_info["pid"] in skip_pids:
-        return []
-
-    info = metaklassen(wd_match["qid"])
-    if not info["legierung"] or MINERALART_QID in info["p31"]:
-        return []
-
-    def zeile(status, wert, wert_label, notiz):
-        return make_row(
-            status, "Metaklasse", wd_match, prop_info, wert, wert_label,
-            Reference(url=GUIDELINE_URL, note=notiz),
-            entry_id="metaklasse", qualifiers=[], ohne_beleg=True,
-        )
-
-    vorhanden = [k for k in info["p31"] if k in CHEMIE_METAKLASSEN]
-    if GEMISCH_METAKLASSE in vorhanden:
-        return [zeile("BEREITS_VORHANDEN", GEMISCH_METAKLASSE,
-                      CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE],
-                      "Metaklasse steht bereits am Item")]
-    if vorhanden:
-        namen = ", ".join(f"{k} ({CHEMIE_METAKLASSEN[k]})" for k in vorhanden)
-        return [zeile(
-            f"MANUELLE_KLAERUNG_NOETIG (Item traegt bereits die Metaklasse "
-            f"{namen}; fuer ein Gemisch ist {GEMISCH_METAKLASSE} vorgesehen, "
-            f"und die Guideline laesst nur EINE zu - die bestehende muesste "
-            f"also weichen)",
-            "", namen, f"abweichende Chemie-Metaklasse am Item: {namen}")]
-
-    if info["p31"] and not auch_mit_p31:
-        return []   # traegt schon eine Einordnung - siehe Docstring
-
-    return [zeile(
-        "VORSCHLAG", GEMISCH_METAKLASSE,
-        CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE],
-        "Legierung, also ein Gemisch (Q37756) - Metaklasse nach "
-        "WikiProject Chemistry, Basic metaclasses and relations")]
 
 
 # ---------------------------------------------------------------------------

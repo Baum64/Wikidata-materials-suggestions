@@ -12,16 +12,21 @@ Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
     Formel  ->  COD  ->  Materials Project  ->  NIST WebBook
             ->  de.wikipedia  ->  en.wikipedia
 
-Zwei weitere Aussagen entstehen aus dem Item selbst: die chemische
-Metaklasse (P31) fuer Legierungen und die Punktgruppe (P589) aus einer
-Raumgruppe (P690) am Item. Bestehende Aussagen "Stoff P527 Element" werden
-auf P2670 umgestellt - die einzige Stufe, die auch Loeschzeilen erzeugt.
+Eine weitere Aussage entsteht aus dem Item selbst: die Punktgruppe (P589)
+aus einer Raumgruppe (P690) am Item. Bestehende Aussagen "Stoff P527 Element"
+werden auf P2670 umgestellt - die einzige Stufe, die auch Loeschzeilen
+erzeugt.
 
-Abschaltbar mit --no-formel, --no-metaklasse, --no-punktgruppe,
---no-cod, --no-nist, --no-wikipedia.
+Die chemische Metaklasse (P31) fuer Legierungen war bis 2026-08-23 eine
+Stufe dieses Werkzeugs. Sie folgt aus der Klassenzugehoerigkeit, nicht aus
+einer Quelle, und steht jetzt in "Material class structure/Vorschläge
+generieren.py" (Pruefung 'metaklasse').
+
+Abschaltbar mit --no-formel, --no-punktgruppe, --no-cod, --no-nist,
+--no-wikipedia.
 
     python -m materialswiki --elements Ti O --max 50
-    python -m materialswiki --group minerale --batch-size 150 --weiter
+    python -m materialswiki --group minerale --batch-size 500 --weiter
 
 BEGRUENDUNGEN STEHEN IM README, NICHT HIER.
 --------------------------------------------
@@ -160,22 +165,24 @@ from .gruppen import (  # noqa: E402,F401
     pruefe_legierungsklasse,
 )
 from .ableitungen import (  # noqa: E402,F401
-    CHEMIE_METAKLASSEN, GEMISCH_METAKLASSE, GUIDELINE_URL, METALL_QID,
-    MINERALART_QID, legierungs_qids,
-    fetch_metaklassen,
-    fetch_p527_elemente, formel_proposals_for_item, melde_metaklassen_luecke,
-    metaklasse_proposals_for_item, metaklassen, metaklassen_vorladen,
+    METALL_QID, legierungs_qids, fetch_metaklassen,
+    fetch_p527_elemente, formel_proposals_for_item,
+    metaklassen, metaklassen_vorladen,
     p527_elemente, p527_vorladen, punktgruppe_proposals_for_item,
     umstellung_proposals_for_item,
 )
 # ---------------------------------------------------------------------------
-# Bewusst NICHT umgesetzt: die chemische Metaklasse (P31)
+# Bewusst NICHT umgesetzt: P31
 # ---------------------------------------------------------------------------
 #
-# P31 = "type of chemical entity" (Q113145171) wird bewusst NICHT
-# vorgeschlagen: die Definition widerspricht sich zwischen Projektseite und
-# Guideline. Wer das wieder aufgreift, faengt bei dieser Klaerung an, nicht
-# beim Code - Zahlen und Belege im README, "Bewusst nicht umgesetzt".
+# Dieses Werkzeug schlaegt gar kein P31 mehr vor. Die Gemisch-Metaklasse
+# (Q119892838) fuer Legierungen ist nach "Material class structure/Vorschläge
+# generieren.py" gewandert - sie folgt aus dem Klassengraphen, den jenes
+# Skript ohnehin haelt. Und P31 = "type of chemical entity" (Q113145171) fuer
+# reine Stoffe bleibt offen: die Definition widerspricht sich zwischen
+# Projektseite und Guideline. Wer das aufgreift, faengt bei dieser Klaerung
+# an, nicht beim Code - Zahlen und Belege im README, "Bewusst nicht
+# umgesetzt".
 
 
 # ---------------------------------------------------------------------------
@@ -186,8 +193,7 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           wikipedia: bool = True, cod: bool = True,
                           nur_experimentell: bool = True,
                           nur_stabil: bool = True, max_entries: int = 1,
-                          formel: bool = True, metaklasse_an: bool = True,
-                          metaklasse_auch_mit_p31: bool = False,
+                          formel: bool = True,
                           punktgruppe_an: bool = True, nist: bool = True,
                           auch_vorhandene: bool = False,
                           ausschluss: bool = True):
@@ -203,8 +209,7 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
     yield from pruefe_legierungsklasse(gruppe, items)
     yield from build_proposals_for_items(
         items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries,
-        formel=formel, metaklasse_an=metaklasse_an,
-        metaklasse_auch_mit_p31=metaklasse_auch_mit_p31,
+        formel=formel,
         punktgruppe_an=punktgruppe_an, nist=nist,
         auch_vorhandene=auch_vorhandene)
 
@@ -215,8 +220,6 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                               nur_stabil: bool = True, max_entries: int = 1,
                               nummer_ab: int = 1, gesamt: Optional[int] = None,
                               formel: bool = True,
-                              metaklasse_an: bool = True,
-                              metaklasse_auch_mit_p31: bool = False,
                               punktgruppe_an: bool = True,
                               nist: bool = True,
                               auch_vorhandene: bool = False):
@@ -229,19 +232,16 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
     Fortschritt ueber Chargen hinweg fortlaufend gezaehlt wird.
     """
     gesamt = gesamt if gesamt is not None else len(items)
-    # Die Metaklassen-Lage aller Items auf einmal holen: eine Abfrage je 200
+    # Die Klassenlage aller Items auf einmal holen: eine Abfrage je 200
     # Items statt je Item. Scheitert das, laeuft der Rest trotzdem - die Stufe
-    # fragt dann eben einzeln nach.
-    # Auch die Umstellung braucht die Klassenlage: sie stellt nur an Stoffen
-    # um, und ein Item ohne Summenformel gilt nur als Stoff, wenn es eine
-    # Legierung ist.
-    if metaklasse_an or formel:
+    # fragt dann eben einzeln nach. Gebraucht wird sie fuer die Umstellung:
+    # die stellt nur an Stoffen um, und ein Item ohne Summenformel gilt nur
+    # als Stoff, wenn es eine Legierung ist.
+    if formel:
         try:
             metaklassen_vorladen([e["qid"] for e in items])
-            if metaklasse_an:
-                melde_metaklassen_luecke(items, metaklasse_auch_mit_p31)
         except (RuntimeError, ValueError, requests.RequestException) as fehler:
-            print(f"  Metaklassen nicht vorgeladen - {fehler}",
+            print(f"  Klassenlage nicht vorgeladen - {fehler}",
                   file=sys.stderr)
     # Und die bestehenden P527-Elementaussagen, die umgestellt werden.
     if formel:
@@ -277,23 +277,7 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                     "title_en": eintrag["title_en"]}
         pids_belegt = set()
         zaehler = collections.Counter()
-        n_cod = n_mp = n_formel = n_p31 = n_p589 = 0
-
-        # Die Metaklasse: eine Aussage, die aus der Klassenzugehoerigkeit des
-        # Items folgt und keine Quelle braucht. Greift nur bei Legierungen -
-        # sie sind Gemische, und dafuer sieht die Guideline eine eigene
-        # Metaklasse vor. P31 wandert NICHT in pids_belegt: die Property
-        # steht auch fuer inhaltliche Einordnungen, und die kaemen aus ganz
-        # anderen Stufen.
-        if metaklasse_an:
-            try:
-                for zeile in metaklasse_proposals_for_item(
-                        wd_match, auch_mit_p31=metaklasse_auch_mit_p31):
-                    n_p31 += 1
-                    yield zeile
-            except (RuntimeError, ValueError, requests.RequestException) as fehler:
-                print(f"  {eintrag['qid']}: Metaklasse uebersprungen - "
-                      f"{fehler}", file=sys.stderr)
+        n_cod = n_mp = n_formel = n_p589 = 0
 
         # Vor der Ableitung die Umstellung: was am Item schon als P527 ->
         # Element steht, wird auf P2670 umgehaengt statt daneben noch einmal
@@ -422,7 +406,7 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                       file=sys.stderr)
 
         print(f"  [{i}/{gesamt}] {eintrag['qid']} "
-              f"{eintrag['label'][:28]}: Formel {n_formel}, P31 {n_p31}, "
+              f"{eintrag['label'][:28]}: Formel {n_formel}, "
               f"P589 {n_p589}, COD {n_cod}, MP {n_mp}, NIST {n_nist}"
               + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
                  if wikipedia else ""),
@@ -785,8 +769,6 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
             charge, args.wikipedia, args.cod,
             args.experimentell, args.stabil, args.max,
             nummer_ab=erstes, gesamt=gesamt, formel=args.formel,
-            metaklasse_an=args.metaklasse,
-            metaklasse_auch_mit_p31=args.metaklasse_auch_mit_p31,
             punktgruppe_an=args.punktgruppe, nist=args.nist,
             auch_vorhandene=args.auch_vorhandene,
         )
@@ -849,8 +831,8 @@ def main():
         "'minerale' ist mit Abstand die ergiebigste (6301 Arten, 5694 mit "
         "Summenformel, KEINE EINZIGE mit COD-ID); 'oxide' umfasst die 154 "
         "Oxide mit Summenformel; bei 'legierungen' laufen COD und MP mangels "
-        "Formel weitgehend leer (nur 10 von 568 tragen eine), dafuer setzt "
-        "die Stufe --metaklasse dort die fehlende Metaklasse",
+        "Formel weitgehend leer (nur 10 von 568 tragen eine), dafuer "
+        "greift dort die Ableitung Formel AUS den Bestandteilen",
     )
     parser.add_argument(
         "--limit", type=int, default=None,
@@ -927,27 +909,6 @@ def main():
         "sondern zur Klaerung ausgewiesen. Default: an",
     )
     parser.add_argument(
-        "--metaklasse",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Legierungen die chemische Metaklasse (P31 = Q119892838, "
-        "'definiertes Gemisch chemischer Substanzen') geben, wo noch keine "
-        "steht - so verlangt es [[Wikidata:WikiProject Chemistry/Guidelines/"
-        "Basic metaclasses and relations]] fuer Gemische. Nur fuer Items, die "
-        "wirklich als Legierung eingeordnet sind; Mineralarten bleiben "
-        "aussen vor, und eine bereits vorhandene ANDERE Chemie-Metaklasse "
-        "wird zur Klaerung ausgewiesen statt ergaenzt. Default: an",
-    )
-    parser.add_argument(
-        "--metaklasse-auch-mit-p31",
-        action="store_true",
-        help="die Metaklasse auch dort vorschlagen, wo das Item schon ein "
-        "P31 traegt (dann steht sie als ZWEITE P31-Aussage daneben). Die "
-        "Guideline verlangt sie auch dort, es sind aber 565 statt 314 Items, "
-        "und in dieser Menge sitzen die Faelle, die gar keine Werkstoffe sind "
-        "(Stahlrohr, Markenzeichen). Default: aus",
-    )
-    parser.add_argument(
         "--punktgruppe",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -1018,8 +979,6 @@ def main():
         proposals = build_group_proposals(
             args.group, args.limit, args.wikipedia, args.cod,
             args.experimentell, args.stabil, args.max, formel=args.formel,
-            metaklasse_an=args.metaklasse,
-            metaklasse_auch_mit_p31=args.metaklasse_auch_mit_p31,
             punktgruppe_an=args.punktgruppe, nist=args.nist,
             auch_vorhandene=args.auch_vorhandene,
             ausschluss=not args.mit_ueberschneidungen,

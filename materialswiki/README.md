@@ -24,7 +24,7 @@ zerlegen will, braucht weder Netz noch Wikidata:
 | [quellen/mp.py](quellen/mp.py) | Materials Project | netz, wikidata, ausgabe |
 | [quellen/cod.py](quellen/cod.py) | Crystallography Open Database | netz, wikidata, ausgabe |
 | [quellen/nist.py](quellen/nist.py) | NIST Chemistry WebBook | netz, wikidata, ausgabe |
-| [ableitungen.py](ableitungen.py) | was ohne externe Quelle aus dem Item folgt (P2670, P31, P589, Umstellung) | wikidata, ausgabe, gruppen |
+| [ableitungen.py](ableitungen.py) | was ohne externe Quelle aus dem Item folgt (P2670, P589, Umstellung) | wikidata, ausgabe, gruppen |
 | [cli.py](cli.py) | die Kaskade, der Chargenbetrieb, die Kommandozeile | alle |
 
 **Eine Regel macht die Tests verlässlich:** Module rufen einander über das
@@ -562,9 +562,7 @@ Formel (ohne Netzzugriff)     →  COD (DOI der Originalarbeit)
 Die Stufe **Formel** steht vorn, weil sie ohne eine einzige Netzanfrage
 auskommt und eine Property liefert, die keine der externen Quellen führt —
 siehe [„enthält Elemente von" (P2670)](#enthält-elemente-von-p2670-aus-der-summenformel). Wo gar
-zwei weitere Aussagen entstehen ebenso aus dem Item selbst: die **chemische
-Metaklasse** (`P31`) für Legierungen, siehe [Chemische Metaklasse (P31) für
-Legierungen](#chemische-metaklasse-p31-für-legierungen), und die
+eine weitere Aussage entsteht ebenso aus dem Item selbst: die
 **Punktgruppe** (`P589`) aus der Raumgruppe, die am Item schon steht, siehe
 [Punktgruppe (P589) aus der Raumgruppe](#punktgruppe-p589-aus-der-raumgruppe).
 
@@ -752,74 +750,25 @@ Löschzeile übrig.
 
 Abschaltbar mit `--no-formel` — die Umstellung hängt an derselben Stufe.
 
-### Chemische Metaklasse (P31) für Legierungen
+### Verschoben: chemische Metaklasse (P31) für Legierungen
 
-[[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]]
-verlangt an **jedem** Item einer chemischen Entität genau **eine** Metaklasse
-über `P31` — und für Gemische ausdrücklich eine eigene, nicht die der reinen
-Stoffe:
+Diese Stufe gibt es hier nicht mehr (seit 2026-08-23). Sie schlug Legierungen
+die Metaklasse `Q119892838` („definiertes Gemisch chemischer Substanzen") vor,
+und sie folgte nicht aus einer Quelle, sondern aus der
+**Klassenzugehörigkeit** des Items — dafür ist dieses Werkzeug der falsche
+Ort: es musste den Klassengraphen eigens abfragen, während das
+Struktur-Werkzeug ihn ohnehin im Speicher hält.
 
-> For mixtures and parts of chemical entities, other metaclasses are used.
+Sie steht jetzt als Prüfung `metaklasse` in
+[Material class structure](../Material%20class%20structure/README.md#chemische-metaklasse-p31-für-legierungen),
+mit denselben Regeln (Mineralarten außen vor, die schiefe Kante
+Metall → Legierung ausgespart, eine vorhandene *andere* Chemie-Metaklasse
+wird gemeldet statt ersetzt) und demselben Schalter
+`--metaklasse-auch-mit-p31`.
 
-Eine Legierung *ist* ein Gemisch (`Q37756`: „mixture or metallic solid
-solution"). Die Metaklasse ist damit bestimmt und muss nicht geraten werden:
-**`Q119892838`** („definiertes Gemisch chemischer Substanzen" / *type of
-mixture of chemical entities*). Sie ist im Bestand etabliert — 189 Items
-tragen sie, darunter Salzsäure, Backpulver und Terpentin. `Q119896085` ist
-ihre einzige Untermetaklasse und meint Polymere, für Legierungen also nichts.
-
-Was die Stufe **nicht** tut: eine *inhaltliche* Einordnung vorschlagen
-(„Kupferlegierung", „Werkzeugstahl"). Die bleibt eine fachliche Entscheidung
-— siehe [Prüfliste statt Datenquelle](#prüfliste-statt-datenquelle).
-
-Am Bestand gemessen (2026-08-21, 1082 Items der Gruppe `legierungen`):
-
-| Fall | Items | Ergebnis |
-|---|---|---|
-| Legierung ohne jedes `P31` | 313 | `VORSCHLAG` |
-| trägt schon `P31`, aber keine Metaklasse | 565 | nichts — siehe unten |
-| trägt eine **andere** Chemie-Metaklasse | 10 | `MANUELLE_KLAERUNG_NOETIG` |
-| trägt `Q119892838` bereits | 3 | `BEREITS_VORHANDEN` |
-| gar keine Legierung, nur über `Q11426` eingehängt | 181 | nichts |
-| Mineralart | 9 | nichts |
-
-**Warum die 565 standardmäßig ausbleiben.** Dort steht meist eine richtige
-Klassenzugehörigkeit (`P31 = Legierung`, `P31 = Aluminiumlegierung`); die
-Metaklasse käme als **zweite** `P31`-Aussage daneben. Die Guideline will das,
-aber es ist eine Massenänderung — und in genau dieser Menge sitzen die Fälle,
-die gar keine Werkstoffe sind: `Q26709` Stahlrohr (ein Rohr),
-`Q898562` Inconel und `Q734159` Glidcop (als Markenzeichen modelliert).
-`--metaklasse-auch-mit-p31` nimmt sie dazu, dann sind es 878 Vorschläge. Wie
-viele Items der Standardlauf so ausspart, meldet er auf stderr.
-
-**Die falsche Metaklasse wird nicht überschrieben.** Zehn Legierungen tragen
-`Q113145171` („definierte chemische Substanz"), darunter **Messing**,
-Aluminiumbronze und Siliciumgermanium. Für ein Gemisch ist das die falsche,
-und die Guideline lässt nur eine zu — die bestehende müsste also weichen.
-Etwas zu *entfernen* tut dieses Werkzeug nirgends; die Zeile geht deshalb zur
-Klärung, mit der vorhandenen Metaklasse im Status.
-
-**„Metalle" (`Q11426`) bekommt nichts.** Es ist der Ausgangspunkt des
-Modellierungsfehlers (siehe [Werkstoffgruppen](#werkstoffgruppen---group)) und
-hängt nur über die defekte Kante unter der Legierung. Ebenso bleiben die 181
-Sammelbegriffe außen vor, die dieselbe Kante hereinspült — Alkalimetalle,
-Übergangsmetalle, „metals of antiquity". Geprüft wird, ob das Item die
-Legierung **ohne den Umweg über `Q11426`** erreicht; da SPARQL einen
-ausgesparten Knoten in einem Pfad nicht ausdrücken kann, werden die
-Oberklassenkanten geholt und der Rest des Wegs im Code durchlaufen. Ein
-simples „hat gar keinen Metall-Weg" reicht nicht: Stahl hat einen, kommt aber
-außerdem über Ferrolegierung an die Legierung heran.
-
-**Mineralarten bleiben außen vor.** Gediegene Metalle und Amalgame (Taenit,
-Kolymit, Bleiamalgam …) sind über die IMA modelliert. Ob dort zusätzlich eine
-Chemie-Metaklasse hingehört, entscheidet das Mineralprojekt, nicht dieses
-Werkzeug.
-
-**Beleg.** Die Aussage folgt aus der Klassenzugehörigkeit des Items, es gibt
-nichts zu zitieren — sie geht **ohne S-Beleg** raus, mit dem Verweis auf die
-Guideline in `ref_note`.
-
-Abschaltbar mit `--no-metaklasse`.
+Was hier bleibt: die **Klassenlage** (`metaklassen()` in `ableitungen.py`).
+Die Umstellung `P527 → P2670` braucht sie, weil ein Item ohne Summenformel
+nur dann als Stoff gilt, wenn es eine Legierung ist.
 
 ### Punktgruppe (P589) aus der Raumgruppe
 
@@ -1060,8 +1009,9 @@ Subtree unter `Q7946` „Mineral", der auch Gruppen und Sammelbegriffe enthält.
 Bei den Legierungen ist die Summenformel dagegen die Ausnahme (Stahl hat
 keine), weshalb COD und Materials Project dort kaum etwas beitragen können.
 Dafür fehlt dort massenhaft die chemische Metaklasse: 313 Legierungen tragen
-gar kein `P31`, siehe [Chemische Metaklasse (P31) für
-Legierungen](#chemische-metaklasse-p31-für-legierungen).
+gar kein `P31`. Die entwirft aber nicht mehr dieses Werkzeug, sondern die
+Prüfung `metaklasse` in
+[Material class structure](../Material%20class%20structure/README.md#chemische-metaklasse-p31-für-legierungen).
 
 **`legierungen` braucht einen Filter, sonst ist die Grundgesamtheit Müll.**
 Die naheliegende Abfrage — alles unter Legierung (`Q37756`) — liefert 3718
@@ -1102,10 +1052,8 @@ Die Überschneidung ist klein — es geht um Sauberkeit, nicht um Tempo
 | `minerale` ∩ `oxide` | 7 (Eis, Stishovit, Coesit, Minium …) |
 | `minerale` ∩ `legierungen` | 26 |
 
-Die 26 Minerale in der Legierungsgruppe sind **nicht** ausgeschlossen: die
-Metaklassen-Stufe lässt Mineralarten ohnehin aus (siehe [Chemische Metaklasse
-(P31) für Legierungen](#chemische-metaklasse-p31-für-legierungen)), und für
-die übrigen Stufen ist die Legierungsgruppe kein Duplikat, sondern der
+Die 26 Minerale in der Legierungsgruppe sind **nicht** ausgeschlossen: für
+die Stufen dieses Werkzeugs ist die Legierungsgruppe kein Duplikat, sondern der
 einzige Ort, an dem diese Items überhaupt vorkommen. Wer es anders will,
 ergänzt eine Zeile in `WERKSTOFFGRUPPEN`.
 
@@ -1264,10 +1212,10 @@ Zwei Fallstricke, beide im Code behandelt:
 
 ### Bewusst offen: die Metaklasse der reinen Stoffe
 
-Für **Gemische** ist die Metaklasse umgesetzt (siehe [Chemische Metaklasse
-(P31) für Legierungen](#chemische-metaklasse-p31-für-legierungen)) — dort ist
-sie eindeutig bestimmt. Für **reine Stoffe** bleibt sie liegen, und zwar aus
-demselben Grund wie beim ersten Anlauf.
+Für **Gemische** ist die Metaklasse umgesetzt — nicht mehr hier, sondern in
+[Material class structure](../Material%20class%20structure/README.md#chemische-metaklasse-p31-für-legierungen);
+dort ist sie eindeutig bestimmt. Für **reine Stoffe** bleibt sie liegen, und
+zwar aus demselben Grund wie beim ersten Anlauf.
 
 Der Widerspruch, an dem es hängt (gemessen 2026-08-16): Die Projektseite
 [[Wikidata:WikiProject Chemistry]] bittet um
@@ -1276,8 +1224,8 @@ Guideline dagegen nur für „stereochemically or isotopically defined chemical
 entities". In der Praxis tragen 1.280.233 Items die Metaklasse — aber
 **keines der 118 Elemente**.
 
-Genau in diese Lücke fällt auch die Gegenprobe zur Gemisch-Stufe: 10
-Legierungen tragen `Q113145171` regelwidrig, darunter Messing. Sie werden
+Genau in diese Lücke fällt auch die Gegenprobe zur Gemisch-Prüfung: 10
+Legierungen tragen `Q113145171` regelwidrig, darunter Messing. Sie werden dort
 gemeldet, nicht korrigiert.
 
 Wer die reinen Stoffe aufgreift, fängt bei jener Klärung an, nicht beim Code.
@@ -1368,7 +1316,6 @@ Properties:
 | Standardbildungsenthalpie | `P3078` | kJ/mol, **mit Aggregatzustand** |
 | molare Standardentropie | `P3071` | J/(mol·K), **mit Aggregatzustand** |
 | COD-ID | `P9824` | external-id |
-| chemische Metaklasse | `P31` | Item (`Q119892838` für Gemische) |
 | Längenausdehnungskoeffizient | `P5672` | µm/(m·K), **mit Temperatur** |
 
 Wichtig: **Ein Eintrag in `PROPERTY_MAP` allein erzeugt noch keine
@@ -1390,7 +1337,7 @@ einzeln getestet ([../tests/test_mp.py](../tests/test_mp.py)). Die Moduln
 kommen als Voigt-Reuss-Hill-Mittel (`vrh`), das übliche Mittel für
 polykristalline Werkstoffe — nicht als `voigt` oder `reuss`.
 
-`P2670` und `P31` entstehen ohne externe Quelle aus dem Item selbst, `P690`
+`P2670` entsteht ohne externe Quelle aus dem Item selbst, `P690`
 und `P9824` liefert die COD, `P589` beide Wege. Alles Übrige stammt aus den
 Wikipedia-Infoboxen:
 bei Elementen alle 13 Kennwerte der Tabelle oben, bei Verbindungen Dichte,

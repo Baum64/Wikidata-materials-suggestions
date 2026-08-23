@@ -38,6 +38,7 @@ P279-Graphen und die Label-Heuristik aus dem früheren
 python "Material class structure/Vorschläge generieren.py"
 python "Material class structure/Vorschläge generieren.py" --population legierungen
 python "Material class structure/Vorschläge generieren.py" --pruefungen redundant verkehrt
+python "Material class structure/Vorschläge generieren.py" --pruefungen metaklasse
 python "Material class structure/Vorschläge generieren.py" --tiefe 3 --beleg beides
 python "Material class structure/Vorschläge generieren.py" --vorsichtig   # nichts einspielbar
 ```
@@ -87,13 +88,14 @@ stehen beieinander. Die Entscheidung fällt einmal für die Gruppe statt
 zwölfmal einzeln, und ein systematischer Fehlgriff der Heuristik fällt als
 Block auf statt verstreut.
 
-## Die zehn Prüfungen
+## Die elf Prüfungen
 
 | Prüfung | Findet | Stufe |
 |---|---|---|
 | `kennzahlen` | wie P279 überhaupt benutzt wird: P279, P31, beides, keines; Mehrfacheltern | Kopf |
 | `redundant` | Kante, die über einen anderen Elter ohnehin gilt | **1** |
 | `instanz-als-klasse` | Item mit P31 auf eine Werkstoffklasse, das selbst Unterklassen hat | 2 |
+| `metaklasse` | Legierung ohne chemische Metaklasse (`P31 = Q119892838`) | 2 |
 | `verkehrt` | Kante `n → p`, obwohl unter `n` mehr hängt als unter `p` ohne `n` | 2 |
 | `zyklus` | eine Klasse ist über P279 ihre eigene Oberklasse | 2 |
 | `zusammensetzung` | der Name nennt die Zusammensetzung — das Element mit dem größten Anteil ist das Basismetall | 3 |
@@ -182,6 +184,84 @@ Körper, aber ein Verbund ist keine Legierung.
 Bestandteile, die keine chemischen Elemente sind — `27.5% Steel`,
 `Other Metals 2%` — gehen nicht als Basismetall durch, verschwinden aber
 auch nicht: sie stehen als „Nicht zugeordnet" in der Begründung.
+
+## Chemische Metaklasse (P31) für Legierungen
+
+*Diese Prüfung stand bis 2026-08-23 in [materialswiki](../materialswiki/) und
+ist hierher gewandert: sie folgt aus dem Klassengraphen, den dieses Skript
+ohnehin im Speicher hält — dort kostet sie **keine einzige zusätzliche
+Abfrage**, während materialswiki sich eine eigene SPARQL-Runde je Charge
+erkaufen musste.*
+
+[[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]]
+verlangt an **jedem** Item einer chemischen Entität genau **eine** Metaklasse
+über `P31` — und für Gemische ausdrücklich eine eigene, nicht die der reinen
+Stoffe:
+
+> For mixtures and parts of chemical entities, other metaclasses are used.
+
+Eine Legierung *ist* ein Gemisch (`Q37756`: „mixture or metallic solid
+solution"). Die Metaklasse ist damit bestimmt und muss nicht geraten werden:
+**`Q119892838`** („definiertes Gemisch chemischer Substanzen" / *type of
+mixture of chemical entities*). Sie ist im Bestand etabliert — 189 Items
+tragen sie, darunter Salzsäure, Backpulver und Terpentin. `Q119896085` ist
+ihre einzige Untermetaklasse und meint Polymere, für Legierungen also nichts.
+
+Was die Prüfung **nicht** tut: eine *inhaltliche* Einordnung vorschlagen
+(„Kupferlegierung", „Werkzeugstahl"). Die bleibt eine fachliche Entscheidung
+und fällt in `ohne-einordnung` und `zusammensetzung`.
+
+Am Bestand gemessen (2026-08-21, 1082 Items der Gruppe `legierungen`):
+
+| Fall | Items | Ergebnis |
+|---|---|---|
+| Legierung ohne jedes `P31` | 313 | Entwurf `metaklasse` |
+| trägt schon `P31`, aber keine Metaklasse | 565 | nichts — siehe unten |
+| trägt eine **andere** Chemie-Metaklasse | 10 | Meldung `metaklasse-konflikt` |
+| trägt `Q119892838` bereits | 3 | nichts |
+| gar keine Legierung, nur über `Q11426` eingehängt | 181 | nichts |
+| Mineralart | 9 | nichts |
+
+**Warum die 565 standardmäßig ausbleiben.** Dort steht meist eine richtige
+Klassenzugehörigkeit (`P31 = Legierung`, `P31 = Aluminiumlegierung`); die
+Metaklasse käme als **zweite** `P31`-Aussage daneben. Die Guideline will das,
+aber es ist eine Massenänderung — und in genau dieser Menge sitzen die Fälle,
+die gar keine Werkstoffe sind: `Q26709` Stahlrohr (ein Rohr), `Q898562`
+Inconel und `Q734159` Glidcop (als Markenzeichen modelliert).
+`--metaklasse-auch-mit-p31` nimmt sie dazu, dann sind es 878 Entwürfe. Wie
+viele der Standardlauf so ausspart, meldet er auf stderr.
+
+**Die falsche Metaklasse wird nicht überschrieben.** Zehn Legierungen tragen
+`Q113145171` („definierte chemische Substanz"), darunter **Messing**,
+Aluminiumbronze und Siliciumgermanium. Für ein Gemisch ist das die falsche,
+und die Guideline lässt nur eine zu — die bestehende müsste also weichen. Zu
+*entfernen* ist Handarbeit; der Befund `metaklasse-konflikt` geht deshalb ohne
+Entwurf raus, mit der vorhandenen Metaklasse in der Begründung.
+
+**„Metalle" (`Q11426`) bekommt nichts.** Es ist der Ausgangspunkt des
+Modellierungsfehlers (siehe [Die schiefe Kante Metall →
+Legierung](#die-schiefe-kante-metall--legierung)) und hängt nur über die
+defekte Kante unter der Legierung. Ebenso bleiben die 181 Sammelbegriffe außen
+vor, die dieselbe Kante hereinspült — Alkalimetalle, Übergangsmetalle, „metals
+of antiquity". Geprüft wird, ob das Item die Legierung **ohne den Umweg über
+`Q11426`** erreicht: der Knoten wird aus dem Graphen genommen, dann zählt, was
+`Q37756` noch erreicht. Ein simples „hat gar keinen Metall-Weg" reicht nicht:
+Stahl hat einen, kommt aber außerdem über Ferrolegierung an die Legierung
+heran.
+
+**Mineralarten bleiben außen vor.** Gediegene Metalle und Amalgame (Taenit,
+Kolymit, Bleiamalgam …) sind über die IMA modelliert (`P31 = Q12089225`). Ob
+dort zusätzlich eine Chemie-Metaklasse hingehört, entscheidet das
+Mineralprojekt, nicht dieses Werkzeug.
+
+**Warum Stufe 2 und nicht Stufe 1.** Die Metaklasse folgt zwar zwingend aus
+der Klassenzugehörigkeit — aber ob das Item *wirklich* eine Legierung ist,
+sagt der Graph nicht. Genau daran hängt der ganze Befund, und genau dort steckt
+der Schrott (siehe die 565 oben). Also: Entwurf mit `#!`, Freigabe von Hand.
+
+**Die reinen Stoffe bleiben offen.** Für sie widerspricht sich die Guideline
+mit der Projektseite; siehe [Bewusst offen: die Metaklasse der reinen
+Stoffe](../materialswiki/README.md#bewusst-offen-die-metaklasse-der-reinen-stoffe).
 
 ## Die Label-Heuristik (`zu-allgemein`)
 

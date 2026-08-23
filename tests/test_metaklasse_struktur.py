@@ -1,157 +1,169 @@
 """Chemische Metaklasse (P31) fuer Legierungen, nach
 [[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]].
-Alles netzwerkfrei."""
+
+Die Pruefung stand bis 2026-08-23 in materialswiki und liegt jetzt in
+"Material class structure/Vorschläge generieren.py". Alles netzwerkfrei: die
+Pruefung selbst rechnet nur auf dem Graphen und den P31-Kanten, die der Lauf
+ohnehin geholt hat.
+"""
+import importlib.util
+import os
+
+import networkx as nx
 import pytest
 
-from materialswiki import ableitungen, cli, netz
-from materialswiki.cli import (
-    CHEMIE_METAKLASSEN,
-    GEMISCH_METAKLASSE,
-    metaklasse_proposals_for_item,
-)
+# "Material class structure/" ist kein Paket - das Modul kommt ueber den Pfad
+# herein, wie in test_anwendung.py auch.
+_PFAD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                     "Material class structure", "Vorschläge generieren.py")
+_spec = importlib.util.spec_from_file_location("vorschlaege_struktur", _PFAD)
+vg = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(vg)
+
+BRONZE = "Q34095"
 
 
 @pytest.fixture
-def bronze():
-    return {"qid": "Q34095", "label": "Bronze", "ambiguous": False,
-            "title_de": "Bronze", "title_en": "Bronze"}
+def items():
+    return {BRONZE: {"qid": BRONZE, "label": "Bronze", "basis": "Copper"}}
 
 
-def setze_lage(qid, p31, legierung=True):
-    ableitungen._METAKLASSE_CACHE[qid] = {"p31": list(p31), "legierung": legierung}
+def graph_mit(*kanten):
+    """P279-Graph, Richtung Kind -> Elter."""
+    g = nx.DiGraph()
+    g.add_nodes_from([BRONZE, vg.LEGIERUNG_QID, vg.METALL_QID])
+    g.add_edges_from(kanten)
+    return g
+
+
+def befunde(items, p31, graph=None, auch_mit_p31=False):
+    graph = graph if graph is not None else graph_mit((BRONZE, vg.LEGIERUNG_QID))
+    kanten = [(BRONZE, k) for k in p31]
+    return vg.pruefe_metaklasse(
+        items, vg.legierungs_items(graph, list(items), kanten), kanten,
+        {BRONZE: "Bronze"}, auch_mit_p31)
 
 
 # ===========================================================================
 # Der Regelfall: Legierung ohne Metaklasse
 # ===========================================================================
 
-def test_legierung_ohne_metaklasse_bekommt_die_des_gemischs(bronze):
+def test_legierung_ohne_metaklasse_bekommt_die_des_gemischs(items):
     """Eine Legierung ist per Definition ein Gemisch (Q37756: 'mixture or
     metallic solid solution'); die Guideline sieht dafuer eine eigene
     Metaklasse vor."""
-    setze_lage("Q34095", ["Q214609"])   # nur "Material", keine Metaklasse
-    zeilen = metaklasse_proposals_for_item(bronze, auch_mit_p31=True)
+    treffer = befunde(items, [])
 
-    assert len(zeilen) == 1
-    assert zeilen[0]["status"] == "VORSCHLAG"
-    assert zeilen[0]["_pid"] == "P31"
-    assert zeilen[0]["value"] == GEMISCH_METAKLASSE     # Q119892838
-    assert zeilen[0]["source"] == "Metaklasse"
+    assert len(treffer) == 1
+    assert treffer[0]["befund"] == "metaklasse"
+    assert treffer[0]["quickstatements"] == f"{BRONZE}\tP31\t{vg.GEMISCH_METAKLASSE}"
+    assert treffer[0]["ziel_qid"] == vg.GEMISCH_METAKLASSE   # Q119892838
 
 
-def test_item_ganz_ohne_p31_bekommt_sie_auch(bronze):
-    setze_lage("Q34095", [])
-    assert metaklasse_proposals_for_item(bronze)[0]["status"] == "VORSCHLAG"
+def test_p31_zaehlt_als_einordnung_mit(items):
+    """Ohne P279-Kante, aber 'ist ein/e Legierung' - auch das ist eine."""
+    treffer = befunde(items, [vg.LEGIERUNG_QID], graph=graph_mit(),
+                      auch_mit_p31=True)
+    assert [b["befund"] for b in treffer] == ["metaklasse"]
 
 
-def test_bestehendes_p31_bleibt_standardmaessig_unangetastet(bronze):
+def test_bestehendes_p31_bleibt_standardmaessig_unangetastet(items):
     """Wo schon eine Einordnung steht ("P31 = Legierung"), waere die
     Metaklasse eine ZWEITE P31-Aussage daneben. Die Guideline will sie, aber
     das ist eine Massenaenderung - sie braucht den ausdruecklichen Schalter."""
-    setze_lage("Q34095", ["Q37756"])
-    assert metaklasse_proposals_for_item(bronze) == []
-    assert metaklasse_proposals_for_item(
-        bronze, auch_mit_p31=True)[0]["status"] == "VORSCHLAG"
+    assert befunde(items, [vg.LEGIERUNG_QID]) == []
+    assert [b["befund"] for b in befunde(items, [vg.LEGIERUNG_QID],
+                                         auch_mit_p31=True)] == ["metaklasse"]
 
 
-def test_aussage_geht_ohne_beleg_raus_aber_mit_verweis(bronze):
-    """Es gibt keine Messung zu belegen - die Metaklasse folgt aus der
-    Klassenzugehoerigkeit. Die Guideline steht trotzdem in der Notiz."""
-    setze_lage("Q34095", [])
-    zeile = metaklasse_proposals_for_item(bronze)[0]
-
-    assert zeile["_ohne_beleg"] is True
-    assert zeile["ref_url"] == ""
-    assert "Gemisch" in zeile["ref_note"]
-    assert "WikiProject Chemistry" in zeile["ref_note"]
-
-
-def test_entwurfszeile_ist_ein_blankes_qid(bronze, tmp_path):
-    setze_lage("Q34095", [])
-    zeilen = metaklasse_proposals_for_item(bronze)
-    pfad = tmp_path / "entwurf.txt"
-    cli.write_quickstatements_draft(zeilen, str(pfad))
-    aussagen = [z for z in pfad.read_text(encoding="utf-8").splitlines()
-                if z.startswith("Q34095")]
-
-    assert aussagen == [f"Q34095\tP31\t{GEMISCH_METAKLASSE}"]
+def test_entwurf_traegt_die_warnung_vor_der_zweiten_aussage(items):
+    treffer = befunde(items, [vg.LEGIERUNG_QID], auch_mit_p31=True)
+    assert "ZWEITE" in treffer[0]["begruendung"]
 
 
 # ===========================================================================
-# Wo nichts vorgeschlagen wird
+# Wo nichts entworfen wird
 # ===========================================================================
 
-def test_bestehende_gemisch_metaklasse_wird_nicht_wiederholt(bronze):
-    setze_lage("Q34095", [GEMISCH_METAKLASSE])
-    zeilen = metaklasse_proposals_for_item(bronze)
-
-    assert [z["status"] for z in zeilen] == ["BEREITS_VORHANDEN"]
+def test_bestehende_gemisch_metaklasse_wird_nicht_wiederholt(items):
+    assert befunde(items, [vg.GEMISCH_METAKLASSE]) == []
+    assert befunde(items, [vg.GEMISCH_METAKLASSE], auch_mit_p31=True) == []
 
 
-def test_andere_chemie_metaklasse_wird_zur_klaerung_ausgewiesen(bronze):
+def test_andere_chemie_metaklasse_wird_gemeldet_nicht_ersetzt(items):
     """Messing traegt Q113145171 'definierte chemische Substanz' - fuer ein
     Gemisch die falsche. Die Guideline laesst nur EINE zu, die bestehende
     muesste also weichen. Loeschen tut dieses Werkzeug nicht."""
-    setze_lage("Q34095", ["Q113145171"])
-    zeilen = metaklasse_proposals_for_item(bronze)
+    treffer = befunde(items, ["Q113145171"])
 
-    assert len(zeilen) == 1
-    assert zeilen[0]["status"].startswith("MANUELLE_KLAERUNG_NOETIG")
-    assert "Q113145171" in zeilen[0]["status"]
-    assert zeilen[0]["value"] == ""     # nichts Einspielbares
-
-
-def test_nichtlegierung_bekommt_keine_gemisch_metaklasse(bronze):
-    """'Platinmetalle' und 'metals of antiquity' haengen nur ueber Q11426
-    (Metalle) unter der Legierung - sie sind Aufzaehlungen, keine Werkstoffe."""
-    setze_lage("Q34095", [], legierung=False)
-    assert metaklasse_proposals_for_item(bronze) == []
+    assert len(treffer) == 1
+    assert treffer[0]["befund"] == "metaklasse-konflikt"
+    assert "Q113145171" in treffer[0]["begruendung"]
+    assert treffer[0]["quickstatements"] == ""     # nichts Einspielbares
 
 
-def test_mineralarten_bleiben_aussen_vor(bronze):
+def test_konflikt_wird_auch_mit_dem_schalter_nicht_zum_entwurf(items):
+    treffer = befunde(items, ["Q113145171"], auch_mit_p31=True)
+    assert [b["befund"] for b in treffer] == ["metaklasse-konflikt"]
+
+
+def test_mineralarten_bleiben_aussen_vor(items):
     """Gediegene Metalle und Amalgame sind als Mineralart modelliert. Ob dort
     zusaetzlich eine Chemie-Metaklasse hingehoert, entscheidet das
     Mineralprojekt."""
-    setze_lage("Q34095", ["Q12089225"])
-    assert metaklasse_proposals_for_item(bronze) == []
+    assert befunde(items, [vg.MINERALART_QID], auch_mit_p31=True) == []
 
 
-def test_belegte_property_wird_uebersprungen(bronze):
-    setze_lage("Q34095", [])
-    assert metaklasse_proposals_for_item(bronze, skip_pids={"P31"}) == []
+def test_nichtlegierung_bekommt_keine_gemisch_metaklasse(items):
+    """Ein Item ohne jeden Pfad zur Legierung."""
+    assert befunde(items, [], graph=graph_mit()) == []
 
 
 # ===========================================================================
-# Auswertung der SPARQL-Antwort
+# Die schiefe Kante Metall -> Legierung
 # ===========================================================================
 
-def _antwort(bindings):
-    class Resp:
-        @staticmethod
-        def json():
-            return {"results": {"bindings": bindings}}
-    return Resp()
+def test_der_weg_ueber_metalle_zaehlt_nicht(items):
+    """'Platinmetalle' und 'metals of antiquity' haengen NUR ueber Q11426
+    (Metalle) unter der Legierung - sie sind Aufzaehlungen, keine
+    Werkstoffe."""
+    graph = graph_mit((BRONZE, vg.METALL_QID),
+                      (vg.METALL_QID, vg.LEGIERUNG_QID))
+    assert befunde(items, [], graph=graph) == []
 
 
-def test_p31_werte_werden_je_item_gesammelt(monkeypatch):
-    monkeypatch.setattr(netz, "get_with_retry", lambda url, params: _antwort([
-        {"i": {"value": "http://www.wikidata.org/entity/Q34095"},
-         "klasse": {"value": "http://www.wikidata.org/entity/Q214609"}},
-        {"i": {"value": "http://www.wikidata.org/entity/Q34095"},
-         "klasse": {"value": "http://www.wikidata.org/entity/Q214609"}},
-        {"i": {"value": "http://www.wikidata.org/entity/Q39782"},
-         "klasse": {"value": "http://www.wikidata.org/entity/Q113145171"}},
-    ]))
-    monkeypatch.setattr(ableitungen, "legierungs_qids", lambda qids: {"Q34095"})
+def test_zweiter_weg_neben_dem_metallweg_zaehlt_sehr_wohl(items):
+    """Stahl hat einen Metall-Weg, kommt aber ausserdem ueber Ferrolegierung
+    an die Legierung heran und ist selbstverstaendlich eine."""
+    graph = graph_mit((BRONZE, vg.METALL_QID),
+                      (vg.METALL_QID, vg.LEGIERUNG_QID),
+                      (BRONZE, "Q1002713"),
+                      ("Q1002713", vg.LEGIERUNG_QID))
+    assert [b["befund"] for b in befunde(items, [], graph=graph)] == ["metaklasse"]
 
-    lage = ableitungen.fetch_metaklassen(["Q34095", "Q39782", "Q1"])
-    assert lage["Q34095"] == {"p31": ["Q214609"], "legierung": True}
-    assert lage["Q39782"] == {"p31": ["Q113145171"], "legierung": False}
-    assert lage["Q1"] == {"p31": [], "legierung": False}
 
+def test_metalle_selbst_bekommt_nichts():
+    """Q11426 ist der Ausgangspunkt des Modellierungsfehlers und haengt nur
+    ueber die defekte Kante unter der Legierung."""
+    graph = graph_mit((vg.METALL_QID, vg.LEGIERUNG_QID))
+    items = {vg.METALL_QID: {"qid": vg.METALL_QID, "label": "Metall"}}
+    assert vg.legierungs_items(graph, list(items), []) == set()
+
+
+# ===========================================================================
+# Die Guideline
+# ===========================================================================
 
 def test_die_guideline_kennt_genau_eine_metaklasse_fuer_gemische():
     """Q119896085 ist die Polymer-Untermetaklasse und fuer Legierungen nicht
-    gemeint - erzeugt wird deshalb nur Q119892838."""
-    assert GEMISCH_METAKLASSE == "Q119892838"
-    assert "Q119896085" in CHEMIE_METAKLASSEN     # bekannt, aber nie erzeugt
+    gemeint - entworfen wird deshalb nur Q119892838."""
+    assert vg.GEMISCH_METAKLASSE == "Q119892838"
+    assert "Q119896085" in vg.CHEMIE_METAKLASSEN     # bekannt, aber nie erzeugt
+
+
+def test_die_pruefung_steht_in_stufe_zwei():
+    """Aus dem Graphen abgeleitet, aber mit einer fachlichen Entscheidung
+    davor - nicht mechanisch sicher wie Stufe 1."""
+    stufe = {nummer: arten for nummer, _, arten, _, _ in vg.STUFEN}
+    assert "metaklasse" in stufe[2]
+    assert "metaklasse-konflikt" in stufe[2]

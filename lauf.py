@@ -34,7 +34,7 @@ Gruppen
 
 Aufruf
 ------
-  python -m lauf minerale                    # Chargen zu je 150 Items
+  python -m lauf minerale                    # Chargen zu je 500 Items
   python -m lauf minerale --weiter --stempel 2026-08-16_1830 --nur-vorschlaege
   python -m lauf minerale --limit 50
   python -m lauf oxide
@@ -47,10 +47,10 @@ Alle erzeugten Dateien tragen denselben Zeitstempel und liegen in
 
 Chargen
 -------
-Die Gruppenlaeufe arbeiten in Chargen zu je --batch-size Items (Default 150).
+Die Gruppenlaeufe arbeiten in Chargen zu je --batch-size Items (Default 500).
 Nach JEDER Charge liegen CSV und QuickStatements fertig vor - man kann also
 einspielen, waehrend der Rest noch laeuft, und ein Abbruch kostet hoechstens
-die angefangene Charge. Bei 6301 Mineralen sind das 43 Chargen; der Stand
+die angefangene Charge. Bei 6301 Mineralen sind das 13 Chargen; der Stand
 steht in <quickstatements>.fortschritt.json.
 """
 
@@ -122,9 +122,9 @@ def main(argv=None) -> int:
     parser.add_argument("--limit", type=int, default=None,
                         help="nur die ersten N Items (bei den Gruppen "
                              "legierungen, minerale, oxide)")
-    parser.add_argument("--batch-size", type=int, default=150, metavar="N",
+    parser.add_argument("--batch-size", type=int, default=500, metavar="N",
                         help="Items je Charge; nach jeder Charge werden CSV "
-                             "und QuickStatements geschrieben (Default: 150). "
+                             "und QuickStatements geschrieben (Default: 500). "
                              "0 schaltet den Chargenbetrieb ab")
     parser.add_argument("--weiter", action="store_true",
                         help="die naechste Charge aus der Fortschrittsdatei "
