@@ -10,7 +10,7 @@ import os
 
 import pytest
 
-# Anwendung/ ist kein Paket (wie P279-structure/ auch nicht) - das Modul
+# Anwendung/ ist kein Paket (wie "Material class structure/" auch nicht) - das Modul
 # kommt deshalb ueber den Pfad herein, nicht ueber einen Import.
 _PFAD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                      "Anwendung", "Anwendung.py")

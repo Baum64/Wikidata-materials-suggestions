@@ -6,6 +6,33 @@ Wikidata-Statements. Das Skript **legt keine neuen Wikidata-Items an und
 schreibt nichts automatisch nach Wikidata** — es liefert CSV-Kandidaten zur
 manuellen Prüfung.
 
+## Aufbau: welche Datei was tut
+
+Der Code liegt in Schichten, die einzeln ladbar sind — wer nur Formeln
+zerlegen will, braucht weder Netz noch Wikidata:
+
+| Datei | Inhalt | haengt ab von |
+|---|---|---|
+| [konfiguration.py](konfiguration.py) | Kennungen, Endpunkte, Schlüssel aus `.env` | — |
+| [netz.py](netz.py) | HTTP: Drosselung je Gegenstelle, Retry, **einziger** Einstiegspunkt | konfiguration |
+| [properties.py](properties.py) | Property-Tabellen, Einheiten, Plausibilitätsschranken, Feldkarten der Infoboxen | — |
+| [formeln.py](formeln.py) | Summenformeln zerlegen und schreiben (beide Parser) | — |
+| [ausgabe.py](ausgabe.py) | Referenzmodell, Vorschlagszeile, CSV, QuickStatements-Entwurf | properties |
+| [wikidata.py](wikidata.py) | Vokabular (Elemente, Raumgruppen) und Itemzustand (Aussagen, CAS, Siedepunkt) | netz, properties, formeln |
+| [gruppen.py](gruppen.py) | Werkstoffgruppen, Prüfliste, Legierungsprüfung | netz, wikidata |
+| [infobox.py](infobox.py) | die drei Wikipedia-Infoboxen samt Parsern | netz, wikidata, ausgabe |
+| [quellen/mp.py](quellen/mp.py) | Materials Project | netz, wikidata, ausgabe |
+| [quellen/cod.py](quellen/cod.py) | Crystallography Open Database | netz, wikidata, ausgabe |
+| [quellen/nist.py](quellen/nist.py) | NIST Chemistry WebBook | netz, wikidata, ausgabe |
+| [ableitungen.py](ableitungen.py) | was ohne externe Quelle aus dem Item folgt (P2670, P31, P589, Umstellung) | wikidata, ausgabe, gruppen |
+| [cli.py](cli.py) | die Kaskade, der Chargenbetrieb, die Kommandozeile | alle |
+
+**Eine Regel macht die Tests verlässlich:** Module rufen einander über das
+*Modul* auf (`netz.get_with_retry`, `wikidata.item_has_statement`), nicht über
+eine eigene Namensbindung. Dadurch greift ein einziger `monkeypatch` überall —
+die Netzsperre in [../conftest.py](../conftest.py) ist deshalb eine Zeile und
+lässt keinen Weg offen.
+
 ## Warum das Materials Project
 
 Entscheidend ist nicht die Menge der Werte, sondern ob sich einer Zeile
@@ -528,6 +555,7 @@ schon belegt hat:
 ```
 Formel (ohne Netzzugriff)     →  COD (DOI der Originalarbeit)
                               →  Materials Project (DOI)
+                              →  NIST WebBook (ISBN der Originalarbeit)
                               →  de.wikipedia (Import)  →  en.wikipedia (Import)
 ```
 
@@ -876,6 +904,91 @@ Thulium …) und Werte, die sich auf eine Modifikation beziehen
 einzige** Aussage `P5672`. Die 38 Vorschläge wären die ersten — ein Grund
 mehr, sie einzeln durchzusehen.
 
+### NIST Chemistry WebBook: ΔfH° und S°
+
+Zwei Größen, die keine andere Quelle hier liefert — **Standardbildungsenthalpie**
+(`P3078`) und **molare Standardentropie** (`P3071`), je Aggregatzustand.
+Gesucht wird über die **CAS-Nummer** am Item (`7440-50-8` → `C7440508`).
+
+**Der Beleg ist nie das WebBook.** NIST-Standardreferenzdaten sind nach dem
+Standard Reference Data Act (15 U.S.C. § 290e) urheberrechtlich geschützt —
+anders als sonstige Werke US-amerikanischer Bundesbehörden, die die
+Lizenzseite von NIST ausdrücklich davon abgrenzt. Auf jeder Seite steht *„Data
+compilation copyright by the U.S. Secretary of Commerce … All rights
+reserved."* Wikidata ist CC0. Übernommen wird deshalb nur, was das WebBook
+einer **zitierbaren Originalarbeit** zuschreibt, und belegt wird mit dieser
+Arbeit — dieselbe Linie wie bei COD (DOI der Originalarbeit statt der
+Datenbank). Das WebBook bleibt Fundstelle in `ref_note`.
+
+Zwei Werke decken den Bestand ab; beide ISBNs am 2026-08-23 über OpenLibrary
+geprüft:
+
+| Kürzel im WebBook | Werk | Beleg |
+|---|---|---|
+| `Cox, Wagman, et al., 1984` | CODATA Key Values for Thermodynamics, Hemisphere | ISBN 0-89116-758-7 |
+| `Chase, 1998` | NIST-JANAF Thermochemical Tables, 4. Aufl., J. Phys. Chem. Ref. Data Monograph 9 | ISBN 978-1-56396-820-4 |
+
+Zur ersten Zeile: das WebBook datiert auf 1984 (CODATA-Bericht), das gedruckte
+Werk erschien 1989 — die ISBN gehört zum Buch. Zur zweiten: OpenLibrary löst
+die ISBN auf ebendiese 1951 Seiten der Reihe „J. Phys. Chem. Ref. Data, no. 9"
+auf, genau wie das WebBook zitiert; es gibt drei ISBNs (Gesamtwerk und beide
+Teile) mit identischem Titel.
+
+**Was keiner dieser beiden Quellen zugeschrieben ist, wird nicht
+übernommen** — ohne Originalarbeit gäbe es keinen Beleg. Solche Werte
+verschwinden aber nicht still: am Ende des Laufs meldet das Skript, wie viele
+es waren und aus welchen Quellen, damit `NIST_QUELLEN` ergänzt werden kann.
+
+**Der Aggregatzustand ist Pflicht.** Beide Properties verlangen ihn laut
+Constraint als Qualifikator (`P515`) — ohne ihn ist die Zahl bedeutungslos,
+weil ΔfH° von Feststoff, Flüssigkeit und Gas verschieden ist. Genau in dieser
+Aufteilung liefert das WebBook sie auch (`ΔfH°solid`, `ΔfH°gas`):
+
+```
+Q753	P3078	337.4U752197	P515	Q11432	S957	"0-89116-758-7"
+```
+
+**Zwei Quellen zur selben Größe** sind der Regelfall (CODATA *und* JANAF).
+Stimmen sie auf 1 % überein, gilt CODATA — das sind die international
+abgestimmten Schlüsselwerte. Weichen sie ab, wird nichts vorgeschlagen,
+sondern `MANUELLE_KLAERUNG_NOETIG` gesetzt, mit beiden Zahlen im Status.
+
+**Gegenprobe über die Summenformel.** Das WebBook liefert auf jeder Seite
+`molecularFormula` als JSON-LD mit. Steht am Item eine Formel und lassen sich
+beide deuten, müssen sie übereinstimmen — eine CAS-Nummer kann am falschen
+Item stehen, die Zusammensetzung lügt nicht.
+
+**Tempo.** `robots.txt` des WebBook verlangt `Crawl-delay: 5`; die Stufe hält
+ihn ein. Je Item mit CAS-Nummer fallen zwei Abrufe an, also rund zehn
+Sekunden. Deshalb greift sie nur, wo eine CAS-Nummer dasteht — und die ist in
+den Gruppen sehr ungleich verteilt:
+
+| Gruppe | Items | mit CAS |
+|---|---|---|
+| chemische Elemente | 118 | 116 |
+| Oxide mit Formel | 155 | 141 |
+| Mineralarten | 6304 | 60 |
+| Legierungen | 1122 | 30 |
+
+Legierungen führt das WebBook ohnehin nicht — es ist eine Verbindungsdatenbank.
+
+**Wie viel davon wirklich ankommt**, an allen 258 Items mit CAS-Nummer
+gemessen (2026-08-23, ein Abruf je Item):
+
+| | Items |
+|---|---|
+| mit Thermochemie im WebBook | **120** (69 Oxide, 51 Elemente) |
+| davon kondensierte Phase / Gasphase | 86 / 97 |
+| Seite vorhanden, aber ohne Thermodaten | 89 |
+| CAS-Nummer dem WebBook unbekannt | 49 |
+
+Die Ausbeute ist bei den Lanthanoiden und Actinoiden am dünnsten — für
+Lanthan etwa liefert das WebBook eine Seite, aber keine einzige
+thermochemische Tabelle. Ein Lauf über beide Gruppen dauert wegen des
+Crawl-delay rund 40 Minuten.
+
+Abschaltbar mit `--no-nist`.
+
 ### Die drei Wikipedia-Stufen und ihre Fallstricke
 
 Welche Infobox gelesen wird, entscheidet sich am Artikel. Alle drei Stufen
@@ -972,6 +1085,33 @@ und Ti-6Al-4V — die hängen völlig zu Recht auch unter „Metalle". Gemessen 
 den 94 klassifizierten Legierungen aus [[en:List of named alloys]]: der alte
 Filter ließ 77 durch, der neue alle 94.
 
+### Überschneidende Gruppen laufen nur einmal
+
+`minerale` lässt aus, was auch in `oxide` steht — für die Oxide gibt es einen
+eigenen Aufruf, und dieselben Vorschläge in zwei Dateien helfen niemandem. Der
+Ausschluss steht als `"ausschluss": ("oxide",)` in der Gruppendefinition und
+greift **vor** `--limit`, damit die Zahl dort die tatsächlich bearbeiteten
+Items meint. Wie viele wegfallen, meldet der Lauf auf stderr;
+`--mit-ueberschneidungen` nimmt sie wieder dazu.
+
+Die Überschneidung ist klein — es geht um Sauberkeit, nicht um Tempo
+(gemessen 2026-08-23):
+
+| Paar | gemeinsame Items |
+|---|---|
+| `minerale` ∩ `oxide` | 7 (Eis, Stishovit, Coesit, Minium …) |
+| `minerale` ∩ `legierungen` | 26 |
+
+Die 26 Minerale in der Legierungsgruppe sind **nicht** ausgeschlossen: die
+Metaklassen-Stufe lässt Mineralarten ohnehin aus (siehe [Chemische Metaklasse
+(P31) für Legierungen](#chemische-metaklasse-p31-für-legierungen)), und für
+die übrigen Stufen ist die Legierungsgruppe kein Duplikat, sondern der
+einzige Ort, an dem diese Items überhaupt vorkommen. Wer es anders will,
+ergänzt eine Zeile in `WERKSTOFFGRUPPEN`.
+
+Fällt die Abfrage der anderen Gruppe aus, wird **nichts** ausgeschlossen —
+lieber doppelt bearbeitet als still um Items gebracht.
+
 **`oxide`** verlangt die Summenformel als Teil der *Definition*, nicht bloß
 als Filter: der Subtree unter `Q50690` umfasst 27670 Items, die allermeisten
 labellose Massenimporte ohne jede Angabe. Ohne Formel ist ein Item für diesen
@@ -990,6 +1130,66 @@ Die Liste ist als Prüfliste ohnehin wertvoller denn als Datenquelle. Gemessen
 2026-08-16: 140 benannte Legierungen, davon 104 mit Wikidata-Item, davon 94
 als Legierung klassifiziert. Die Kennwerte sind praktisch leer —
 Zugfestigkeit 0 von 104, Elastizitätsmodul 2, Dichte 6.
+
+### Laufzeit
+
+Gemessen an fünf Oxiden mit allen Stufen (2026-08-23, je ein frischer Prozess):
+
+| | vorher | nachher |
+|---|---|---|
+| Gesamt | 68,9 s | **17,7 s** |
+| je Item | 13,8 s | **3,5 s** |
+| Anfragen je Item | 8,8 | 6,0 |
+
+Im Periodensystem-Modus (fünf Elemente): 11,0 s → **4,7 s** je Element. Vier
+Maßnahmen, keine davon ändert ein Ergebnis:
+
+**1. Gedrosselt wird je Gegenstelle, nicht global.** Ein Lauf spricht sieben
+Server an (Wikidata-Query, Wikidata-API, COD, Materials Project, zwei
+Wikipedias, WebBook). Eine gemeinsame Uhr summierte deren Wartezeiten: 44
+Anfragen waren 44 Wartesekunden. Jetzt hat jeder Server seine eigene Uhr — die
+Rücksicht bleibt dieselbe (≤ 1 Anfrage/s je Server), die Wartezeiten laufen
+aber nebeneinander statt hintereinander. Das war der größte Einzelposten.
+
+**2. Der Aussagenbestand kommt in Chargen.** Statt `wbgetclaims` je Item holt
+`wbgetentities` 50 Items auf einmal — bei 6301 Mineralen 127 Anfragen statt
+6301. **Der Siedepunkt fällt dabei mit ab:** die Rohaussagen tragen Wert und
+Einheit längst, wofür vorher eine eigene SPARQL-Abfrage *je Item* nötig war.
+
+**3. Quellen, die nichts mehr beitragen können, werden nicht befragt.** Trägt
+das Item alle Properties einer Stufe schon, entfällt der Abruf — nicht bloß
+die Zeile. Das ist billig zu prüfen, seit (2) den Bestand ohnehin vorlädt.
+
+Wie viel das bringt, hängt stark an der Gruppe (gemessen 2026-08-23):
+
+| | Mineralarten (6304) | Oxide (155) |
+|---|---|---|
+| alle COD-Properties vorhanden | 8 | 0 |
+| alle MP-Properties vorhanden | 131 | 28 |
+| alle NIST-Properties vorhanden | 0 | 4 |
+
+In den großen Gruppen greift es also **selten** — Items tragen fast nie den
+*vollständigen* Satz einer Quelle. Im Periodensystem-Modus dagegen oft: dort
+wurde die MP-Stufe bei drei von fünf Elementen übersprungen. Was der Lauf sich
+gespart hat, meldet er am Ende auf stderr.
+
+**Der Preis:** Abschnitt 2 des Entwurfs (`BEREITS_VORHANDEN`) enthält dann nur
+noch, was beim Suchen nebenbei anfiel — nicht mehr jede geprüfte und verworfene
+Möglichkeit. Wer den vollständigen Prüfbericht braucht, nimmt
+`--auch-vorhandene`. Die Gegenprobe an fünf Oxiden: **dieselben 23 Vorschläge**
+in beiden Läufen, nur acht `BEREITS_VORHANDEN`-Zeilen fehlen.
+
+**4. Das WebBook liefert beide Phasen in einem Abruf.** `Mask` ist eine
+Bitmaske; `Mask=3` (Gasphase | kondensierte Phase) enthält alle Zeilen der
+beiden Einzelseiten — an Kupfer geprüft. Bei `Crawl-delay: 5` sind das
+5 statt 10 Sekunden je Item mit CAS-Nummer.
+
+**Was nicht umgesetzt ist:** echte Parallelität. Während der Lauf fünf
+Sekunden auf das WebBook wartet, liegen die sechs anderen Gegenstellen
+brach — ein kleiner Thread-Pool über die Items wäre der nächste große Hebel,
+verträgt sich aber nicht ohne Weiteres mit der zeilenweise geschriebenen CSV
+und der stabilen Reihenfolge der Chargen. Ebenso fehlt ein Antwort-Cache auf
+der Platte: ein abgebrochener Lauf holt beim Wiederholen alles neu.
 
 ### Chargenbetrieb (`--batch-size`)
 
@@ -1165,6 +1365,8 @@ Properties:
 | enthält Elemente von | `P2670` | Item (Element, Anzahl als `P1114`) |
 | Raumgruppe | `P690` | Item (230 Raumgruppen über `P9733`) |
 | Punktgruppe | `P589` | Item (32 Punktgruppen, am Raumgruppen-Item abgelesen) |
+| Standardbildungsenthalpie | `P3078` | kJ/mol, **mit Aggregatzustand** |
+| molare Standardentropie | `P3071` | J/(mol·K), **mit Aggregatzustand** |
 | COD-ID | `P9824` | external-id |
 | chemische Metaklasse | `P31` | Item (`Q119892838` für Gemische) |
 | Längenausdehnungskoeffizient | `P5672` | µm/(m·K), **mit Temperatur** |

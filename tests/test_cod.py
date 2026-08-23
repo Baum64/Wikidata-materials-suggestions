@@ -1,22 +1,22 @@
 """COD-Anbindung: Hill-Notation, Eintragswahl, Belege - netzwerkfrei."""
 import pytest
 
+from materialswiki import cli, wikidata
+from materialswiki.wikidata import _sg_besser, kristallsystem_aus_nummer
 from materialswiki.cli import (
     MP_DATASET_DOI,
     MP_DATASET_WERK,
     MP_DOI,
     Reference,
-    _sg_besser,
     cod_best_entry,
     cod_dominante_raumgruppe,
     cod_hill_formula,
     cod_proposals_for_item,
-    kristallsystem_aus_nummer,
-    # Beim Import gesichert: conftest ersetzt das Modulattribut, nicht
-    # diese Referenz. Nur so laesst sich die Funktion selbst pruefen.
-    siedepunkt_kelvin as echter_siedepunkt,
     proposals_for_material,
 )
+# Beim Import gesichert: conftest ersetzt das Modulattribut, nicht diese
+# Referenz. Nur so laesst sich die Funktion selbst pruefen.
+from materialswiki.wikidata import siedepunkt_kelvin as echter_siedepunkt
 
 
 # ---------------------------------------------------------------------------
@@ -137,8 +137,8 @@ RAUMGRUPPEN = {
 @pytest.fixture
 def cod_zeilen(monkeypatch):
     from materialswiki import cli
-    monkeypatch.setattr(cli, "fetch_space_group_qids", lambda: RAUMGRUPPEN)
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "fetch_space_group_qids", lambda: RAUMGRUPPEN)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     wd = {"qid": "Q753", "label": "Kupfer"}
     return cod_proposals_for_item(wd, [EINTRAG_KUPFER])
 
@@ -162,12 +162,12 @@ def test_ohne_punktgruppe_am_raumgruppen_item_wird_nichts_behauptet(monkeypatch)
     """Sechs der 236 Raumgruppen-Items fuehren keine Punktgruppe. Dann faellt
     die Zeile weg - geraten wird nicht."""
     from materialswiki import cli
-    monkeypatch.setattr(cli, "fetch_space_group_qids", lambda: {
+    monkeypatch.setattr(wikidata, "fetch_space_group_qids", lambda: {
         225: {"qid": "Q15041891", "label": "Raumgruppe 225",
               "cs_qid": "Q473227", "cs_label": "kubisch",
               "pg_qid": "", "pg_label": ""},
     })
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     zeilen = cod_proposals_for_item({"qid": "Q753", "label": "Kupfer"},
                                     [EINTRAG_KUPFER])
     assert "P589" not in [z["_pid"] for z in zeilen]
@@ -205,8 +205,8 @@ def test_cod_id_bekommt_keinen_beleg(cod_zeilen):
 
 def test_skip_pids_unterdrueckt_bereits_belegte_properties(monkeypatch):
     from materialswiki import cli
-    monkeypatch.setattr(cli, "fetch_space_group_qids", lambda: RAUMGRUPPEN)
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "fetch_space_group_qids", lambda: RAUMGRUPPEN)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     zeilen = cod_proposals_for_item(
         {"qid": "Q753", "label": "Kupfer"}, [EINTRAG_KUPFER],
         skip_pids={"P690", "P556", "P589"},
@@ -216,7 +216,7 @@ def test_skip_pids_unterdrueckt_bereits_belegte_properties(monkeypatch):
 
 def test_ohne_raumgruppennummer_kommt_nur_die_cod_id(monkeypatch):
     from materialswiki import cli
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     zeilen = cod_proposals_for_item(
         {"qid": "Q753", "label": "Kupfer"}, [{"file": "123", "sgNumber": None}])
     assert [z["_pid"] for z in zeilen] == ["P9824"]
@@ -268,12 +268,12 @@ def test_ohne_raumgruppenangabe_kommt_none():
 def test_uneindeutige_modifikation_wird_zur_klaerung_markiert(monkeypatch):
     """Nicht still den haeufigeren Wert vorschlagen - das waere geraten."""
     from materialswiki import cli
-    monkeypatch.setattr(cli, "fetch_space_group_qids", lambda: {
+    monkeypatch.setattr(wikidata, "fetch_space_group_qids", lambda: {
         136: {"qid": "Q1", "label": "Raumgruppe 136",
               "cs_qid": "Q503601", "cs_label": "tetragonal",
               "pg_qid": "Q13363960", "pg_label": "Ditetragonal-dipyramidal"},
     })
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     zeilen = cod_proposals_for_item(
         {"qid": "Q0", "label": "TiO2"}, _eintraege((136, 12), (141, 11)))
 
@@ -291,8 +291,8 @@ def test_cod_id_stammt_aus_der_dominanten_raumgruppe(monkeypatch):
     """Sonst zeigt die COD-ID auf eine andere Modifikation als die
     vorgeschlagene Raumgruppe."""
     from materialswiki import cli
-    monkeypatch.setattr(cli, "fetch_space_group_qids", lambda: RAUMGRUPPEN)
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "fetch_space_group_qids", lambda: RAUMGRUPPEN)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     entries = [
         # juengster Eintrag, aber exotische Modifikation
         {"file": "999", "sgNumber": "15", "year": "2024", "doi": "10.1/neu"},
@@ -313,7 +313,7 @@ def test_cod_id_stammt_aus_der_dominanten_raumgruppe(monkeypatch):
 
 def test_mp_ueberspringt_was_cod_schon_geliefert_hat(monkeypatch):
     from materialswiki import cli
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     material = {"material_id": "mp-30", "formula": "Cu", "density": 8.96,
                 "symmetry": {"crystal_system": "Cubic", "symbol": "Fm-3m"}}
     wd = {"qid": "Q753", "label": "Kupfer"}
@@ -335,7 +335,7 @@ def test_elastische_groessen_zitieren_zusaetzlich_den_datensatz(monkeypatch):
     """Die Nutzungsbedingungen verlangen fuer den Elastizitaets-Datensatz
     eine eigene Zitierung zusaetzlich zu Jain et al."""
     from materialswiki import cli
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     material = {"material_id": "mp-30", "formula": "Cu",
                 "bulk_modulus": {"vrh": 140.0}, "shear_modulus": {"vrh": 46.0},
                 "homogeneous_poisson": 0.35}
@@ -350,7 +350,7 @@ def test_elastische_groessen_zitieren_zusaetzlich_den_datensatz(monkeypatch):
 
 def test_nicht_elastische_groessen_zitieren_nur_die_hauptpublikation(monkeypatch):
     from materialswiki import cli
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
     material = {"material_id": "mp-30", "formula": "Cu", "density": 8.96}
     zeile = [z for z in proposals_for_material(
         material, {"qid": "Q753", "label": "Cu"}) if z["_pid"] == "P2054"][0]

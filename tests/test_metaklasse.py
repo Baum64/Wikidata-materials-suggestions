@@ -3,7 +3,7 @@
 Alles netzwerkfrei."""
 import pytest
 
-from materialswiki import cli
+from materialswiki import ableitungen, cli, netz
 from materialswiki.cli import (
     CHEMIE_METAKLASSEN,
     GEMISCH_METAKLASSE,
@@ -18,7 +18,7 @@ def bronze():
 
 
 def setze_lage(qid, p31, legierung=True):
-    cli._METAKLASSE_CACHE[qid] = {"p31": list(p31), "legierung": legierung}
+    ableitungen._METAKLASSE_CACHE[qid] = {"p31": list(p31), "legierung": legierung}
 
 
 # ===========================================================================
@@ -134,7 +134,7 @@ def _antwort(bindings):
 
 
 def test_p31_werte_werden_je_item_gesammelt(monkeypatch):
-    monkeypatch.setattr(cli, "get_with_retry", lambda url, params: _antwort([
+    monkeypatch.setattr(netz, "get_with_retry", lambda url, params: _antwort([
         {"i": {"value": "http://www.wikidata.org/entity/Q34095"},
          "klasse": {"value": "http://www.wikidata.org/entity/Q214609"}},
         {"i": {"value": "http://www.wikidata.org/entity/Q34095"},
@@ -142,9 +142,9 @@ def test_p31_werte_werden_je_item_gesammelt(monkeypatch):
         {"i": {"value": "http://www.wikidata.org/entity/Q39782"},
          "klasse": {"value": "http://www.wikidata.org/entity/Q113145171"}},
     ]))
-    monkeypatch.setattr(cli, "legierungs_qids", lambda qids: {"Q34095"})
+    monkeypatch.setattr(ableitungen, "legierungs_qids", lambda qids: {"Q34095"})
 
-    lage = cli.fetch_metaklassen(["Q34095", "Q39782", "Q1"])
+    lage = ableitungen.fetch_metaklassen(["Q34095", "Q39782", "Q1"])
     assert lage["Q34095"] == {"p31": ["Q214609"], "legierung": True}
     assert lage["Q39782"] == {"p31": ["Q113145171"], "legierung": False}
     assert lage["Q1"] == {"p31": [], "legierung": False}

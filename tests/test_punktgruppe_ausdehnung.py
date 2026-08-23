@@ -2,7 +2,7 @@
 (P5672) aus der englischen Elementinfobox. Alles netzwerkfrei."""
 import pytest
 
-from materialswiki import cli
+from materialswiki import cli, wikidata
 from materialswiki.cli import (
     parse_thermal_expansion,
     punktgruppe_proposals_for_item,
@@ -28,12 +28,12 @@ def item():
 
 @pytest.fixture(autouse=True)
 def tabelle(monkeypatch):
-    monkeypatch.setattr(cli, "fetch_space_group_qids", lambda: RAUMGRUPPEN)
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
+    monkeypatch.setattr(wikidata, "fetch_space_group_qids", lambda: RAUMGRUPPEN)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: False)
 
 
 def setze_raumgruppen(qid, sg_qids):
-    cli._ITEM_RAUMGRUPPE_CACHE[qid] = list(sg_qids)
+    wikidata._ITEM_RAUMGRUPPE_CACHE[qid] = list(sg_qids)
 
 
 # ===========================================================================
@@ -92,7 +92,7 @@ def test_belegte_property_wird_uebersprungen(item):
 
 
 def test_bestehende_punktgruppe_wird_nicht_ergaenzt(monkeypatch, item):
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: True)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: True)
     setze_raumgruppen("Q5309", ["Q15042088"])
     zeilen = punktgruppe_proposals_for_item(item)
 
@@ -145,7 +145,7 @@ def kupfer_item():
 
 @pytest.fixture(autouse=True)
 def kein_gas(monkeypatch):
-    monkeypatch.setattr(cli, "ist_bei_raumtemperatur_gas", lambda qid: False)
+    monkeypatch.setattr(wikidata, "ist_bei_raumtemperatur_gas", lambda qid: False)
 
 
 def test_ausdehnung_traegt_ihre_temperatur(kupfer_item):
@@ -170,7 +170,7 @@ def test_anisotrope_ausdehnung_wird_zur_klaerung_ausgewiesen(kupfer_item):
 
 
 def test_gase_bekommen_keinen_festkoerperwert(monkeypatch, kupfer_item):
-    monkeypatch.setattr(cli, "ist_bei_raumtemperatur_gas", lambda qid: True)
+    monkeypatch.setattr(wikidata, "ist_bei_raumtemperatur_gas", lambda qid: True)
     assert waermeausdehnung_proposals_for_item(
         kupfer_item, KUPFER, "https://en.wikipedia.org/x", "", set()) == []
 

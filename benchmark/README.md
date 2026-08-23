@@ -48,7 +48,7 @@ Instanz). Ausgewertet wird deshalb die Vereinigung aus
 
 Beide Teilmengen werden zusätzlich einzeln ausgewiesen. Warum die
 Klassenhierarchie hier so uneinheitlich ist, untersucht
-[../Kategorie Hirachie/](../Kategorie%20Hirachie/).
+[../Material class structure/](../Material%20class%20structure/).
 
 ## Ausgabe
 
@@ -66,7 +66,7 @@ materialswiki:
 kopiert** — die Auswertung kann also nicht veralten, wenn dort etwas ergänzt
 wird.
 
-Von den 58 Properties der Liste überschneidet sich das Materials Project mit
+Von den 64 Properties der Liste überschneidet sich das Materials Project mit
 fünf — Dichte (`P2054`), Kristallsystem (`P556`), Kompressionsmodul
 (`P5668`), Schubmodul (`P5673`) und Poissonzahl (`P5593`). Welche MP-Felder
 bewusst nicht übernommen sind und warum, steht im Abschnitt „Abgedeckte

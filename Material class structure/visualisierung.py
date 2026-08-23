@@ -38,9 +38,9 @@ Ausgabe
 
 Nutzung
 -------
-  python material_hierarchy_check.py
+  python "Material class structure/visualisierung.py"
   # oder mit eigener Liste:
-  python material_hierarchy_check.py --materials Stahl Titan Beton Diamant PVC
+  python "Material class structure/visualisierung.py" --materials Stahl Titan Beton Diamant PVC
 """
 
 import argparse

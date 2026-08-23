@@ -119,7 +119,7 @@ erste Zeile die Aussage und der Rest ihr Echo. Weg kommt, wozu es eine
 Bewusst nur in diese Richtung. Die naheliegende Variante — jede P279-Kette
 auf ihr bestbelegtes Glied zusammenziehen — würde über kaputte Kanten hinweg
 zusammenziehen, und davon gibt es hier reichlich: Wikidata führt *Münze* als
-Unterklasse von *Skulptur* (siehe [P279-structure/](../P279-structure/)).
+Unterklasse von *Skulptur* (siehe [Material class structure/](../Material%20class%20structure/)).
 Über diese Kante fiele die Skulptur-Zeile weg, weil die Münz-Zeile mehr
 Belege hat. So herum kann das nicht passieren: die bestbelegte Klasse einer
 Kette fällt nie. 524 Zeilen.
@@ -262,7 +262,7 @@ Die Grundgesamtheiten kommen per Import aus
 Werkzeuge nicht irgendwann verschiedene Mengen meinen. `--population
 legierungen` enthält deshalb auch hier „Metalle" (Q11426), weil Wikidata
 Metall unter Legierung führt; das ist der in
-[P279-structure/](../P279-structure/) dokumentierte Befund und keine
+[Material class structure/](../Material%20class%20structure/) dokumentierte Befund und keine
 Eigenheit dieser Anwendung.
 
 ## Ausgabe
@@ -291,7 +291,7 @@ ist jede Zeile in einer Minute nachprüfbar.
   (*Alkalimetalle*, *2. Hauptgruppe des Periodensystems*) — sie tragen
   selbst keine Ordnungszahl und rutschen deshalb durch den Elementfilter.
   Bekannte Eigenheit der Grundgesamtheit, siehe
-  [P279-structure/](../P279-structure/).
+  [Material class structure/](../Material%20class%20structure/).
 * Der Anteil, zu dem ein Gegenstand aus dem Werkstoff besteht, ist in
   Wikidata nicht erfasst (`P518`: 0 von 127 000). Der Verbund-Filter ersetzt
   ihn durch eine Klassenaussage — das ist gröber und liegt bei *Flurkreuz*

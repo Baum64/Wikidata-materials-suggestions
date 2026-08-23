@@ -2,7 +2,7 @@
 Infobox-Parser. Alles netzwerkfrei."""
 import pytest
 
-from materialswiki import cli
+from materialswiki import ableitungen, cli, wikidata
 from materialswiki.cli import (
     elemente_aus_formel,
     formel_proposals_for_item,
@@ -188,7 +188,7 @@ def test_nicht_deutbare_formeln(formel):
 
 @pytest.fixture
 def elementtabelle(monkeypatch):
-    monkeypatch.setattr(cli, "_ELEMENT_QID_CACHE", {
+    monkeypatch.setattr(wikidata, "_ELEMENT_QID_CACHE", {
         "H": {"qid": "Q556", "label": "Wasserstoff", "name_en": "hydrogen",
               "title_de": "Wasserstoff"},
         "O": {"qid": "Q629", "label": "Sauerstoff", "name_en": "oxygen",
@@ -206,13 +206,13 @@ def elementtabelle(monkeypatch):
 def item():
     # Leerer P527-Zwischenspeicher: das Item traegt keine Altaussage, die
     # umgestellt werden muesste. Ohne den Eintrag ginge die Stufe ins Netz.
-    cli._P527_CACHE["Q283"] = {}
+    ableitungen._P527_CACHE["Q283"] = {}
     return {"qid": "Q283", "label": "Wasser", "ambiguous": False,
             "title_de": "Wasser", "title_en": "Water"}
 
 
 def test_vorschlag_je_element_mit_anzahl(monkeypatch, elementtabelle, item):
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: False)
     zeilen = formel_proposals_for_item(item, "H₂O")
 
     assert [z["value"] for z in zeilen] == ["Q556", "Q629"]  # sortiert: H, O
@@ -229,7 +229,7 @@ def test_abgeleitete_aussage_geht_ohne_beleg_raus(monkeypatch, elementtabelle,
                                                   item):
     """Es gibt keine externe Quelle - ein 'importiert aus Wikidata' waere
     zirkulaer. Die Herkunft bleibt trotzdem pruefbar in der Notiz."""
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: False)
     zeile = formel_proposals_for_item(item, "H₂O")[0]
 
     assert zeile["_ohne_beleg"] is True
@@ -242,7 +242,7 @@ def test_entwurf_enthaelt_keine_s_angabe(monkeypatch, elementtabelle, item,
                                          tmp_path):
     """Die Probe aufs Exempel: im QuickStatements-Entwurf darf hinter der
     Aussage der Qualifikator stehen, aber kein Beleg-Snak."""
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: False)
     zeilen = formel_proposals_for_item(item, "H₂O")
 
     pfad = tmp_path / "entwurf.txt"
@@ -257,7 +257,7 @@ def test_entwurf_enthaelt_keine_s_angabe(monkeypatch, elementtabelle, item,
 
 
 def test_ohne_anzahl_kein_qualifikator(monkeypatch, elementtabelle, item):
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: False)
     zeilen = formel_proposals_for_item(item, "SiO₂·nH₂O")
     nach_wert = {z["value"]: z for z in zeilen}
 
@@ -268,7 +268,7 @@ def test_ohne_anzahl_kein_qualifikator(monkeypatch, elementtabelle, item):
 
 def test_mischreihe_wird_zur_klaerung_ausgewiesen(monkeypatch, elementtabelle,
                                                   item):
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: False)
     zeilen = formel_proposals_for_item(item, "(Fe,Mg)₂SiO₄")
 
     vorgeschlagen = {z["value"] for z in zeilen if z["status"] == "VORSCHLAG"}
@@ -283,7 +283,7 @@ def test_bestehendes_p2670_wird_nicht_ergaenzt(monkeypatch, elementtabelle,
                                                 item):
     """Wer die Zusammensetzung von Hand gepflegt hat, weiss mehr als diese
     Ableitung."""
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: True)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: True)
     zeilen = formel_proposals_for_item(item, "H₂O")
 
     assert all(z["status"] == "BEREITS_VORHANDEN" for z in zeilen)
@@ -294,6 +294,6 @@ def test_keine_zeile_wo_nichts_zu_behaupten_ist(monkeypatch, elementtabelle,
     """Zwei Gruende, gar nichts zu liefern: die Property ist schon von einer
     frueheren Stufe belegt, oder das Elementsymbol hat kein Wikidata-Item -
     dann wird nicht geraten."""
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: False)
     assert formel_proposals_for_item(item, "H₂O", skip_pids={"P2670"}) == []
     assert formel_proposals_for_item(item, "NaCl") == []  # Na/Cl fehlen

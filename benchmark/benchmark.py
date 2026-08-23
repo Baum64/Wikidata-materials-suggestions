@@ -15,7 +15,11 @@ Die Seite listet ihre Properties als {{List of properties with sources/Row
 Vorlagendoku werden verworfen, Unterabschnitte gehoeren zum Elternabschnitt).
 
 Die Liste wird live geholt und als Momentaufnahme in properties_snapshot.json
-abgelegt - damit bleibt ein Lauf reproduzierbar und --offline moeglich.
+abgelegt - damit bleibt ein Lauf reproduzierbar und --offline moeglich. Stand
+des Snapshots: 2026-08-23, 65 Eintraege (64 verschiedene, P5672 steht sowohl
+unter Physics als auch unter Thermal); zuletzt kamen die thermodynamischen
+Groessen P3078 (Standardbildungsenthalpie) und P3071 (molare Standardentropie)
+unter "Chemical" dazu - beide bedient materialswiki bereits.
 
 Die Projektseite listet nur Messgroessen. Die CAS-Nummer (P231) wird deshalb
 fest ergaenzt (Abschnitt "Identifikatoren", abschaltbar mit --no-extra) - sie
@@ -447,8 +451,8 @@ def main(argv: Optional[list] = None) -> int:
     # Die Ergaenzung loest sich damit von selbst auf, sobald die Projektseite
     # eine Property uebernimmt: P231 stand am 2026-08-16 noch nicht auf der
     # Seite und steht seit demselben Tag unter "Chemical". Ohne diese Pruefung
-    # erschiene sie in zwei Abschnitten und die Zusammenfassung zaehlte 62
-    # statt 61 Properties.
+    # erschiene sie in zwei Abschnitten und die Zusammenfassung zaehlte 66
+    # statt 65 Properties.
     uebernommen = []
     if not args.no_extra:
         schon_da = {p for v in sections.values() for p in v}

@@ -9,7 +9,8 @@ ausfuehrbar sind.
 
 Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
 
-    Formel  ->  COD  ->  Materials Project  ->  de.wikipedia  ->  en.wikipedia
+    Formel  ->  COD  ->  Materials Project  ->  NIST WebBook
+            ->  de.wikipedia  ->  en.wikipedia
 
 Zwei weitere Aussagen entstehen aus dem Item selbst: die chemische
 Metaklasse (P31) fuer Legierungen und die Punktgruppe (P589) aus einer
@@ -17,7 +18,7 @@ Raumgruppe (P690) am Item. Bestehende Aussagen "Stoff P527 Element" werden
 auf P2670 umgestellt - die einzige Stufe, die auch Loeschzeilen erzeugt.
 
 Abschaltbar mit --no-formel, --no-metaklasse, --no-punktgruppe,
---no-cod, --no-wikipedia.
+--no-cod, --no-nist, --no-wikipedia.
 
     python -m materialswiki --elements Ti O --max 50
     python -m materialswiki --group minerale --batch-size 150 --weiter
@@ -47,6 +48,7 @@ import argparse
 import collections
 import csv
 import datetime as dt
+import html as htmlmodul
 import json
 import os
 import re
@@ -67,2157 +69,118 @@ import konfig  # noqa: E402
 # Konfiguration
 # ---------------------------------------------------------------------------
 
-# Kontaktadresse und Schluessel kommen aus .env im Repo-Wurzelverzeichnis
-# (Vorlage: .env.beispiel). Diese Datei ist gitignoriert - so steht kein
-# Zugangsdatum im Quelltext und damit auch keines auf GitHub.
-CONTACT_EMAIL = konfig.wert("CONTACT_EMAIL", "DEINE-ADRESSE@example.org")
-CONTACT = f"mailto:{CONTACT_EMAIL}"
-
-# Zwei Kennungen, weil die beiden Gegenstellen Gegensaetzliches verlangen:
-#
-#   Wikimedia  verlangt laut User-Agent-Richtlinie eine sprechende Kennung
-#              mit Kontakt; "Bot" im Namen ist dort ueblich und erwuenscht.
-#   Materials  blockt genau das. Am Bestand geprueft (2026-08-15): mit
-#   Project    "MaterialsWikidataSuggestBot/0.1" antwortet die API HTTP 403
-#              "Forbidden", obwohl der Schluessel gueltig ist - und zwar
-#              BEVOR sie den Schluessel prueft. Ausschlaggebend ist allein
-#              das Wort "Bot": "SomethingBot/1.0" -> 403, dieselbe Kennung
-#              ohne "Bot" -> 200. Kontaktangaben stoeren nicht,
-#              "materialswiki/0.1 (mailto:...)" geht durch.
-#
-# Ein gemeinsamer User-Agent kann beide Anforderungen nicht erfuellen.
-USER_AGENT = f"MaterialsWikidataSuggestBot/0.1 ({CONTACT})"
-MP_USER_AGENT = f"materialswiki/0.1 ({CONTACT})"
-
-HEADERS = {"User-Agent": USER_AGENT, "Content-Type": "application/json"}
-
-MP_API = "https://api.materialsproject.org"
-# Die API verlangt einen Schluessel; ohne ihn antwortet jeder Endpunkt mit
-# HTTP 401. Aus .env bzw. der Umgebung statt aus dem Quelltext - ein
-# Schluessel im Repo waere ein Leck, sobald das Repo geteilt wird.
-MP_API_KEY = konfig.wert("MP_API_KEY")
-
-# Einzelne MP-Materialien haben keine eigene DOI. Belegt wird deshalb mit der
-# Referenzpublikation der Datenbank; welches Material gemeint ist, steht als
-# mp-ID in der Notiz und in der Belegspalte der CSV.
-MP_DOI = "10.1063/1.4812323"  # Jain et al. 2013, APL Materials 1, 011002
-
-# Die Nutzungsbedingungen verlangen fuer einzelne Datensaetze eine EIGENE
-# Zitierung zusaetzlich zur Hauptpublikation
-# (https://legacy.materialsproject.org/citing, geprueft am 2026-08-16).
-# Betroffen ist hier der Elastizitaets-Datensatz: Kompressionsmodul,
-# Schubmodul und Poissonzahl stammen samt und sonders daraus. Ohne diesen
-# Eintrag wuerde nur Jain et al. zitiert - die Zitierpflicht waere verletzt.
-MP_DATASET_DOI = {
-    "bulk_modulus": "10.1038/sdata.2015.9",
-    "shear_modulus": "10.1038/sdata.2015.9",
-    "poisson_ratio": "10.1038/sdata.2015.9",
-}
-MP_DATASET_WERK = {
-    "10.1038/sdata.2015.9": (
-        "de Jong et al., Charting the complete elastic properties of "
-        "inorganic crystalline compounds, Sci Data 2:150009 (2015)"
-    ),
-}
-
-# Groesste Seite, die die API ausliefert (Feld meta.max_limit in jeder
-# Antwort, geprueft am 2026-08-15). Groessere Mengen kommen ueber _skip.
-MP_MAX_LIMIT = 1000
-
-WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
-WIKIDATA_API = "https://www.wikidata.org/w/api.php"
-
-REQUEST_DELAY_SEC = 1.0  # höflich sein, Rate Limits respektieren
-
-# MP-Feldpfad -> (interner Schluessel, Faktor auf die Wikidata-Einheit).
-# Der Faktor ist der Knackpunkt: die Moduln liefert MP in GPa, Wikidata will
-# Pascal. Die DICHTE dagegen kommt in g/cm^3 - genau der Einheit, in der sie
-# auch nach Wikidata geht (siehe PROPERTY_MAP) - und bleibt deshalb, wie sie
-# ist.
-#
-# Welche MP-Felder bewusst NICHT uebernommen sind (band_gap und weitere) und
-# warum: README, "Abgedeckte Properties".
-MP_FIELD_MAP = {
-    "density": ("density", 1.0),                       # g/cm^3, unveraendert
-    "symmetry.crystal_system": ("crystal_system", None),  # itemwertig
-    "bulk_modulus.vrh": ("bulk_modulus", 1e9),         # GPa     -> Pa
-    "shear_modulus.vrh": ("shear_modulus", 1e9),       # GPa     -> Pa
-    "homogeneous_poisson": ("poisson_ratio", 1.0),     # dimensionslos
-}
-
-# Groessen, die MP zwar liefert, die aber nur der Qualitaetsbewertung dienen
-# und nie zu einer Aussage werden. Sie landen als Kontext in der CSV.
-MP_META_FIELDS = ("material_id", "formula_pretty", "theoretical", "is_stable",
-                  "energy_above_hull", "database_IDs")
-
-# ---------------------------------------------------------------------------
-# Bestimmungsmethode: gerechnete Werte als solche kennzeichnen
-# ---------------------------------------------------------------------------
-#
-# Jede MP-Aussage traegt P459 -> Q1048589 ("berechnet, DFT"). Warum das noetig
-# ist, wie weit die Rechnung vom Messwert abweicht und warum es Q1048589 sein
-# muss und nicht der gleichnamige Stub Q1209474: README, "Die Werte sind
-# gerechnet, nicht gemessen". Infobox-Werte bekommen bewusst KEINEN
-# Qualifikator - dort steht die Methode nicht dabei.
-DETERMINATION_PID = "P459"
-DFT_QID = "Q1048589"
-DFT_LABEL = "Dichtefunktionaltheorie"
-
-# ---------------------------------------------------------------------------
-# Messbedingungen der Dichte (P2054)
-# ---------------------------------------------------------------------------
-#
-# P2054 verlangt laut Nutzungsanweisung Temperatur (P2076) und
-# Aggregatzustand (P515) als Qualifikatoren. Begruendung und Belege:
-# README, "Die Dichte traegt ihre Messbedingungen".
-TEMPERATUR_PID = "P2076"
-AGGREGAT_PID = "P515"
-CELSIUS_QID = "Q25267"
-KELVIN_QID = "Q11579"
-AGGREGAT_FEST = "Q11438"      # Festkoerper
-AGGREGAT_FLUESSIG = "Q11435"  # Fluessigkeit
-AGGREGAT_GAS = "Q11432"       # Gas
-
-# Vorgabe, wenn die Quelle keine Messtemperatur nennt. Nicht willkuerlich:
-# die deutschen Elementinfoboxen schreiben ueberwiegend "(20 °C)".
-STANDARD_TEMPERATUR_C = 20.0
-
-# Die Temperatur JEDER MP-Groesse. Eine DFT-Rechnung kennt keine thermische
-# Anregung: Dichte wie Elastizitaetstensor gehoeren zum relaxierten
-# Grundzustand, also zu 0 K. Das ist keine Annahme ueber eine Messung,
-# sondern eine Eigenschaft der Rechnung - und genau die Groesse, an der die
-# systematische Abweichung von den Handbuchwerten haengt.
-DFT_TEMPERATUR = (TEMPERATUR_PID, f"0U{KELVIN_QID[1:]}", "0 K (DFT-Grundzustand)")
-
-# ---------------------------------------------------------------------------
-# Groessen, die NICHT mit der Rechnung belegt werden
-# ---------------------------------------------------------------------------
-#
-# Fuer das Kristallsystem ist die DFT-Rechnung der schwaechere Beleg als jedes
-# Standardwerk. Solche Groessen bekommen deshalb einen LITERATURBELEG und
-# folgerichtig KEINEN P459-Qualifikator. Warum, und was das fuer die Pruefung
-# der Zeile bedeutet: README, "Das Kristallsystem wird mit Literatur belegt".
-# ---------------------------------------------------------------------------
-# Physikalische Plausibilitaet
-# ---------------------------------------------------------------------------
-#
-# Die API-Filter sagen etwas ueber das MATERIAL aus, nichts ueber die einzelne
-# Rechnung - MP liefert vereinzelt Rechenmuell (Zink: Schubmodul -2781 GPa).
-# Der Fall im Detail: README, "Physikalisch Unmoegliches wird abgefangen".
-#
-# Geprueft wird gegen physikalische Schranken, in Wikidata-Einheiten:
-#   Moduln       muessen positiv sein; die Obergrenze liegt weit ueber
-#                Diamant (Kompressionsmodul ~443 GPa, Schubmodul ~535 GPa)
-#   Poissonzahl  ist fuer isotrope lineare Elastizitaet thermodynamisch auf
-#                [-1; 0,5] beschraenkt - ausserhalb ist sie unmoeglich
-#   Dichte       zwischen Lithium (0,534 g/cm^3) und Osmium (22,59 g/cm^3),
-#                grosszuegig gefasst
-#
-# Unplausible Werte werden NICHT still verworfen, sondern als
-# MANUELLE_KLAERUNG_NOETIG ausgewiesen: sonst faellt nie auf, dass die
-# Datenbank an dieser Stelle kaputt ist.
-PLAUSIBEL = {
-    "density": (0.01, 30.0),               # g/cm^3
-    "bulk_modulus": (1e6, 1e12),           # Pa, also 0,001 bis 1000 GPa
-    "shear_modulus": (1e6, 1e12),          # Pa
-    "poisson_ratio": (-1.0, 0.5),          # dimensionslos, thermodynamisch
-    # Spannweite an den 62 Elementwerten der englischen Infoboxen: 2,556
-    # (Silicium) bis 92,6 (Caesium). Grosszuegig gefasst - unterhalb von 0
-    # waere die Angabe aber physikalisch kaum noch ein Elementwert, und
-    # oberhalb von 200 steht dort etwas anderes.
-    "linear_thermal_expansion": (0.0, 200.0),   # um/(m*K)
-}
-
-
-def ist_plausibel(internal_key: str, wert) -> bool:
-    """False, wenn der Wert physikalisch unmoeglich ist."""
-    grenzen = PLAUSIBEL.get(internal_key)
-    if grenzen is None or not isinstance(wert, (int, float)):
-        return True
-    return grenzen[0] <= wert <= grenzen[1]
-
-
-# ---------------------------------------------------------------------------
-# Groessen, die gar keinen Beleg bekommen
-# ---------------------------------------------------------------------------
-#
-# Externe Identifikatoren belegen sich selbst; sie gehen ohne S-Angabe raus,
-# die Herkunft bleibt in ref_note. Warum: README, "Identifikatoren bekommen
-# gar keinen Beleg". Entschieden ueber den DATENTYP statt ueber einzelne
-# P-Nummern - was external-id ist, ist per Definition ein Identifikator.
-OHNE_BELEG_DATENTYPEN = {"external-id"}
-
-LITERATUR_BELEG = {
-    "crystal_system": {
-        # Greenwood/Earnshaw, Chemistry of the Elements, 2. Aufl. 1997.
-        # ISBN am 2026-08-15 geprueft: Pruefsumme gueltig, ueber OpenLibrary
-        # als dieses Werk bestaetigt. ISBN-10 -> QuickStatements S957.
-        "isbn": "0-08-037941-9",
-        "werk": "Greenwood/Earnshaw, Chemistry of the Elements, 2. Aufl. 1997",
-    },
-}
-
-# MP schreibt das Kristallsystem gross ("Tetragonal"), die value_map unten
-# klein. Verglichen wird deshalb in Kleinschreibung; das Vokabular ist
-# ansonsten identisch (dieselben sieben Systeme).
-
-# Interner Schlüssel -> (Wikidata-Property, Datentyp, Einheit-QID, Beschreibung)
-# NUR mit auf wikidata.org verifizierten Properties befüllen!
-#
-# "datatype" muss zum Wikidata-Datentyp der Property passen:
-#   "quantity" -> Zahlwert + unit_qid
-#   "item"     -> QID-Wert; "value_map" uebersetzt den Quellstring in ein QID.
-#                 Werte ausserhalb der value_map werden NICHT geraten, sondern
-#                 zur manuellen Klaerung markiert.
-PROPERTY_MAP = {
-    # Dichte in GRAMM PRO KUBIKZENTIMETER. Beide Einheiten sind laut
-    # Constraint erlaubt (Q844211 kg/m^3, Q13147228 g/cm^3, dazu g/l und
-    # g/m^3), aber der Bestand ist eindeutig: 2015 der 2476 P2054-Aussagen
-    # stehen in g/cm^3 und nur 461 in kg/m^3 (gemessen 2026-08-19). Es ist
-    # ausserdem die Einheit, in der alle hiesigen Quellen liefern - MP wie
-    # beide Wikipedias -, also entfaellt jede Umrechnung.
-    "density": {
-        "pid": "P2054",
-        "datatype": "quantity",
-        "unit_qid": "Q13147228",  # Gramm pro Kubikzentimeter, g/cm^3
-        "label": "Dichte",
-    },
-    "melting_point": {
-        "pid": "P2101",
-        "datatype": "quantity",
-        "unit_qid": "Q11579",  # Kelvin
-        "label": "Schmelzpunkt",
-    },
-    "boiling_point": {
-        "pid": "P2102",
-        "datatype": "quantity",
-        "unit_qid": "Q11579",  # Kelvin
-        "label": "Siedepunkt",
-    },
-    # P556 ist item-wertig. Die QIDs sind nicht geraten, sondern der
-    # "one-of"-Constraint der Property, am 2026-08-15 ausgelesen. Er umfasst
-    # inzwischen ELF Werte: die sieben Kristallsysteme plus
-    #
-    #   Q3006714  face-centered cubic  (fcc, kubisch flaechenzentriert)
-    #   Q851536   body-centered cubic  (bcc, kubisch raumzentriert)
-    #   Q103382   amorphes Material
-    #   Q263214   Quasikristall
-    #
-    # fcc und bcc sind streng genommen Bravais-Gitter und keine
-    # Kristallsysteme; Wikidata laesst sie auf P556 dennoch zu, und sie sind
-    # die AUSSAGEKRAEFTIGEREN Werte - "kubisch" allein unterschlaegt den
-    # Unterschied zwischen Kupfer und Wolfram. Wo die Quelle die Zentrierung
-    # hergibt, wird deshalb der spezifischere Wert genommen (siehe
-    # verfeinere_zentrierung und die Stichwortlisten der beiden Wikipedias).
-    #
-    # amorph und Quasikristall stehen bewusst NICHT hier: weder MP noch die
-    # Infoboxen liefern sie, und ein Wert ausserhalb der value_map wird
-    # ohnehin zur manuellen Klaerung markiert statt geraten.
-    "crystal_system": {
-        "pid": "P556",
-        "datatype": "item",
-        "unit_qid": "",
-        "label": "Kristallsystem",
-        "value_map": {
-            "cubic": ("Q473227", "kubisches Kristallsystem"),
-            "fcc": ("Q3006714", "kubisch flaechenzentriert"),
-            "bcc": ("Q851536", "kubisch raumzentriert"),
-            "hexagonal": ("Q663314", "hexagonales Kristallsystem"),
-            "monoclinic": ("Q624543", "monoklines Kristallsystem"),
-            "orthorhombic": ("Q648961", "orthorhombisches Kristallsystem"),
-            "tetragonal": ("Q503601", "tetragonales Kristallsystem"),
-            "triclinic": ("Q376927", "triklines Kristallsystem"),
-            "trigonal": ("Q588274", "trigonales Kristallsystem"),
-        },
-    },
-    # Elastische Moduln. MP fuehrt sie als Objekt mit voigt/reuss/vrh;
-    # genommen wird das Voigt-Reuss-Hill-Mittel (Pfad "...vrh" in
-    # MP_FIELD_MAP), das uebliche Mittel fuer polykristalline Werkstoffe.
-    # MP rechnet in GPa, Wikidata will Pascal - Faktor steht in MP_FIELD_MAP.
-    "bulk_modulus": {
-        "pid": "P5668",
-        "datatype": "quantity",
-        "unit_qid": "Q44395",  # Pascal
-        "label": "Kompressionsmodul",
-    },
-    "shear_modulus": {
-        "pid": "P5673",
-        "datatype": "quantity",
-        "unit_qid": "Q44395",  # Pascal
-        "label": "Schubmodul",
-    },
-    "thermal_conductivity": {
-        "pid": "P2068",
-        "datatype": "quantity",
-        "unit_qid": "Q1463969",  # Watt pro Meter-Kelvin, W/(m*K)
-        "label": "Waermeleitfaehigkeit",
-    },
-    "electrical_conductivity": {
-        "pid": "P2055",
-        "datatype": "quantity",
-        "unit_qid": "Q80842107",  # Siemens pro Meter, S/m
-        "label": "Elektrische Leitfaehigkeit",
-    },
-    # Aus der Wikipedia-Infobox kommt der spezifische Widerstand direkt;
-    # er wird als solcher uebernommen und NICHT zur Leitfaehigkeit
-    # umgerechnet - so steht in der Aussage, was die Quelle wirklich sagt.
-    "electrical_resistivity": {
-        "pid": "P5679",
-        "datatype": "quantity",
-        "unit_qid": "Q1441459",  # Ohm-Meter, Ohm*m
-        "label": "Spezifischer Widerstand",
-    },
-    # Spezifische Waermekapazitaet - MP fuehrt sie nicht, aber die deutsche
-    # Wikipedia fuehrt sie als Skalar in J/(kg*K).
-    "specific_heat_capacity": {
-        "pid": "P2056",
-        "datatype": "quantity",
-        "unit_qid": "Q3085309",  # Joule pro Kilogramm-Kelvin, J/(kg*K)
-        "label": "Spezifische Waermekapazitaet",
-    },
-    "speed_of_sound": {
-        "pid": "P2075",
-        "datatype": "quantity",
-        "unit_qid": "Q182429",  # Meter pro Sekunde, m/s
-        "label": "Schallgeschwindigkeit",
-    },
-    "poisson_ratio": {
-        "pid": "P5593",
-        "datatype": "quantity",
-        "unit_qid": "",  # dimensionslos
-        "label": "Poissonzahl",
-    },
-    # CAS-Nummer: Datentyp external-id, also eine Zeichenkette ohne Einheit.
-    # Q102507 ("CAS-Nummer") traegt P1687 -> P231; das ist die Property.
-    "cas_number": {
-        "pid": "P231",
-        "datatype": "external-id",
-        "unit_qid": "",
-        "label": "CAS-Nummer",
-    },
-    # Raumgruppe. Itemwertig, aber OHNE value_map: die Zielitems sind die 230
-    # Raumgruppen, die per P9733 (Raumgruppennummer) aus Wikidata selbst
-    # aufgeloest werden - siehe fetch_space_group_qids. Eine handgepflegte
-    # Tabelle mit 230 Eintraegen waere sofort veraltet.
-    "space_group": {
-        "pid": "P690",
-        "datatype": "item",
-        "unit_qid": "",
-        "label": "Raumgruppe",
-    },
-    # Laengenausdehnungskoeffizient. Einzige laut Constraint erlaubte
-    # Einheit ist Q56025776 (Mikrometer pro Meterkelvin) - genau die, in der
-    # die englischen Elementinfoboxen rechnen: "{{val|16.64|e=-6}}/K" sind
-    # 16,64 um/(m*K). Am Bestand traegt die Property noch KEINE einzige
-    # Aussage (gemessen 2026-08-19); Quelle und Grenzen: README,
-    # "Laengenausdehnungskoeffizient (P5672)".
-    "linear_thermal_expansion": {
-        "pid": "P5672",
-        "datatype": "quantity",
-        "unit_qid": "Q56025776",  # Mikrometer pro Meterkelvin, um/(m*K)
-        "label": "Laengenausdehnungskoeffizient",
-    },
-    # Punktgruppe. Wie die Raumgruppe itemwertig und ohne value_map - die 32
-    # kristallographischen Punktgruppen stehen als Items in Wikidata und
-    # haengen dort schon an den Raumgruppen (230 der 236 Raumgruppen-Items
-    # tragen P589, gemessen 2026-08-19). Abgelesen statt abgebildet: eine
-    # eigene Tabelle waere eine zweite Wahrheit.
-    "point_group": {
-        "pid": "P589",
-        "datatype": "item",
-        "unit_qid": "",
-        "label": "Punktgruppe",
-    },
-    "cod_id": {
-        "pid": "P9824",
-        "datatype": "external-id",
-        "unit_qid": "",
-        "label": "COD-ID",
-    },
-    # Die chemischen Elemente eines Stoffs, je Element eine Aussage.
-    # Itemwertig, aufgeloest ueber fetch_element_qids - eine value_map waere
-    # hier eine zweite Elementtabelle.
-    #
-    # P2670 "enthaelt Elemente von", NICHT P527 "besteht aus": das Item eines
-    # Elements ist die KLASSE seiner Atome, kein einzelnes Stueck Materie.
-    # "Wasser besteht aus Wasserstoff" waere mereologisch falsch, "Wasser
-    # enthaelt Teile der Klasse Wasserstoff" trifft es. Vorbild im Bestand
-    # sind Kohlenstoffdioxid (Q1997) und Kohlenstoffmonoxid (Q2025): P2670 ->
-    # Element mit P1114 als Anzahl. Genau diese Form wird erzeugt.
-    "has_part_of_class": {
-        "pid": "P2670",
-        "datatype": "item",
-        "unit_qid": "",
-        "label": "enthaelt Elemente von",
-    },
-    # Nur fuer die UMSTELLUNG gebraucht: die alte, mereologisch falsche
-    # Aussage wird damit zum Entfernen ausgewiesen. Erzeugt wird P527 nie.
-    "has_part": {
-        "pid": "P527",
-        "datatype": "item",
-        "unit_qid": "",
-        "label": "besteht aus",
-    },
-    # Chemische Metaklasse. P31 steht hier AUSSCHLIESSLICH fuer die
-    # Metaklasse nach WikiProject Chemistry, nie fuer eine inhaltliche
-    # Einordnung wie "Kupferlegierung" - siehe Abschnitt "Chemische
-    # Metaklasse (P31) fuer Legierungen".
-    "metaklasse": {
-        "pid": "P31",
-        "datatype": "item",
-        "unit_qid": "",
-        "label": "ist ein(e)",
-    },
-}
-
-
-# ---------------------------------------------------------------------------
-# Referenz-Modell: DOI bevorzugt, sonst Referenz-URL + Abrufdatum
-# ---------------------------------------------------------------------------
-
-WIKIPEDIA_EN_QID = "Q328"  # englischsprachige Wikipedia
-
-
-class Reference:
-    """Belegt einen Wert. Drei Arten, in absteigender Belastbarkeit:
-
-      DOI      -> S356                                 (stabil, zitierfaehig)
-      Import   -> S143 <Projekt-QID> + S4656 <URL>     (Wikimedia-Import)
-      URL      -> S854 + S813 (abgerufen am)           (Notnagel)
-
-    P143 "importiert aus Wikimedia-Projekt" zusammen mit P4656
-    "Wikimedia-Import-URL" ist die vorgesehene Form fuer aus einer Wikipedia
-    uebernommene Werte. Als Import-URL wird ein Permalink auf die konkrete
-    Version (oldid) gesetzt - sonst zeigt der Beleg auf eine Seite, die sich
-    nach dem Import beliebig geaendert haben kann.
-    """
-
-    def __init__(self, doi=None, isbn=None, url=None, imported_from=None,
-                 import_url=None, retrieved=None, note="", dataset_doi=None):
-        if not any((doi, isbn, url, import_url)):
-            raise ValueError("Reference braucht doi, isbn, url oder import_url")
-        self.doi = doi
-        # Zweite DOI fuer den konkreten Datensatz, wo die Quelle das verlangt
-        # (siehe MP_DATASET_DOI). Beide landen als eigener S356-Snak im
-        # SELBEN Referenzblock - die Aussage ist mit beiden Arbeiten belegt.
-        self.dataset_doi = dataset_doi
-        self.isbn = isbn
-        self.url = url
-        self.imported_from = imported_from
-        self.import_url = import_url
-        self.retrieved = retrieved or dt.date.today().isoformat()
-        self.note = note
-
-    @property
-    def dois(self) -> list:
-        return [d for d in (self.doi, self.dataset_doi) if d]
-
-    @property
-    def isbn_pid(self) -> str:
-        """P212 fuer ISBN-13, P957 fuer ISBN-10 - anhand der Ziffernzahl."""
-        ziffern = re.sub(r"[^\dXx]", "", self.isbn or "")
-        return "P212" if len(ziffern) == 13 else "P957"
-
-    @property
-    def mode(self) -> str:
-        if self.doi:
-            return "DOI"
-        if self.isbn:
-            return "ISBN-13" if self.isbn_pid == "P212" else "ISBN-10"
-        if self.import_url:
-            return "Wikimedia-Import"
-        return "URL+Datum"
-
-    def as_csv_fields(self) -> dict:
-        return {
-            "ref_mode": self.mode,
-            "ref_doi": "; ".join(self.dois),
-            "ref_isbn": self.isbn or "",
-            "ref_url": (
-                self.url
-                or self.import_url
-                or (f"https://doi.org/{self.doi}" if self.doi else "")
-            ),
-            # Abrufdatum nur wo noetig - DOI und ISBN sind stabil.
-            "ref_retrieved": "" if (self.doi or self.isbn) else self.retrieved,
-            "ref_note": self.note,
-        }
-
-    def as_quickstatements(self) -> str:
-        if self.doi:
-            return "".join(f'\tS356\t"{d}"' for d in self.dois)
-        if self.isbn:
-            return f'\t{self.isbn_pid.replace("P", "S")}\t"{self.isbn}"'
-        if self.import_url:
-            return (
-                f"\tS143\t{self.imported_from}"
-                f'\tS4656\t"{self.import_url}"'
-                f"\tS813\t+{self.retrieved}T00:00:00Z/11"
-            )
-        return f'\tS854\t"{self.url}"\tS813\t+{self.retrieved}T00:00:00Z/11'
-
-
-# ---------------------------------------------------------------------------
-# Schritt 1: Materialien aus dem Materials Project holen
-# ---------------------------------------------------------------------------
-
-class MissingApiKey(RuntimeError):
-    """Kein MP_API_KEY gesetzt - ohne Schluessel antwortet die API mit 401."""
-
-
-def mp_headers() -> dict:
-    if not MP_API_KEY:
-        raise MissingApiKey(
-            konfig.fehlt_hinweis("MP_API_KEY")
-            + "\nSchluessel kostenlos unter "
-            "https://next-gen.materialsproject.org/api"
-        )
-    # User-Agent bewusst ueberschreiben - siehe Kommentar bei MP_USER_AGENT.
-    return {**HEADERS, "User-Agent": MP_USER_AGENT, "X-API-KEY": MP_API_KEY}
-
-
-def fetch_mp_materials(
-    elements: Optional[list],
-    max_entries: int = 50,
-    pure_element: Optional[str] = None,
-    nur_experimentell: bool = True,
-    nur_stabil: bool = True,
-) -> list:
-    """Fragt den summary-Endpunkt des Materials Project ab.
-
-    EIN Aufruf genuegt: das Material-Dokument enthaelt Formel, Symmetrie und
-    alle Kennwerte zugleich. Zurueck kommt eine Liste von dicts mit formula,
-    material_id, den Metafeldern und den Rohwerten.
-
-    Die drei Qualitaetsfilter entscheiden ueber die Brauchbarkeit:
-
-      nur_experimentell  theoretical=false - das Material ist experimentell
-                         nachgewiesen (in aller Regel ICSD-hinterlegt) und
-                         nicht bloss durchgerechnet.
-      nur_stabil         is_stable=true - liegt auf der konvexen Huelle, ist
-                         also thermodynamisch stabil und keine Phase, die es
-                         so gar nicht gibt.
-      (immer)            deprecated=false - keine zurueckgezogenen Dokumente.
-
-    pure_element schraenkt auf den REINEN Stoff ein (nelements == 1) - der
-    Modus fuer das Periodensystem, wo ein Material genau einem Element
-    zugeordnet werden muss.
-    """
-    # Nur die Top-Level-Namen anfordern; Unterfelder wie "symmetry.crystal_system"
-    # kennt _fields nicht, die kommen im Objekt "symmetry" mit.
-    felder = {pfad.split(".")[0] for pfad in MP_FIELD_MAP}
-    felder.update(MP_META_FIELDS)
-
-    params = {
-        "_fields": ",".join(sorted(felder)),
-        "deprecated": "false",
-    }
-    if nur_experimentell:
-        params["theoretical"] = "false"
-    if nur_stabil:
-        params["is_stable"] = "true"
-    if pure_element:
-        params["elements"] = pure_element
-        params["nelements"] = 1
-    elif elements:
-        params["elements"] = ",".join(elements)
-
-    # Seitenweise holen. Die API deckelt _limit bei 1000 (Feld meta.max_limit),
-    # liefert aber ohne Murren weniger, wenn man mehr verlangt - wer einfach
-    # min(max_entries, 100) sendet, bekommt bei --max 500 stillschweigend 100
-    # Dokumente und merkt es nicht. Deshalb echte Paginierung ueber _skip.
-    materials = []
-    while len(materials) < max_entries:
-        params["_limit"] = min(max_entries - len(materials), MP_MAX_LIMIT)
-        params["_skip"] = len(materials)
-        resp = request_with_retry(
-            "GET", f"{MP_API}/materials/summary/",
-            headers=mp_headers(), params=params,
-        )
-        # Zwei verschiedene Codes, dieselbe Ursache - am Bestand geprueft
-        # (2026-08-15): ohne Schluessel antwortet MP mit 401 "No API key found
-        # in request", mit einem falschen Schluessel dagegen mit 403
-        # "Forbidden". Wer nur 401 abfaengt, bekommt beim Tippfehler im
-        # Schluessel einen nichtssagenden RuntimeError.
-        if resp.status_code in (401, 403):
-            raise MissingApiKey(
-                f"Materials Project weist die Anfrage zurueck (HTTP "
-                f"{resp.status_code}). MP_API_KEY pruefen - Schluessel unter "
-                f"https://next-gen.materialsproject.org/api"
-            )
-        if not resp.ok:
-            # MP begruendet Query-Fehler (422) im Body - sonst geht die
-            # eigentliche Ursache im generischen HTTPError verloren.
-            raise RuntimeError(
-                f"MP-Query fehlgeschlagen ({resp.status_code}): "
-                f"{resp.text[:500]}"
-            )
-
-        seite = resp.json().get("data", [])
-        if not seite:
-            break  # keine weiteren Treffer
-        for doc in seite:
-            formel = doc.get("formula_pretty")
-            if not formel:
-                continue
-            doc["formula"] = formel
-            materials.append(doc)
-        if len(seite) < params["_limit"]:
-            break  # letzte Seite war nicht voll -> Ende der Treffermenge
-
-    return materials[:max_entries]
-
-
-_LAST_REQUEST = 0.0
-
-
-
-def request_with_retry(method: str, url: str, attempts: int = 4, **kwargs):
-    """Einziger HTTP-Einstiegspunkt: drosselt und wiederholt bei 429/5xx.
-
-    Die Drosselung steckt hier statt in den Aufrufern - so wird genau dann
-    gewartet, wenn wirklich eine Anfrage rausgeht (Cache-Treffer bremsen
-    nichts mehr), und keine Stelle kann das Rate-Limit versehentlich umgehen.
-
-    Ohne Retry reisst ein einzelner 502 den kompletten Lauf ab; der
-    Wikidata-Query-Service liefert die unter Last sporadisch.
-    """
-    global _LAST_REQUEST
-    delay = 2.0
-    for attempt in range(1, attempts + 1):
-        wait = REQUEST_DELAY_SEC - (time.monotonic() - _LAST_REQUEST)
-        if wait > 0:
-            time.sleep(wait)
-        _LAST_REQUEST = time.monotonic()
-        try:
-            # headers ueberschreibbar - die MP-API braucht zusaetzlich
-            # X-API-KEY, alle anderen Aufrufer bleiben bei HEADERS.
-            resp = requests.request(
-                method, url, timeout=60,
-                **{"headers": HEADERS, **kwargs}
-            )
-        except requests.RequestException:
-            if attempt == attempts:
-                raise
-        else:
-            if resp.status_code < 500 and resp.status_code != 429:
-                return resp
-            if attempt == attempts:
-                resp.raise_for_status()
-            print(
-                f"  HTTP {resp.status_code} von {url} - Versuch "
-                f"{attempt}/{attempts}, warte {delay:.0f}s",
-                file=sys.stderr,
-            )
-        time.sleep(delay)
-        delay *= 2
-    raise RuntimeError(f"Unerreichbar: {url}")
-
-
-def get_with_retry(url: str, params: dict, attempts: int = 4):
-    resp = request_with_retry("GET", url, attempts, params=params)
-    resp.raise_for_status()
-    return resp
-
-
-# ---------------------------------------------------------------------------
-# Crystallography Open Database (COD) - primaere Strukturquelle
-# ---------------------------------------------------------------------------
-#
-# Warum COD vor dem Materials Project steht (CC0 statt CC BY, DOI der
-# Originalarbeit statt Sammel-DOI, gemessen statt gerechnet) und wie die
-# Modifikation gewaehlt wird: README, "Quellenkaskade". MP bleibt Fallback.
-#
-# Kein API-Schluessel noetig; dokumentierte RESTful-API
-# (https://wiki.crystallography.net/RESTful_API/, geprueft am 2026-08-16).
-COD_API = "https://www.crystallography.net/cod/result"
-COD_ENTRY_URL = "https://www.crystallography.net/cod/{cod_id}.html"
-
-# Zuordnung Raumgruppennummer -> Kristallsystem, normativ aus den
-# International Tables for Crystallography (Bd. A). KEINE Heuristik: die
-# Bereiche sind so definiert. Dient nur als Rueckfall - primaer wird das
-# Kristallsystem am Raumgruppen-Item selbst abgelesen (P556), und das deckt
-# 229 der 230 Raumgruppen ab.
-KRISTALLSYSTEM_BEREICHE = [
-    (1, 2, "triclinic"), (3, 15, "monoclinic"), (16, 74, "orthorhombic"),
-    (75, 142, "tetragonal"), (143, 167, "trigonal"), (168, 194, "hexagonal"),
-    (195, 230, "cubic"),
-]
-
-
-def kristallsystem_aus_nummer(nummer: int) -> Optional[str]:
-    for von, bis, name in KRISTALLSYSTEM_BEREICHE:
-        if von <= nummer <= bis:
-            return name
-    return None
-
-
-_SPACE_GROUP_CACHE = None
-
-
-def fetch_space_group_qids() -> dict:
-    """{Raumgruppennummer: {qid, label, cs_qid, cs_label, pg_qid, pg_label}}.
-
-    Aufgeloest ueber P9733 (Raumgruppennummer) statt ueber Labels - die
-    Raumgruppen-Items sind uneinheitlich benannt ("Raumgruppe 227" neben
-    "space group C2/m"), die Nummer ist der einzige verlaessliche Schluessel.
-
-    Kristallsystem (P556) und Punktgruppe (P589) kommen vom Raumgruppen-Item
-    selbst: Wikidata weiss dort bereits, dass Raumgruppe 227 kubisch ist und
-    zur Punktgruppe m-3m gehoert. Das erspart zwei gepflegte Tabellen - und
-    die Punktgruppe kostet nicht einmal eine eigene Abfrage, sie faellt in
-    derselben ab. 230 der 236 Raumgruppen-Items fuehren sie (2026-08-19).
-
-    Sechs Nummern haben mehr als ein Item (Dubletten in Wikidata, am
-    2026-08-16: 40, 122, 146, 147, 148, 160). Gewaehlt wird deterministisch
-    das Item MIT Kristallsystem, bei Gleichstand die kleinere Q-Nummer.
-    """
-    global _SPACE_GROUP_CACHE
-    if _SPACE_GROUP_CACHE is not None:
-        return _SPACE_GROUP_CACHE
-
-    query = """
-    SELECT ?nummer ?sg ?sgLabel ?cs ?csLabel ?pg ?pgLabel WHERE {
-      ?sg wdt:P9733 ?nummer .
-      OPTIONAL { ?sg wdt:P556 ?cs . }
-      OPTIONAL { ?sg wdt:P589 ?pg . }
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "de,en". }
-    }
-    """
-    resp = get_with_retry(WIKIDATA_SPARQL, {"query": query, "format": "json"})
-    gefunden = {}
-    for b in resp.json()["results"]["bindings"]:
-        nummer = int(float(b["nummer"]["value"]))
-        qid = b["sg"]["value"].rsplit("/", 1)[-1]
-        eintrag = {
-            "qid": qid,
-            "label": b.get("sgLabel", {}).get("value", qid),
-            "cs_qid": (b["cs"]["value"].rsplit("/", 1)[-1] if "cs" in b else ""),
-            "cs_label": b.get("csLabel", {}).get("value", ""),
-            "pg_qid": (b["pg"]["value"].rsplit("/", 1)[-1] if "pg" in b else ""),
-            "pg_label": b.get("pgLabel", {}).get("value", ""),
-        }
-        bisher = gefunden.get(nummer)
-        if bisher is None or _sg_besser(eintrag, bisher):
-            gefunden[nummer] = eintrag
-    _SPACE_GROUP_CACHE = gefunden
-    return gefunden
-
-
-def raumgruppen_nach_qid() -> dict:
-    """Dieselbe Tabelle, aber nach der QID des Raumgruppen-Items geschluesselt.
-
-    Gebraucht fuer den umgekehrten Weg: am Item steht eine Raumgruppe, und
-    gesucht ist ihre Punktgruppe - da ist die Nummer gar nicht bekannt.
-    """
-    return {e["qid"]: e for e in fetch_space_group_qids().values()}
-
-
-def _sg_besser(neu: dict, alt: dict) -> bool:
-    """Dubletten aufloesen: Kristallsystem schlaegt kein Kristallsystem,
-    danach die kleinere Q-Nummer."""
-    if bool(neu["cs_qid"]) != bool(alt["cs_qid"]):
-        return bool(neu["cs_qid"])
-    return int(neu["qid"][1:]) < int(alt["qid"][1:])
-
-
-def cod_hill_formula(formula: str) -> Optional[str]:
-    """Summenformel -> Hill-Notation, wie die COD-Suche sie verlangt.
-
-    COD sortiert STRIKT nach Hill: Kohlenstoff zuerst, dann Wasserstoff,
-    dann alle uebrigen alphabetisch; ohne Kohlenstoff rein alphabetisch.
-    Elemente durch Leerzeichen getrennt, die Anzahl direkt am Symbol.
-    Die Reihenfolge ist nicht kosmetisch - "Ti O2" liefert NULL Treffer,
-    "O2 Ti" deren 39 (am 2026-08-16 geprueft).
-    """
-    zusammensetzung = parse_formula(formula)
-    if not zusammensetzung:
-        return None
-    rest = sorted(el for el in zusammensetzung if el not in ("C", "H"))
-    reihenfolge = ([el for el in ("C", "H") if el in zusammensetzung] + rest
-                   if "C" in zusammensetzung else
-                   sorted(zusammensetzung))
-    return " ".join(
-        el + ("" if zusammensetzung[el] == 1 else str(zusammensetzung[el]))
-        for el in reihenfolge
-    )
-
-
-def fetch_cod_entries(element_symbol: Optional[str] = None,
-                      formula: Optional[str] = None,
-                      max_entries: int = 20) -> list:
-    """Strukturen aus der COD holen.
-
-    Bei element_symbol wird auf den REINEN Stoff eingegrenzt (strictmin=
-    strictmax=1, also genau ein Element) - sonst liefert el1=Cu auch jede
-    kupferhaltige Organometallverbindung.
-
-    include_duplicates/include_errors werden NICHT gesetzt; COD liefert dann
-    nur die bereinigten Eintraege.
-    """
-    params = {"format": "json"}
-    if element_symbol:
-        params.update({"el1": element_symbol, "strictmin": 1, "strictmax": 1})
-    elif formula:
-        hill = cod_hill_formula(formula)
-        if not hill:
-            return []  # nicht deutbare Formel - lieber nichts als Falsches
-        params["formula"] = hill
-    else:
-        raise ValueError("fetch_cod_entries braucht element_symbol oder formula")
-
-    resp = get_with_retry(COD_API, params)
-    try:
-        daten = resp.json()
-    except ValueError:
-        # COD antwortet bei leerer Treffermenge mit einem leeren Rumpf
-        return []
-    if not isinstance(daten, list):
-        return []
-    return daten[:max_entries]
-
-
-def cod_dominante_raumgruppe(entries: list) -> Optional[tuple]:
-    """(Raumgruppennummer, Treffer, ausgewertet, eindeutig) ueber alle Eintraege.
-
-    Der juengste Eintrag ist NICHT die uebliche Modifikation. Am Bestand
-    geprueft (2026-08-16): fuer Fe2O3 liefert die Wahl nach Jahrgang
-    Raumgruppe 15 (monoklin, 2 von 25 Eintraegen), waehrend 13 Eintraege
-    Haematit zeigen (167, trigonal). Entschieden wird deshalb nach
-    HAEUFIGKEIT - das trifft die Standardmodifikation.
-
-    "eindeutig" ist False, wenn die haeufigste Raumgruppe nicht mindestens
-    doppelt so oft vorkommt wie die zweithaeufigste. Dann GIBT es keine
-    uebliche Modifikation: TiO2 steht 12:11 zwischen Rutil (136) und Anatas
-    (141), und ein Vorschlag waere schlicht geraten.
-    """
-    zaehler = collections.Counter(
-        int(e["sgNumber"]) for e in entries
-        if str(e.get("sgNumber") or "").isdigit()
-    )
-    if not zaehler:
-        return None
-    haeufigste = zaehler.most_common(2)
-    nummer, anzahl = haeufigste[0]
-    zweite = haeufigste[1][1] if len(haeufigste) > 1 else 0
-    return (nummer, anzahl, sum(zaehler.values()), anzahl >= 2 * zweite)
-
-
-def cod_best_entry(entries: list, sg_number: Optional[int] = None) -> Optional[dict]:
-    """Der belastbarste Eintrag einer Trefferliste.
-
-    Rangfolge: Eintrag mit DOI schlaegt Eintrag ohne (nur mit DOI laesst sich
-    die Originalarbeit als Beleg setzen), danach der juengere Jahrgang,
-    zuletzt die kleinere COD-ID. Das letzte Kriterium ist kein Geschmack,
-    sondern Reproduzierbarkeit: ohne es haengt bei Gleichstand davon ab, in
-    welcher Reihenfolge die API antwortet, und zwei Laeufe schlagen
-    verschiedene Strukturen fuer denselben Stoff vor.
-
-    Mit `sg_number` wird auf eine Raumgruppe eingeschraenkt - so gehoeren
-    die vorgeschlagene COD-ID und die vorgeschlagene Raumgruppe zur selben
-    Struktur und nicht zu zwei verschiedenen Modifikationen.
-
-    Duplikate und als fehlerhaft markierte Eintraege fliegen vorher raus.
-    """
-    brauchbar = [
-        e for e in entries
-        if not e.get("duplicateof") and (e.get("status") or "").lower() not in
-        {"retracted", "errors"}
-    ]
-    if sg_number is not None:
-        brauchbar = [e for e in brauchbar
-                     if str(e.get("sgNumber") or "") == str(sg_number)]
-    if not brauchbar:
-        return None
-
-    def rang(e):
-        jahr = int(e["year"]) if str(e.get("year") or "").isdigit() else 0
-        cod_id = int(e["file"]) if str(e.get("file") or "").isdigit() else 0
-        return (1 if e.get("doi") else 0, jahr, -cod_id)
-
-    return max(brauchbar, key=rang)
-
-
-def cod_proposals_for_item(wd_match: dict, entries: list,
-                           skip_pids: Optional[set] = None) -> list:
-    """Vorschlagszeilen aus den COD-Treffern: COD-ID, Raumgruppe,
-    Kristallsystem.
-
-    Bekommt bewusst die GANZE Trefferliste, nicht einen Eintrag: welche
-    Raumgruppe die uebliche ist, entscheidet die Haeufigkeit ueber alle
-    Treffer (siehe cod_dominante_raumgruppe). Ein einzelner Eintrag waere
-    eine beliebige Modifikation.
-
-    Gitterparameter (a, b, c und die Winkel) liefert COD zwar mit, aber
-    Wikidata hat dafuer keine Property - am 2026-08-16 gesucht, es gibt
-    weder "lattice constant" noch "unit cell". Sie bleiben deshalb aussen
-    vor; der eigentliche Strukturinhalt laesst sich nicht eintragen.
-    """
-    skip_pids = skip_pids or set()
-    if not entries:
-        return []
-
-    mehrheit = cod_dominante_raumgruppe(entries)
-    nummer = mehrheit[0] if mehrheit else None
-    eindeutig = mehrheit[3] if mehrheit else False
-    # Eintrag aus der dominanten Raumgruppe, damit COD-ID und Raumgruppe
-    # dieselbe Struktur meinen.
-    entry = cod_best_entry(entries, sg_number=nummer if eindeutig else None)
-    if entry is None:
-        entry = cod_best_entry(entries)
-    if entry is None:
-        return []
-    cod_id = str(entry.get("file") or "").strip()
-    if not cod_id:
-        return []
-
-    # Beleg: die Originalarbeit, nicht die Datenbank. Genau das ist der
-    # Grund, COD dem Materials Project vorzuziehen.
-    quelle_text = ", ".join(
-        t for t in (
-            entry.get("journal"), str(entry.get("year") or "") or None,
-            f"Methode: {entry['method']}" if entry.get("method") else None,
-            f"T = {entry['celltemp']} K" if entry.get("celltemp") else None,
-        ) if t
-    )
-    note = f"COD {cod_id}" + (f"; {quelle_text}" if quelle_text else "")
-    if entry.get("doi"):
-        reference = Reference(doi=entry["doi"], note=note)
-    else:
-        reference = Reference(url=COD_ENTRY_URL.format(cod_id=cod_id), note=note)
-
-    # Gemessen, nicht gerechnet - der P459-Qualifikator der MP-Zeilen
-    # ("berechnet (DFT)") waere hier schlicht falsch und entfaellt.
-    proposals = []
-
-    # Ist der Stoff bei 20 C ein Gas, hat er keine Kristallstruktur - die
-    # COD-Eintraege beschreiben dann die Tieftemperaturphase.
-    gasfoermig = ist_bei_raumtemperatur_gas(wd_match["qid"])
-
-    def anfuegen(internal_key, value, value_label="", status=None):
-        prop_info = PROPERTY_MAP[internal_key]
-        if prop_info["pid"] in skip_pids:
-            return
-        if gasfoermig and internal_key in NUR_FESTKOERPER:
-            return
-        if status is None:
-            status = ("BEREITS_VORHANDEN"
-                      if item_has_statement(wd_match["qid"], prop_info["pid"])
-                      else "VORSCHLAG")
-        proposals.append(make_row(
-            status, "COD", wd_match, prop_info, value, value_label,
-            reference, formula=(entry.get("formula") or "").strip("- ").strip(),
-            entry_id=f"cod-{cod_id}", qualifiers=[],
-        ))
-
-    anfuegen("cod_id", cod_id)
-
-    if nummer is None:
-        return proposals
-
-    raumgruppen = fetch_space_group_qids()
-    sg = raumgruppen.get(nummer)
-    if sg is None:
-        return proposals
-
-    # Keine deutliche Mehrheit heisst: der Stoff hat mehrere gaengige
-    # Modifikationen (TiO2 = Rutil ODER Anatas). Dann wird nichts
-    # vorgeschlagen, sondern zur Klaerung markiert - raten waere schlimmer.
-    _, anzahl, gesamt, _ = mehrheit
-    klaerung = None if eindeutig else (
-        f"MANUELLE_KLAERUNG_NOETIG (keine eindeutige Modifikation: "
-        f"Raumgruppe {nummer} nur in {anzahl} von {gesamt} COD-Eintraegen)"
-    )
-    anfuegen("space_group", sg["qid"], sg["label"], status=klaerung)
-
-    # Die Punktgruppe folgt zwingend aus der Raumgruppe - jede der 230 gehoert
-    # zu genau einer der 32. Sie wird deshalb mit DERSELBEN Quelle belegt und
-    # traegt denselben Klaerungsvermerk: ist die Modifikation offen, ist es
-    # die Punktgruppe auch.
-    if sg["pg_qid"]:
-        anfuegen("point_group", sg["pg_qid"], sg["pg_label"], status=klaerung)
-
-    # Kristallsystem: bevorzugt am Raumgruppen-Item abgelesen, sonst ueber
-    # die normativen Nummernbereiche. Anschliessend wie bei MP auf fcc/bcc
-    # verfeinert, wo das Hermann-Mauguin-Symbol die Zentrierung hergibt.
-    cs_qid, cs_label = sg["cs_qid"], sg["cs_label"]
-    if not cs_qid:
-        name = kristallsystem_aus_nummer(nummer)
-        mapped = PROPERTY_MAP["crystal_system"]["value_map"].get(name)
-        if mapped:
-            cs_qid, cs_label = mapped
-    if cs_qid:
-        verfeinert = verfeinere_zentrierung(
-            _cs_name_aus_qid(cs_qid), entry.get("sg"))
-        mapped = PROPERTY_MAP["crystal_system"]["value_map"].get(verfeinert)
-        if mapped:
-            cs_qid, cs_label = mapped
-        anfuegen("crystal_system", cs_qid, cs_label, status=klaerung)
-    return proposals
-
-
-def _cs_name_aus_qid(qid: str) -> str:
-    """QID eines Kristallsystems -> interner Name der value_map."""
-    for name, (q, _) in PROPERTY_MAP["crystal_system"]["value_map"].items():
-        if q == qid:
-            return name
-    return ""
-
-
-# ---------------------------------------------------------------------------
-# Belege aus den Wikipedia-Einzelnachweisen ziehen
-# ---------------------------------------------------------------------------
-#
-# Traegt ein Infobox-Wert einen eigenen <ref> mit DOI oder ISBN, wird der
-# statt des Wikimedia-Imports gesetzt. Die zu behandelnden Schreibweisen -
-# darunter die reine Wiederverwendung <ref name="..." />, deren Inhalt
-# anderswo im Artikel steht - listet das README auf:
-# "Die drei Wikipedia-Stufen und ihre Fallstricke".
-
-_REF_TAG = re.compile(r"<ref([^>]*?)(?:/>|>(.*?)</ref>)", re.S | re.I)
-_REF_NAME_ATTR = re.compile(r'name\s*=\s*"([^"]+)"|name\s*=\s*([^\s/>]+)', re.I)
-
-_DOI_MUSTER = [
-    re.compile(r"\[\[\s*doi:\s*(10\.\d{4,9}/[^\]\s|]+)", re.I),
-    re.compile(r"\{\{\s*DOI\s*\|\s*(10\.\d{4,9}/[^}\s|]+)", re.I),
-    re.compile(r"\|\s*DOI\s*=\s*(10\.\d{4,9}/[^|}\n]+)", re.I),
-    re.compile(r"\bdoi:\s*(10\.\d{4,9}/[^\s,;\]}]+)", re.I),
-]
-_ISBN_MUSTER = [
-    re.compile(r"\|\s*ISBN\s*=\s*([\d\-Xx]{10,17})", re.I),
-    re.compile(r"\bISBN(?:-1[03])?[:\s=]\s*([\d\-Xx]{10,17})", re.I),
-]
-
-
-def _ref_name(attrs: str) -> Optional[str]:
-    m = _REF_NAME_ATTR.search(attrs or "")
-    return (m.group(1) or m.group(2)) if m else None
-
-
-def ref_texts_for_field(raw: str, article_wikitext: str) -> list:
-    """Volltexte aller Einzelnachweise eines Infobox-Feldes.
-
-    Selbstschliessende <ref name="X" /> werden ueber ihren Namen im Artikel
-    aufgeloest.
-    """
-    texts = []
-    for m in _REF_TAG.finditer(raw or ""):
-        attrs, inhalt = m.group(1), m.group(2)
-        if inhalt:
-            texts.append(inhalt)
-            continue
-        name = _ref_name(attrs)
-        if not name:
-            continue
-        treffer = re.search(
-            r'<ref[^>]*name\s*=\s*"?' + re.escape(name) + r'"?[^>/]*>(.*?)</ref>',
-            article_wikitext or "", re.S | re.I,
-        )
-        if treffer:
-            texts.append(treffer.group(1))
-    return texts
-
-
-def extract_ref_ids(raw: str, article_wikitext: str) -> dict:
-    """{'doi': ..., 'isbn': ...} aus den Belegen eines Feldes.
-
-    Nur EINDEUTIGE Treffer: nennen die Belege eines Feldes mehrere
-    verschiedene DOIs bzw. ISBNs, laesst sich der Wert keiner davon sicher
-    zuordnen - dann lieber der Import als ein falscher Literaturbeleg.
-    """
-    dois, isbns = [], []
-    for text in ref_texts_for_field(raw, article_wikitext):
-        for muster in _DOI_MUSTER:
-            for treffer in muster.findall(text):
-                dois.append(treffer.rstrip(" .,;)]}"))
-        for muster in _ISBN_MUSTER:
-            for treffer in muster.findall(text):
-                ziffern = re.sub(r"[^\dXx]", "", treffer)
-                if len(ziffern) in (10, 13):
-                    isbns.append(treffer.strip(" -"))
-
-    ids = {}
-    if len(set(dois)) == 1:
-        ids["doi"] = dois[0]
-    if len(set(isbns)) == 1:
-        ids["isbn"] = isbns[0]
-    return ids
-
-
-# ---------------------------------------------------------------------------
-# Fallback-Quelle 1: Deutsche Wikipedia, {{Infobox Chemisches Element}}
-# ---------------------------------------------------------------------------
-#
-# Die ergiebigste Quelle ueberhaupt: sie fuehrt als einzige P2056, P2055,
-# P2075, P5593 und P231. Der Artikeltitel kommt aus dem Wikidata-Sitelink,
-# NICHT aus dem Elementnamen geraten (Titan -> "Titan (Element)").
-#
-# Werte mit "<br" oder ":" nennen mehrere Modifikationen und werden VERWORFEN,
-# sonst landete willkuerlich Graphit oder Diamant als "der" Wert des Elements.
-# Die vollstaendige Liste der Zahl- und Markup-Eigenheiten, an denen sich die
-# Parser unten abarbeiten, steht im README:
-# "Die drei Wikipedia-Stufen und ihre Fallstricke".
-
-WIKIPEDIA_DE_QID = "Q48183"  # deutschsprachige Wikipedia
-WIKIPEDIA_DE_API = "https://de.wikipedia.org/w/api.php"
-
-# Infobox-Feld -> (interner Schluessel, Faktor auf die Wikidata-Einheit)
-WIKIPEDIA_DE_FIELDS = {
-    "Schmelzpunkt_K": ("melting_point", 1.0),            # K
-    "Siedepunkt_K": ("boiling_point", 1.0),              # K
-    "Dichte": ("density", 1.0),                          # g/cm^3
-    "Wärmeleitfähigkeit": ("thermal_conductivity", 1.0),  # W/(m*K)
-    "ElektrischeLeitfähigkeit": ("electrical_conductivity", 1.0),  # S/m
-    "SpezifischeWärmekapazität": ("specific_heat_capacity", 1.0),  # J/(kg*K)
-    "Schallgeschwindigkeit": ("speed_of_sound", 1.0),    # m/s
-    "Poissonzahl": ("poisson_ratio", 1.0),               # dimensionslos
-}
-
-WIKIPEDIA_DE_CRYSTAL_KEYWORDS = [
-    # Zentrierung zuerst: "kubisch flaechenzentriert" ist aussagekraeftiger
-    # als "kubisch", und die allgemeine Regel wuerde sonst greifen. Die
-    # Bindestrichvarianten kommen im Bestand beide vor.
-    ("kubisch flächenzentriert", "fcc"),
-    ("kubisch-flächenzentriert", "fcc"),
-    ("kubisch raumzentriert", "bcc"),
-    ("kubisch-raumzentriert", "bcc"),
-    ("orthorhombisch", "orthorhombic"),
-    ("rhombisch", "orthorhombic"),
-    ("tetragonal", "tetragonal"),
-    ("monoklin", "monoclinic"),
-    ("triklin", "triclinic"),
-    ("rhomboedrisch", "trigonal"),
-    ("rhomboëdrisch", "trigonal"),
-    ("trigonal", "trigonal"),
-    ("hexagonal", "hexagonal"),
-    ("kubisch", "cubic"),
-]
-
-# "58,1 · 10<sup>6</sup>" -> vor dem Tag-Strippen einfangen, sonst bleibt
-# nur "58,1 6" uebrig und die Zehnerpotenz ginge verloren.
-_DE_ZEHNERPOTENZ = re.compile(
-    r"([\d.,]+)\s*[·⋅*x]\s*10\s*<sup>\s*([−–-]?\s*\d+)\s*</sup>", re.I
-)
-_DE_CASRN = re.compile(r"\{\{\s*CASRN\s*\|\s*([\d-]+)\s*\}\}", re.I)
-_DE_HEDGE = re.compile(r"^(etwa|ca\.?|ungefähr|circa|rund|≈|~)\s*", re.I)
-_DE_NUMBER = re.compile(r"^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$")
-# Einheiten, die hinter der Zahl stehen duerfen und abgetrennt werden.
-# "g·cm-3" und "°C" kommen aus der Verbindungsinfobox (siehe unten), die
-# Elementinfobox schreibt "g/cm³" bzw. gar keine Einheit.
-_DE_UNIT = re.compile(
-    r"\s*(g\s*/\s*cm\s*\^?\s*3|g/cm³|g\s*[·⋅*]\s*cm\s*\^?\s*-?\s*3"
-    r"|kg\s*/\s*m\s*\^?\s*3|°\s*C|K|W|S/m|m/s|GPa|Pa)\s*$"
+# Kennungen, Endpunkte und Schluessel stehen in konfiguration.py - sie werden
+# von jedem Modul gebraucht und sind keine Logik.
+from .konfiguration import (  # noqa: E402
+    CONTACT, CONTACT_EMAIL, HEADERS, MP_API, MP_API_KEY, MP_DATASET_DOI,
+    MP_DATASET_WERK, MP_DOI, MP_MAX_LIMIT, MP_USER_AGENT, REQUEST_DELAY_SEC,
+    USER_AGENT, WIKIDATA_API, WIKIDATA_SPARQL,
 )
 
 
-def parse_de_number(raw: str) -> Optional[float]:
-    """Zahl aus einem deutschen Infobox-Feld, sonst None.
-
-    Konservativ: mehrdeutige Felder (mehrere Modifikationen), Bereiche und
-    alles mit Resttext werden verworfen statt interpretiert.
-    """
-    s = raw or ""
-    if not s.strip():
-        return None
-    # Auskommentiertes zuerst weg (Kohlenstoff), dann Mehrdeutigkeit pruefen
-    s = _WIKI_COMMENT.sub(" ", s)
-    if "<br" in s.lower() or ":" in _WIKI_REF.sub(" ", s):
-        return None  # mehrere Modifikationen / beschrifteter Wert
-
-    # Zehnerpotenz normalisieren, bevor die Tags fallen
-    s = _DE_ZEHNERPOTENZ.sub(
-        lambda m: f"{m.group(1)}e{m.group(2).replace(' ', '').replace('−', '-').replace('–', '-')}",
-        s,
-    )
-    s = strip_wiki_markup(s)
-    s = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r"\1", s)  # [[Kelvin|K]] -> K
-    s = _DE_HEDGE.sub("", s.strip())
-    if "±" in s:
-        s = s.split("±")[0]  # "1812 ± 1 K" -> Hauptwert
-    if "{{" in s or "…" in s or "–" in s:
-        return None  # Restvorlage oder Bereich
-    # Einheit und angehaengte Messbedingung "(20 °C)" abtragen, in
-    # beliebiger Reihenfolge - beides kann am Ende stehen.
-    s = s.strip()
-    for _ in range(3):
-        vorher = s
-        s = re.sub(r"\s*\([^()]*\)\s*$", "", s).strip()
-        s = _DE_UNIT.sub("", s).strip()
-        if s == vorher:
-            break
-
-    if "," in s:  # deutsches Dezimalkomma, Punkt ist Tausendertrenner
-        s = s.replace(".", "").replace(",", ".")
-    if not _DE_NUMBER.match(s):
-        return None
-    return float(s)
-
-
-def parse_de_cas(raw: str) -> Optional[str]:
-    """CAS-Nummer aus {{CASRN|7440-50-8}}.
-
-    Nur bei GENAU einer Nummer - manche Elemente listen je Modifikation
-    eine eigene (Kohlenstoff: Graphit und Diamant), dann ist unklar, welche
-    dem Element-Item zusteht. Ein blosses angehaengtes <br /> ist dagegen
-    unschaedlich.
-    """
-    treffer = _DE_CASRN.findall(raw or "")
-    return treffer[0] if len(treffer) == 1 else None
-
-
-# Verbindungen stehen in der deutschen Wikipedia nicht in der Elementinfobox,
-# sondern in {{Infobox Chemikalie}}. Deren Felder heissen anders und - der
-# entscheidende Unterschied - die Temperaturen stehen in GRAD CELSIUS:
-#   | Schmelzpunkt = 1855 [[Grad Celsius|°C]]<ref .../>
-#   | Siedepunkt   = 2900 °C
-#   | Dichte       = 4,23 g·cm<sup>−3</sup>
-#   | CAS          = {{CASRN|13463-67-7}}
-# Ein Artikel traegt immer nur eine der beiden Infoboxen, deshalb koennen
-# beide Feldsaetze gefahrlos nacheinander auf denselben Wikitext angewendet
-# werden.
-WIKIPEDIA_DE_CHEM_FIELDS = {
-    "Dichte": ("density", 1.0),   # g/cm^3
-}
-
-_DE_TEMP_K = re.compile(r"([+-]?[\d.,]+)\s*K(?![A-Za-z])")
-_DE_TEMP_C = re.compile(r"([+-]?[\d.,]+)\s*°\s*C")
-# Zersetzung/Sublimation ist kein Schmelzpunkt, "> 300" keine Zahl.
-_DE_TEMP_UNSICHER = re.compile(r"zersetz|sublim|explod|[<>≤≥]", re.I)
-
-
-def _de_zahl(roh: str) -> Optional[float]:
-    """Deutsche Zahlschreibweise -> float ('1.234,5' -> 1234.5)."""
-    s = (roh or "").strip()
-    if "," in s:  # Dezimalkomma, Punkt ist Tausendertrenner
-        s = s.replace(".", "").replace(",", ".")
-    return float(s) if _DE_NUMBER.match(s) else None
-
-
-def parse_de_temperature(raw: str) -> Optional[float]:
-    """Temperatur aus der Verbindungsinfobox, umgerechnet in KELVIN.
-
-    Die Einheit MUSS im Feld stehen: "1843" allein laesst offen, ob Grad
-    Celsius oder Kelvin gemeint ist, und der Unterschied waere ein um 273,15
-    danebenliegender Wert in Wikidata. Steht beides da ("1855 °C (2128 K)"),
-    gewinnt Kelvin - dieser Wert geht ohne Umrechnung durch.
-
-    Verworfen wird wie ueberall alles Mehrdeutige: mehrere Modifikationen,
-    Bereiche, Zersetzungs- statt Schmelztemperaturen, Ungleichungen.
-    """
-    s = _WIKI_COMMENT.sub(" ", raw or "")
-    if "<br" in s.lower() or ":" in _WIKI_REF.sub(" ", s):
-        return None  # mehrere Modifikationen / beschrifteter Wert
-    s = strip_wiki_markup(s)
-    s = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r"\1", s)  # [[Grad Celsius|°C]]
-    s = _DE_HEDGE.sub("", s.strip())
-    if "{{" in s or "…" in s or "–" in s or _DE_TEMP_UNSICHER.search(s):
-        return None
-    if "±" in s:
-        s = s.split("±")[0]
-
-    treffer = _DE_TEMP_K.search(s)
-    if treffer:
-        return _de_zahl(treffer.group(1))
-    treffer = _DE_TEMP_C.search(s)
-    if treffer:
-        wert = _de_zahl(treffer.group(1))
-        return None if wert is None else wert + 273.15
-    return None
-
-
-def wikipedia_de_chem_values(fields: dict, article_wikitext: str = "") -> dict:
-    """{Schluessel: (wert, notiz, beleg_ids)} aus {{Infobox Chemikalie}}."""
-    out = {}
-
-    def merken(key, value, feld, note):
-        out[key] = (value, note, extract_ref_ids(fields.get(feld, ""),
-                                                 article_wikitext))
-
-    for feld, (key, faktor) in WIKIPEDIA_DE_CHEM_FIELDS.items():
-        value = parse_de_number(fields.get(feld, ""))
-        if value is None:
-            continue
-        if key == "density" and not (0.01 <= value <= 30):
-            continue  # g/cm^3 plausibel? sonst steht dort etwas anderes
-        merken(key, value * faktor, feld, f"Infobox-Feld '{feld}'")
-
-    for feld, key in (("Schmelzpunkt", "melting_point"),
-                      ("Siedepunkt", "boiling_point")):
-        kelvin = parse_de_temperature(fields.get(feld, ""))
-        if kelvin is not None:
-            merken(key, kelvin, feld, f"Infobox-Feld '{feld}' (in Kelvin)")
-
-    cas = parse_de_cas(fields.get("CAS", ""))
-    if cas:
-        merken("cas_number", cas, "CAS", "Infobox-Feld 'CAS'")
-    return out
-
-
-def fetch_page_infobox(api: str, page: str, site: str):
-    """(Felder, Permalink, Wikitext) einer beliebigen Wiki-Seite.
-
-    Gemeinsame Basis fuer alle drei Faelle: deutscher Artikel (Element wie
-    Verbindung), englische Elementvorlage und englischer Verbindungsartikel.
-
-    Der volle Wikitext wird mitgegeben, weil benannte Einzelnachweise
-    (<ref name="X" />) nur ueber den restlichen Artikel aufloesbar sind.
-    Der Permalink zeigt auf die konkrete Version (oldid) - ein Beleg auf
-    "die Seite" waere wertlos, sobald sie sich aendert.
-    """
-    resp = request_with_retry("GET", api, params={
-        "action": "parse", "page": page, "prop": "wikitext|revid",
-        "format": "json", "formatversion": "2",
-    })
-    if resp.status_code != 200:
-        return None, None, ""
-    data = resp.json()
-    if "error" in data:
-        return None, None, ""
-    parse = data["parse"]
-    permalink = (
-        f"{site}/w/index.php?title={page.replace(' ', '_')}"
-        f"&oldid={parse.get('revid')}"
-    )
-    return parse_infobox_fields(parse["wikitext"]), permalink, parse["wikitext"]
-
-
-def fetch_de_wikipedia_infobox(title: str):
-    """(Felder, Permalink, Wikitext) der Infobox im deutschen Artikel."""
-    return fetch_page_infobox(WIKIPEDIA_DE_API, title, "https://de.wikipedia.org")
-
-
-def wikipedia_de_values(fields: dict, article_wikitext: str = "") -> dict:
-    """{Schluessel: (wert, notiz, beleg_ids)} aus der deutschen Infobox."""
-    out = {}
-
-    def merken(key, value, feld, note):
-        out[key] = (value, note, extract_ref_ids(fields.get(feld, ""),
-                                                 article_wikitext))
-
-    for feld, (key, faktor) in WIKIPEDIA_DE_FIELDS.items():
-        value = parse_de_number(fields.get(feld, ""))
-        if value is None:
-            continue
-        if key == "density" and not (0.01 <= value <= 30):
-            continue  # g/cm^3 plausibel? sonst steht dort etwas anderes
-        merken(key, value * faktor, feld, f"Infobox-Feld '{feld}'")
-
-    cas = parse_de_cas(fields.get("CAS", ""))
-    if cas:
-        merken("cas_number", cas, "CAS", "Infobox-Feld 'CAS'")
-
-    roh = fields.get("Kristallstruktur", "")
-    if roh and "<br" not in roh.lower() and ":" not in _WIKI_REF.sub(" ", roh):
-        # Wikilinks aufloesen, BEVOR nach Stichworten gesucht wird: Aluminium
-        # schreibt "[[Kubisches Kristallsystem|kubisch]] flächenzentriert",
-        # und die Klammern zerreissen die Phrase, nach der wir suchen.
-        xtal = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r"\1",
-                      strip_wiki_markup(roh)).lower()
-        for keyword, system in WIKIPEDIA_DE_CRYSTAL_KEYWORDS:
-            if keyword in xtal:
-                merken("crystal_system", system, "Kristallstruktur",
-                       f"Infobox 'Kristallstruktur' = '{xtal}'")
-                break
-    return out
-
-
-def wikipedia_de_proposals_for_item(wd_match: dict, de_title: str,
-                                    skip_keys: set) -> list:
-    """Vorschlaege aus der deutschen Wikipedia, als Import referenziert.
-
-    Deckt beide Infoboxen ab: {{Infobox Chemisches Element}} bei Elementen,
-    {{Infobox Chemikalie}} bei Verbindungen. Ein Artikel traegt nie beide -
-    ein Abruf, beide Feldsaetze darauf angewendet. Die Elementinfobox hat
-    Vorrang, weil sie mehr Groessen fuehrt und ihre Temperaturen bereits in
-    Kelvin stehen.
-    """
-    if not de_title:
-        return []
-    fields, permalink, wikitext = fetch_de_wikipedia_infobox(de_title)
-    if not fields:
-        return []
-    werte = wikipedia_de_values(fields, wikitext)
-    for key, wert in wikipedia_de_chem_values(fields, wikitext).items():
-        werte.setdefault(key, wert)
-    return _infobox_proposals(
-        wd_match, werte, skip_keys,
-        "Wikipedia (de)", WIKIPEDIA_DE_QID, permalink,
-        messtemperatur=parse_de_messtemperatur(fields.get("Dichte", "")),
-    )
-
-
-# Messtemperatur der Dichte, z. B. "8,96 g/cm³ (20 °C)". Sie steht in
-# Klammern hinter dem Wert - die Elementinfoboxen sind darin uneinheitlich:
-# Kupfer/Silber/Aluminium/Blei nennen 20 °C, Titan und Zink 25 °C, Eisen und
-# Quecksilber gar nichts. Blind 20 °C anzunehmen waere also fuer einen Teil
-# des Bestands schlicht falsch.
-_DE_MESSTEMPERATUR = re.compile(r"\(\s*([+-]?[\d.,]+)\s*°\s*C\s*\)")
-
-
-def parse_de_messtemperatur(raw: str) -> Optional[float]:
-    """Messtemperatur aus einem Infobox-Feld in Grad Celsius, sonst None."""
-    s = strip_wiki_markup(raw or "")
-    s = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r"\1", s)  # [[Grad Celsius|°C]]
-    treffer = _DE_MESSTEMPERATUR.search(s)
-    return _de_zahl(treffer.group(1)) if treffer else None
-
-
-def aggregatzustand_bei(temperatur_c: float, werte: dict) -> Optional[str]:
-    """QID des Aggregatzustands bei dieser Temperatur, sonst None.
-
-    Abgeleitet aus Schmelz- und Siedepunkt DESSELBEN Artikels, beide in
-    Kelvin. Fehlt einer der beiden, wird nichts behauptet - lieber kein
-    Qualifikator als ein falscher.
-
-    Noetig, weil "fest" gerade nicht immer stimmt: Quecksilber schmilzt bei
-    234 K, seine Dichteangabe bei 20 °C meint also die FLUESSIGKEIT.
-    """
-    kelvin = temperatur_c + 273.15
-    schmelz = werte.get("melting_point")
-    if schmelz is None:
-        return None
-    if kelvin < schmelz[0]:
-        return AGGREGAT_FEST
-    siede = werte.get("boiling_point")
-    if siede is None:
-        return None  # oberhalb des Schmelzpunkts, aber fluessig oder gasfoermig?
-    return AGGREGAT_FLUESSIG if kelvin < siede[0] else AGGREGAT_GAS
-
-
-def dichte_qualifikatoren(temperatur_c: float, zustand_qid: Optional[str]) -> list:
-    """Qualifikatoren fuer eine Dichteaussage: Temperatur, Aggregatzustand.
-
-    Der Temperaturwert steht in QuickStatements-Schreibweise, also mit
-    Einheit - "20U25267" ist 20 Grad Celsius (Q25267).
-    """
-    zahl = format(Decimal(str(temperatur_c)).normalize(), "f")
-    qual = [(TEMPERATUR_PID, f"{zahl}U{CELSIUS_QID[1:]}",
-             f"{zahl} °C")]
-    if zustand_qid:
-        klartext = {AGGREGAT_FEST: "fest", AGGREGAT_FLUESSIG: "fluessig",
-                    AGGREGAT_GAS: "gasfoermig"}[zustand_qid]
-        qual.append((AGGREGAT_PID, zustand_qid, klartext))
-    return qual
-
-
-def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
-                       permalink, messtemperatur=None) -> list:
-    """Gemeinsame Zeilenerzeugung fuer beide Wikipedia-Sprachen.
-
-    Der Beleg wird in dieser Reihenfolge gewaehlt: DOI aus dem
-    Einzelnachweis, sonst ISBN daraus, sonst der Wikimedia-Import. Ein
-    echter Literaturbeleg ist in Wikidata deutlich mehr wert als
-    "importiert aus Wikipedia"; der Permalink bleibt in der Notiz erhalten,
-    damit nachvollziehbar ist, woher der Wert stammt.
-    """
-    # Auch die Infoboxen fuehren Moduln, die aus der Festkoerperphase
-    # stammen - siehe NUR_FESTKOERPER.
-    gasfoermig = ist_bei_raumtemperatur_gas(wd_match["qid"])
-    proposals = []
-    for key, (value, note, ids) in werte.items():
-        if key in skip_keys:
-            continue
-        prop_info = PROPERTY_MAP.get(key)
-        if prop_info is None:
-            continue
-        if gasfoermig and key in NUR_FESTKOERPER:
-            continue
-        if ids.get("doi"):
-            reference = Reference(
-                doi=ids["doi"], note=f"{note}, Beleg aus {quelle}: {permalink}"
-            )
-        elif ids.get("isbn"):
-            reference = Reference(
-                isbn=ids["isbn"], note=f"{note}, Beleg aus {quelle}: {permalink}"
-            )
-        else:
-            reference = Reference(
-                imported_from=projekt_qid, import_url=permalink, note=note
-            )
-        value_label = ""
-        qualifiers = []
-        if key == "density":
-            # P2054 verlangt Temperatur und Aggregatzustand als Qualifikator.
-            # Die Temperatur steht meist im Feld selbst; sonst 20 °C.
-            temperatur = (messtemperatur if messtemperatur is not None
-                          else STANDARD_TEMPERATUR_C)
-            qualifiers = dichte_qualifikatoren(
-                temperatur, aggregatzustand_bei(temperatur, werte))
-        if prop_info.get("datatype") == "item":
-            mapped = prop_info.get("value_map", {}).get(str(value))
-            if mapped is None:
-                proposals.append(make_row(
-                    f"MANUELLE_KLAERUNG_NOETIG (Wert '{value}' nicht in "
-                    f"value_map fuer {prop_info['pid']})",
-                    quelle, wd_match, prop_info, value, "", reference,
-                ))
-                continue
-            value, value_label = mapped
-        elif prop_info.get("datatype") == "quantity":
-            value = round_significant(value)
-
-        already_present = item_has_statement(wd_match["qid"], prop_info["pid"])
-        proposals.append(make_row(
-            "BEREITS_VORHANDEN" if already_present else "VORSCHLAG",
-            quelle, wd_match, prop_info, value, value_label, reference,
-            qualifiers=qualifiers,
-        ))
-    return proposals
-
-
 # ---------------------------------------------------------------------------
-# Fallback-Quelle 2: Englische Wikipedia-Elementinfobox (Import-Referenz)
+# Properties, Einheiten, Schranken
 # ---------------------------------------------------------------------------
 #
-# Je Element eine Vorlage "Infobox <name>" (z. B. [[Template:Infobox copper]]).
-# "melting point K" / "boiling point K" stehen bereits in Kelvin.
-#
-# Markup wird entfernt und anschliessend nur ein SAUBERER Zahlwert akzeptiert;
-# alles mit Buchstaben, Bereich oder Restvorlage wird verworfen. Die realen
-# Faelle, die das noetig machen: README, "Die drei Wikipedia-Stufen".
-
-WIKIPEDIA_API = "https://en.wikipedia.org/w/api.php"
-
-# Infobox-Feld -> (interner Schluessel, Umrechnung in die Wikidata-Einheit)
-WIKIPEDIA_NUMERIC_FIELDS = {
-    "melting point K": ("melting_point", 1.0),        # schon Kelvin
-    "boiling point K": ("boiling_point", 1.0),        # schon Kelvin
-    "thermal conductivity": ("thermal_conductivity", 1.0),  # W/(m*K)
-}
-
-# "crystal structure" nennt das Bravais-Gitter bzw. den Strukturtyp, nicht
-# das Kristallsystem. Schreibweisen schwanken ("face-centered cubic" vs.
-# "face centered cubic"), deshalb wird normalisiert und nach Schluesselwort
-# gesucht. Reihenfolge ist wichtig: spezifisch vor allgemein.
-WIKIPEDIA_CRYSTAL_KEYWORDS = [
-    # Zentrierung zuerst, aus demselben Grund wie in der deutschen Liste.
-    # Ohne Bindestrich, weil die Auswertung "-" vorher durch " " ersetzt.
-    ("face centered cubic", "fcc"),
-    ("body centered cubic", "bcc"),
-    ("orthorhombic", "orthorhombic"),
-    ("tetragonal", "tetragonal"),
-    ("monoclinic", "monoclinic"),
-    ("triclinic", "triclinic"),
-    ("rhombohedral", "trigonal"),  # rhomboedrisch gehoert zum trigonalen System
-    ("trigonal", "trigonal"),
-    ("hexagonal", "hexagonal"),
-    ("cubic", "cubic"),
-]
-
-_WIKI_REF = re.compile(r"<ref[^>]*/>|<ref[^>]*>.*?</ref>", re.S | re.I)
-_WIKI_TAG = re.compile(r"<[^>]+>")
-_WIKI_COMMENT = re.compile(r"<!--.*?-->", re.S)
-_WIKI_ENTITY = re.compile(r"&[a-z]+;|&#\d+;", re.I)
-_WIKI_NUMBER = re.compile(r"^[+-]?\d+(?:\.\d+)?$")
-# SI-Praefixe des Feldes "electrical resistivity unit prefix"
-_SI_PREFIX = {"n": 1e-9, "µ": 1e-6, "μ": 1e-6, "m": 1e-3, "": None,
-              "k": 1e3, "M": 1e6, "G": 1e9}
-
-
-def strip_wiki_markup(text: str) -> str:
-    """Entfernt Refs, Tags, Kommentare und HTML-Entities aus einem Feldwert."""
-    s = _WIKI_COMMENT.sub(" ", text or "")
-    s = _WIKI_REF.sub(" ", s)
-    s = _WIKI_TAG.sub(" ", s)
-    s = _WIKI_ENTITY.sub(" ", s)
-    s = s.replace("''", " ").replace("−", "-")  # Unicode-Minus
-    return re.sub(r"\s+", " ", s).strip()
-
-
-def parse_wiki_number(raw: str) -> Optional[float]:
-    """Sauberer Zahlwert oder None.
-
-    Bewusst streng: Restvorlagen ({{...}}), Bereiche und alles mit
-    Buchstaben werden verworfen statt interpretiert.
-    """
-    s = strip_wiki_markup(raw)
-    if not s or "{{" in s or "}}" in s:
-        return None
-    s = s.replace(",", "")
-    # Bekannte Einheit hinter der Zahl abtrennen. Grosszuegig bei
-    # Leerzeichen, weil "<sup>3</sup>" beim Strippen zu "g/cm 3" wird.
-    s = re.sub(
-        r"\s*(g\s*/\s*cm\s*\^?\s*3|kg\s*/\s*m\s*\^?\s*3)\s*$",
-        "", s, flags=re.I,
-    ).strip()
-    if not _WIKI_NUMBER.match(s):
-        return None
-    return float(s)
-
-
-def parse_infobox_fields(wikitext: str) -> dict:
-    """{Feldname: Rohwert} aus dem Vorlagenaufruf."""
-    fields = {}
-    for m in re.finditer(r"^\|\s*([^=|\n]+?)\s*=(.*)$", wikitext, re.M):
-        fields[m.group(1).strip()] = m.group(2).strip()
-    return fields
-
-
-def fetch_wikipedia_infobox(element_name: str):
-    """(Felder, Permalink, Wikitext) der Vorlage "Infobox <element>"."""
-    return fetch_page_infobox(
-        WIKIPEDIA_API, f"Template:Infobox {element_name.lower()}",
-        "https://en.wikipedia.org",
-    )
-
-
-def wikipedia_values(fields: dict, article_wikitext: str = "") -> dict:
-    """{Schluessel: (wert, notiz, beleg_ids)} aus den Infobox-Feldern."""
-    out = {}
-
-    def merken(key, value, feld, note):
-        out[key] = (value, note, extract_ref_ids(fields.get(feld, ""),
-                                                 article_wikitext))
-
-    for feld, (key, faktor) in WIKIPEDIA_NUMERIC_FIELDS.items():
-        value = parse_wiki_number(fields.get(feld, ""))
-        if value is not None:
-            merken(key, value * faktor, feld, f"Infobox-Feld '{feld}'")
-
-    # Dichte steht konventionell in g/cm^3 - der Zieleinheit, siehe
-    # PROPERTY_MAP. Nichts umzurechnen, nur zu pruefen.
-    dichte = parse_wiki_number(fields.get("density", ""))
-    if dichte is not None and 0.01 <= dichte <= 30:
-        merken("density", dichte, "density",
-               "Infobox-Feld 'density' (g/cm^3)")
-
-    # Spezifischer Widerstand: Zahl + eigenes Praefix-Feld. Ohne bekanntes
-    # Praefix wird nicht geraten (Silizium fuehrt dort nur eine Vorlage).
-    rho = parse_wiki_number(fields.get("electrical resistivity at 20", ""))
-    faktor = _SI_PREFIX.get(fields.get("electrical resistivity unit prefix", "").strip())
-    if rho is not None and faktor:
-        merken(
-            "electrical_resistivity", rho * faktor,
-            "electrical resistivity at 20",
-            f"Infobox 'electrical resistivity at 20' mit Praefix "
-            f"'{fields.get('electrical resistivity unit prefix')}'",
-        )
-
-    # Kristallstruktur -> Kristallsystem
-    xtal = strip_wiki_markup(fields.get("crystal structure", "")).lower()
-    xtal = xtal.replace("-", " ")
-    if xtal:
-        for keyword, system in WIKIPEDIA_CRYSTAL_KEYWORDS:
-            if keyword in xtal:
-                merken("crystal_system", system, "crystal structure",
-                       f"Infobox 'crystal structure' = '{xtal}'")
-                break
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Laengenausdehnungskoeffizient (P5672) aus der englischen Elementinfobox
-# ---------------------------------------------------------------------------
-#
-# Die einzige Quelle im ganzen Werkzeug, die diese Groesse fuehrt - die
-# deutsche Elementinfobox hat kein solches Feld, die Chembox auch nicht, und
-# das Materials Project rechnet keine thermische Ausdehnung.
-#
-# Das Feld heisst "thermal expansion comment" und steht in der Form
-#   {{val|16.64|e=−6}}/K (at&nbsp;20&nbsp;°C)<ref name="Arblaster 2018" />
-# also 16,64 um/(m*K) mit ausdruecklicher Temperatur. Aeltere Vorlagen fuehren
-# stattdessen "thermal expansion at 25" als blosse Zahl, die dort bereits in
-# um/(m*K) steht.
-#
-# Wie weit das traegt, an allen 118 Elementvorlagen gemessen (2026-08-19):
-# 38 isotrope Werte, 24 anisotrope, 11 unbrauchbare, 45 ohne Angabe. Warum die
-# anisotropen NICHT vorgeschlagen werden: README.
-_AUSDEHNUNG_VAL = re.compile(
-    r"\{\{val\|([\d.]+)\|e=[−-]6(?:\|u=[^}]*)?\}\}\s*/?\s*K?\s*"
-    r"\(at&nbsp;([\d.]+)&nbsp;°C\)"
+# Die Tabellen stehen in properties.py - sie sind lang, aendern sich selten
+# und haengen an nichts.
+from .properties import (  # noqa: E402,F401
+    AGGREGAT_FEST, AGGREGAT_FLUESSIG, AGGREGAT_GAS, AGGREGAT_PID,
+    CELSIUS_QID, DETERMINATION_PID, DFT_LABEL, DFT_QID, DFT_TEMPERATUR,
+    KELVIN_QID, LITERATUR_BELEG, MP_FIELD_MAP, MP_META_FIELDS,
+    OHNE_BELEG_DATENTYPEN, PLAUSIBEL, PROPERTY_MAP, STANDARD_TEMPERATUR_C,
+    TEMPERATUR_PID, ist_plausibel,
 )
-# "The thermal expansion is anisotropic" - dann ist der genannte Wert das
-# Mittel ueber die Achsen (alpha_V/3), nicht "der" Laengenkoeffizient.
-_AUSDEHNUNG_ANISOTROP = re.compile(r"anisotrop", re.I)
-
-
-def parse_thermal_expansion(fields: dict) -> Optional[tuple]:
-    """(Wert in um/(m*K), Temperatur in °C, anisotrop) oder None.
-
-    Verworfen wird alles, was die Temperatur nicht ausdruecklich nennt
-    ("at r.t.") oder sich auf eine Modifikation bezieht ("diamond: 0.8",
-    "beta form: 5-7") - beides kommt real vor und waere geraten.
-    """
-    kommentar = fields.get("thermal expansion comment", "")
-    treffer = _AUSDEHNUNG_VAL.search(kommentar)
-    if treffer:
-        return (float(treffer.group(1)), float(treffer.group(2)),
-                bool(_AUSDEHNUNG_ANISOTROP.search(kommentar)))
-    if kommentar:
-        return None  # Kommentar da, aber ohne verwertbare Zahl-Temperatur
-
-    # Aeltere Vorlagen: Zahl in um/(m*K), Temperatur steckt im Feldnamen.
-    roh = fields.get("thermal expansion at 25", "").strip()
-    if re.fullmatch(r"[\d.]+", roh):
-        return float(roh), 25.0, False
-    return None
-
-
-def waermeausdehnung_proposals_for_item(wd_match: dict, fields: dict,
-                                        permalink: str, wikitext: str,
-                                        skip_keys: set) -> list:
-    """P5672-Vorschlag aus der englischen Elementinfobox.
-
-    Eigene Stufe statt eines Eintrags in WIKIPEDIA_NUMERIC_FIELDS: die
-    Groesse braucht eine Temperatur als Qualifikator, und die anisotropen
-    Faelle brauchen einen Klaerungsvermerk. Beides passt nicht in die
-    generische Feldabbildung.
-    """
-    prop_info = PROPERTY_MAP["linear_thermal_expansion"]
-    if "linear_thermal_expansion" in skip_keys:
-        return []
-    if ist_bei_raumtemperatur_gas(wd_match["qid"]):
-        return []  # siehe NUR_FESTKOERPER - der Wert waere der des Feststoffs
-    gemessen = parse_thermal_expansion(fields)
-    if gemessen is None:
-        return []
-    wert, temperatur_c, anisotrop = gemessen
-    if not ist_plausibel("linear_thermal_expansion", wert):
-        return []
-
-    feld = ("thermal expansion comment"
-            if fields.get("thermal expansion comment") else
-            "thermal expansion at 25")
-    ids = extract_ref_ids(fields.get(feld, ""), wikitext)
-    note = f"Infobox-Feld '{feld}' ({wert} um/(m*K) bei {temperatur_c:g} °C)"
-    if ids.get("doi"):
-        reference = Reference(doi=ids["doi"],
-                              note=f"{note}, Beleg aus Wikipedia (en): {permalink}")
-    elif ids.get("isbn"):
-        reference = Reference(isbn=ids["isbn"],
-                              note=f"{note}, Beleg aus Wikipedia (en): {permalink}")
-    else:
-        reference = Reference(imported_from=WIKIPEDIA_EN_QID,
-                              import_url=permalink, note=note)
-
-    zahl = format(Decimal(str(temperatur_c)).normalize(), "f")
-    qualifiers = [(TEMPERATUR_PID, f"{zahl}U{CELSIUS_QID[1:]}", f"{zahl} °C")]
-
-    if anisotrop:
-        # Bei anisotropen Kristallen haengt der Koeffizient von der
-        # Kristallachse ab; die Infobox nennt das Mittel alpha_V/3 und die
-        # Achsenwerte in einer Fussnote. Ein einzelner Wert ohne Achsenangabe
-        # waere in Wikidata eine Halbwahrheit - das entscheidet niemand
-        # nebenbei.
-        return [make_row(
-            f"MANUELLE_KLAERUNG_NOETIG (anisotrope Ausdehnung: {wert} "
-            f"um/(m*K) ist das Mittel alpha_V/3, die Achsenwerte stehen in "
-            f"der Fussnote der Infobox)",
-            "Wikipedia (en)", wd_match, prop_info, round_significant(wert), "",
-            reference, entry_id="waermeausdehnung", qualifiers=qualifiers,
-        )]
-
-    vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
-    return [make_row(
-        "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
-        "Wikipedia (en)", wd_match, prop_info, round_significant(wert), "",
-        reference, entry_id="waermeausdehnung", qualifiers=qualifiers,
-    )]
-
-
-def wikipedia_proposals_for_item(wd_match: dict, name_en: str,
-                                 skip_keys: set) -> list:
-    """Vorschlaege aus der englischen Elementinfobox, als Import referenziert."""
-    fields, permalink, wikitext = fetch_wikipedia_infobox(name_en)
-    if not fields:
-        return []
-    zeilen = _infobox_proposals(
-        wd_match, wikipedia_values(fields, wikitext), skip_keys,
-        "Wikipedia (en)", WIKIPEDIA_EN_QID, permalink,
-        messtemperatur=parse_de_messtemperatur(fields.get("density", "")),
-    )
-    return zeilen + waermeausdehnung_proposals_for_item(
-        wd_match, fields, permalink, wikitext, skip_keys)
-
-
-# ---------------------------------------------------------------------------
-# Fallback-Quelle 3: {{Chembox}} der englischen Wikipedia (Verbindungen)
-# ---------------------------------------------------------------------------
-#
-# Die Chembox steht im Artikel selbst. Die Einheit steckt im FELDNAMEN
-# (MeltingPtC vs. MeltingPtK), es muss also nichts geraten werden. Reihenfolge
-# im Mapping: Kelvin-Felder vor Celsius-Feldern, damit der Wert ohne
-# Umrechnung gewinnt, wenn die Box beide fuehrt.
-
-# Feld -> (interner Schluessel, Faktor, Offset auf die Wikidata-Einheit)
-CHEMBOX_FIELDS = {
-    "MeltingPtK": ("melting_point", 1.0, 0.0),
-    "MeltingPtC": ("melting_point", 1.0, 273.15),
-    "BoilingPtK": ("boiling_point", 1.0, 0.0),
-    "BoilingPtC": ("boiling_point", 1.0, 273.15),
-    "Density": ("density", 1.0, 0.0),             # g/cm^3
-}
-
-_CAS_RE = re.compile(r"^\d{2,7}-\d{2}-\d$")
-
-
-def wikipedia_en_chem_values(fields: dict, article_wikitext: str = "") -> dict:
-    """{Schluessel: (wert, notiz, beleg_ids)} aus der {{Chembox}}."""
-    out = {}
-
-    def merken(key, value, feld, note):
-        if key not in out:  # erstes passendes Feld gewinnt (K vor C)
-            out[key] = (value, note, extract_ref_ids(fields.get(feld, ""),
-                                                     article_wikitext))
-
-    for feld, (key, faktor, offset) in CHEMBOX_FIELDS.items():
-        value = parse_wiki_number(fields.get(feld, ""))
-        if value is None:
-            continue
-        if key == "density" and not (0.01 <= value <= 30):
-            continue  # g/cm^3 plausibel? sonst steht dort etwas anderes
-        einheit = " (in Kelvin)" if offset else ""
-        merken(key, value * faktor + offset, feld,
-               f"Chembox-Feld '{feld}'{einheit}")
-
-    cas = strip_wiki_markup(fields.get("CASNo", ""))
-    if _CAS_RE.match(cas):
-        merken("cas_number", cas, "CASNo", "Chembox-Feld 'CASNo'")
-    return out
-
-
-def wikipedia_en_chem_proposals_for_item(wd_match: dict, en_title: str,
-                                         skip_keys: set) -> list:
-    """Vorschlaege aus der englischen Chembox, als Import referenziert."""
-    if not en_title:
-        return []
-    fields, permalink, wikitext = fetch_page_infobox(
-        WIKIPEDIA_API, en_title, "https://en.wikipedia.org")
-    if not fields:
-        return []
-    return _infobox_proposals(
-        wd_match, wikipedia_en_chem_values(fields, wikitext), skip_keys,
-        "Wikipedia (en)", WIKIPEDIA_EN_QID, permalink,
-        messtemperatur=parse_de_messtemperatur(fields.get("Density", "")),
-    )
-
-
-def wikipedia_fallback_proposals(wd_match: dict, pids_belegt: set,
-                                 de_title: str = "", en_element: str = "",
-                                 en_title: str = ""):
-    """Die Wikipedia-Stufen der Quellenkaskade - fuer BEIDE Modi dieselbe.
-
-    Jede Stufe liefert nur, was die vorherigen nicht schon belegt haben;
-    `pids_belegt` waechst dabei mit. Deutsch vor Englisch, weil die deutsche
-    Infobox mehr Groessen fuehrt (u. a. spezifische Waermekapazitaet,
-    elektrische Leitfaehigkeit, Schallgeschwindigkeit, CAS-Nummer).
-
-    Zurueck kommen (Zeilen, Zaehler je Stufe).
-    """
-    zeilen, zaehler = [], collections.Counter()
-
-    def offene_schluessel():
-        # Schluessel statt PIDs vergleichen - uebersprungen wird nur, was
-        # eine hoeherwertige Quelle wirklich geliefert hat.
-        return {k for k, v in PROPERTY_MAP.items() if v["pid"] in pids_belegt}
-
-    def stufe(name, rows):
-        for proposal in rows:
-            pids_belegt.add(proposal["_pid"])
-            zeilen.append(proposal)
-            zaehler[name] += 1
-
-    if de_title:
-        stufe("de.wp", wikipedia_de_proposals_for_item(
-            wd_match, de_title, offene_schluessel()))
-    if en_element:
-        stufe("en.wp", wikipedia_proposals_for_item(
-            wd_match, en_element, offene_schluessel()))
-    if en_title:
-        stufe("en.wp", wikipedia_en_chem_proposals_for_item(
-            wd_match, en_title, offene_schluessel()))
-    return zeilen, zaehler
-
-
-# ---------------------------------------------------------------------------
-# Schritt 2a: Elemente des Periodensystems -> bestehende Wikidata-Items
-# ---------------------------------------------------------------------------
-
-# Echte Elementsymbole haben ein oder zwei Zeichen; die systematischen
-# IUPAC-Platzhalter fuer unentdeckte Elemente immer drei (siehe unten).
-_ECHTES_ELEMENTSYMBOL = re.compile(r"[A-Z][a-z]?")
-
-
-# ---------------------------------------------------------------------------
-# Metalle und Halbmetalle
-# ---------------------------------------------------------------------------
-#
-# Feste Liste statt Wikidata-Abfrage, weil Wikidatas Klassifikation dafuer zu
-# lueckenhaft ist (die Messung dazu: README, "Auswahl im Periodensystem-Modus").
-# Definiert wird ueber die NICHT-Metalle - die kuerzere, stabilere Liste;
-# alles andere ist Metall oder Halbmetall.
-#
-# Grenzfaelle, bewusst so entschieden:
-#   Po, At   Halbmetall (Po) bzw. Nichtmetall (At), wie im gaengigen
-#            Periodensystem farblich dargestellt
-#   Ts, Og   Zuordnung ist rein theoretisch (nie in Substanzmenge erzeugt);
-#            als Nichtmetalle gefuehrt, praktisch ohnehin ohne Datenlage
-HALBMETALLE = frozenset({"B", "Si", "Ge", "As", "Sb", "Te", "Po"})
-NICHTMETALLE = frozenset({
-    "H", "He", "C", "N", "O", "F", "Ne", "P", "S", "Cl", "Ar",
-    "Se", "Br", "Kr", "I", "Xe", "At", "Rn", "Ts", "Og",
-})
-
-
-def ist_metall_oder_halbmetall(symbol: str) -> bool:
-    """True fuer Metalle und Halbmetalle, False fuer Nichtmetalle."""
-    return symbol not in NICHTMETALLE
-
-
-# ---------------------------------------------------------------------------
-# Legierungen
-# ---------------------------------------------------------------------------
-#
-# Ohne Filter ist die Grundgesamtheit Muell: Wikidata fuehrt Q11426 "Metalle"
-# als Unterklasse von Q37756 "Legierung", also haengt jedes Metall und jedes
-# Isotop darunter. Ausgeschlossen wird, was eine ORDNUNGSZAHL traegt - warum
-# genau dieser Schnitt und nicht der naheliegendere: README,
-# "Werkstoffgruppen".
-LEGIERUNG_QID = "Q37756"
-
-# Ohne diesen Filter ist die Grundgesamtheit Muell - siehe oben.
-LEGIERUNG_OHNE_ELEMENTE = "FILTER NOT EXISTS { ?i wdt:P1086 ?ordnungszahl }"
-LEGIERUNG_PATTERN = (
-    f"{{ ?i wdt:P31/wdt:P279* wd:{LEGIERUNG_QID} }} UNION "
-    f"{{ ?i wdt:P279* wd:{LEGIERUNG_QID} }} {LEGIERUNG_OHNE_ELEMENTE}"
-)
-
-# Mineralarten: Instanzen von Q12089225, also die von der IMA gefuehrten
-# Arten - NICHT der Subtree unter Q7946 "Mineral", der auch Gruppen und
-# Sammelbegriffe enthaelt. Mit Abstand die ergiebigste Gruppe fuer COD:
-# 5694 der 6301 Arten tragen eine Summenformel, aber KEINE EINZIGE eine
-# COD-ID, und 3916 fehlt die Raumgruppe (gemessen 2026-08-16).
-MINERAL_PATTERN = "?i wdt:P31 wd:Q12089225 ."
-
-# Oxide: der Subtree unter Q50690 umfasst 27670 Items, davon sind die
-# allermeisten labellose Massenimporte ohne jede Angabe (Q37807585 ff.).
-# Brauchbar sind die mit Summenformel - 154 Stueck, davon 151 ohne
-# Raumgruppe. Die Formel ist hier also Teil der DEFINITION, nicht bloss ein
-# Filter: ohne sie ist ein Item fuer diesen Zweck wertlos.
-OXID_PATTERN = (
-    "{ ?i wdt:P31/wdt:P279* wd:Q50690 } UNION { ?i wdt:P279* wd:Q50690 } "
-    "?i wdt:P274 ?pflichtformel ."
+from .properties import (  # noqa: E402,F401
+    CHEMBOX_FIELDS, NUR_FESTKOERPER, RAUMTEMPERATUR_K, STUFEN_PIDS,
+    TEMPERATUR_NACH_KELVIN, WIKIPEDIA_DE_CHEM_FIELDS, WIKIPEDIA_DE_FIELDS,
+    WIKIPEDIA_NUMERIC_FIELDS,
 )
 
 # ---------------------------------------------------------------------------
-# Benannte Legierungen aus der Wikipedia-Liste
+# Die uebrigen Schichten
 # ---------------------------------------------------------------------------
 #
-# [[en:List of named alloys]] fuehrt die Legierungen mit EIGENEM NAMEN
-# (Duralumin, Hastelloy, Nitinol ...), gruppiert nach Basismetall. Sie ist als
-# PRUEFLISTE wertvoller denn als Datenquelle - Zahlen dazu im README,
-# "Pruefliste statt Datenquelle".
-NAMED_ALLOYS_SEITE = "List_of_named_alloys"
-NAMED_ALLOYS_API = "https://en.wikipedia.org/w/api.php"
+# Aufgerufen wird ueber das MODUL (netz.get_with_retry, wikidata.…) - so
+# sperrt ein einziger monkeypatch in den Tests jeden Weg ins Netz, und man
+# sieht an der Aufrufstelle, woher der Wert kommt.
+from . import netz, wikidata  # noqa: E402
+from .formeln import (  # noqa: E402,F401
+    PAULING, elemente_aus_formel, formula_candidates, parse_formula,
+)
+from .wikidata import _ECHTES_ELEMENTSYMBOL  # noqa: E402,F401
+from .ausgabe import (  # noqa: E402,F401
+    CSV_FIELDS, Reference, WIKIPEDIA_EN_QID, clear_quickstatements_draft,
+    make_row, quickstatements_value, round_significant, write_csv,
+    write_csv_streaming, write_quickstatements_draft,
+)
+from . import infobox  # noqa: E402
+from .infobox import (  # noqa: E402,F401
+    WIKIPEDIA_API, WIKIPEDIA_DE_API, WIKIPEDIA_DE_QID, aggregatzustand_bei,
+    dichte_qualifikatoren, extract_ref_ids, parse_de_cas,
+    parse_de_messtemperatur, parse_de_number, parse_de_temperature,
+    parse_infobox_fields, parse_thermal_expansion, parse_wiki_number,
+    strip_wiki_markup, waermeausdehnung_proposals_for_item,
+    wikipedia_de_chem_values, wikipedia_de_proposals_for_item,
+    wikipedia_de_values, wikipedia_en_chem_proposals_for_item,
+    wikipedia_en_chem_values, wikipedia_fallback_proposals,
+    wikipedia_proposals_for_item, wikipedia_values,
+)
+# Die drei externen Quellen liegen je in einer Datei unter quellen/.
+# Unter eigenem Namen, weil "cod" und "nist" hier auch Schalter sind - eine
+# Namenskollision mit dem Modul haette den Lauf mitten im COD-Aufruf zerlegt.
+from .quellen import cod as cod_quelle, mp as mp_quelle  # noqa: E402
+from .quellen import nist as nist_quelle  # noqa: E402
+from .quellen.cod import (  # noqa: E402,F401
+    COD_API, COD_ENTRY_URL, cod_best_entry, cod_dominante_raumgruppe,
+    cod_hill_formula, cod_proposals_for_item, fetch_cod_entries,
+)
+from .quellen.mp import (  # noqa: E402,F401
+    MissingApiKey, fetch_mp_materials, mp_value, proposals_for_material,
+    verfeinere_zentrierung,
+)
+from .quellen.nist import (  # noqa: E402,F401
+    NIST_QUELLEN, melde_nist_quellen, nist_fetch, nist_proposals_for_item,
+    nist_tabellenzeilen, nist_wert,
+)
 
-# Der einleitende Abschnitt listet nur die Basismetalle selbst, keine
-# Legierungen - er wird uebersprungen.
-NAMED_ALLOYS_KEIN_ABSCHNITT = "Alloys by base metal"
-
-
-def fetch_named_alloys() -> list:
-    """[{titel, basis}] aus [[en:List of named alloys]].
-
-    `basis` ist das Basismetall aus der Abschnittsueberschrift (Aluminum,
-    Copper, Iron ...) - die Information, aus der sich eine sinnvolle
-    P279-Einordnung ableiten liesse.
-    """
-    resp = request_with_retry("GET", NAMED_ALLOYS_API, params={
-        "action": "parse", "page": NAMED_ALLOYS_SEITE, "prop": "wikitext",
-        "format": "json", "formatversion": "2",
-    })
-    daten = resp.json()
-    if "error" in daten:
-        raise RuntimeError(daten["error"].get("info", "Seite nicht lesbar"))
-    wikitext = daten["parse"]["wikitext"]
-
-    eintraege = []
-    abschnitt = ""
-    for zeile in wikitext.splitlines():
-        ueberschrift = re.match(r"^(={2,3})\s*(.+?)\s*\1\s*$", zeile)
-        if ueberschrift:
-            abschnitt = ueberschrift.group(2)
-            continue
-        treffer = re.match(r"^\*\s*\[\[([^\]|#]+)", zeile)
-        if treffer and abschnitt and abschnitt != NAMED_ALLOYS_KEIN_ABSCHNITT:
-            eintraege.append({"titel": treffer.group(1).strip(),
-                              "basis": abschnitt})
-    return eintraege
-
-
-def named_alloys_als_items() -> tuple:
-    """(Items im Format von fetch_group_items, Liste der Namen OHNE Item).
-
-    Die Zuordnung laeuft ueber den enwiki-Sitelink, nicht ueber die
-    Bezeichnung - ein Labelabgleich wuerde bei "Mulberry" oder "Elektron"
-    munter danebengreifen.
-    """
-    eintraege = fetch_named_alloys()
-    nach_titel = {e["titel"]: e for e in eintraege}
-    items, ohne_item = [], []
-
-    titel = list(nach_titel)
-    gefunden_titel = set()
-    for start in range(0, len(titel), 50):
-        resp = request_with_retry("GET", WIKIDATA_API, params={
-            "action": "wbgetentities", "sites": "enwiki",
-            "titles": "|".join(titel[start:start + 50]),
-            "props": "labels|claims|sitelinks", "languages": "de|en",
-            "format": "json", "formatversion": "2",
-        })
-        for qid, eintrag in resp.json().get("entities", {}).items():
-            if not qid.startswith("Q") or "missing" in eintrag:
-                continue
-            sitelinks = eintrag.get("sitelinks", {})
-            en_titel = sitelinks.get("enwiki", {}).get("title", "")
-            gefunden_titel.add(en_titel)
-            labels = eintrag.get("labels", {})
-            claims = eintrag.get("claims", {})
-            formeln = claims.get("P274", [])
-            items.append({
-                "qid": qid,
-                "label": (labels.get("de") or labels.get("en")
-                          or {"value": qid})["value"],
-                "formula": (formeln[0]["mainsnak"].get("datavalue", {})
-                            .get("value", "") if formeln else ""),
-                "title_de": sitelinks.get("dewiki", {}).get("title", ""),
-                "title_en": en_titel,
-                "basis": nach_titel.get(en_titel, {}).get("basis", ""),
-            })
-    ohne_item = sorted(t for t in titel if t not in gefunden_titel)
-    items.sort(key=lambda e: int(e["qid"][1:]))
-    return items, ohne_item
+# ---------------------------------------------------------------------------
+# Werkstoffgruppen und Ableitungen
+# ---------------------------------------------------------------------------
+#
+# Welche Items ein Lauf anfasst, steht in gruppen.py; was sich ohne externe
+# Quelle aus einem Item ableiten laesst, in ableitungen.py.
+from . import ableitungen, gruppen  # noqa: E402
+from .gruppen import (  # noqa: E402,F401
+    HALBMETALLE, LEGIERUNG_OHNE_ELEMENTE, LEGIERUNG_PATTERN, LEGIERUNG_QID,
+    MINERAL_PATTERN, NICHTMETALLE,
+    NAMED_ALLOYS_SEITE, OXID_PATTERN, WERKSTOFFGRUPPEN, fetch_group_items,
+    fetch_named_alloys, gruppen_qids, items_der_gruppe,
+    ist_metall_oder_halbmetall, named_alloys_als_items,
+    pruefe_legierungsklasse,
+)
+from .ableitungen import (  # noqa: E402,F401
+    CHEMIE_METAKLASSEN, GEMISCH_METAKLASSE, GUIDELINE_URL, METALL_QID,
+    MINERALART_QID, legierungs_qids,
+    fetch_metaklassen,
+    fetch_p527_elemente, formel_proposals_for_item, melde_metaklassen_luecke,
+    metaklasse_proposals_for_item, metaklassen, metaklassen_vorladen,
+    p527_elemente, p527_vorladen, punktgruppe_proposals_for_item,
+    umstellung_proposals_for_item,
+)
+# ---------------------------------------------------------------------------
+# Bewusst NICHT umgesetzt: die chemische Metaklasse (P31)
+# ---------------------------------------------------------------------------
+#
+# P31 = "type of chemical entity" (Q113145171) wird bewusst NICHT
+# vorgeschlagen: die Definition widerspricht sich zwischen Projektseite und
+# Guideline. Wer das wieder aufgreift, faengt bei dieser Klaerung an, nicht
+# beim Code - Zahlen und Belege im README, "Bewusst nicht umgesetzt".
 
 
-WERKSTOFFGRUPPEN = {
-    "legierungen": {
-        "pattern": LEGIERUNG_PATTERN,
-        "beschreibung": "Legierungen (Q37756, ohne Elemente und Isotope)",
-    },
-    "benannte-legierungen": {
-        "pattern": None,   # kommt aus der Wikipedia-Liste, nicht aus SPARQL
-        "beschreibung": "benannte Legierungen aus [[en:List of named alloys]]",
-        "items": named_alloys_als_items,
-    },
-    "minerale": {
-        "pattern": MINERAL_PATTERN,
-        "beschreibung": "Mineralarten (Q12089225, IMA-gefuehrt)",
-    },
-    "oxide": {
-        "pattern": OXID_PATTERN,
-        "beschreibung": "Oxide mit Summenformel (Q50690)",
-    },
-}
-
-
-def fetch_group_items(pattern: str, limit: Optional[int] = None) -> list:
-    """Items einer Werkstoffgruppe, mit Formel und Artikeltiteln.
-
-    Wie ergiebig das ist, haengt stark an der Gruppe (gemessen 2026-08-16):
-
-        Gruppe        Items   mit Formel   mit de-Artikel
-        Legierungen     568        10           178
-        Mineralarten   6301      5694          1806
-        Oxide           154       154           108
-
-    Bei den Legierungen ist die Summenformel die Ausnahme - Stahl hat keine
-    -, weshalb COD und Materials Project dort kaum etwas beitragen koennen.
-    Bei Mineralen und Oxiden ist sie die Regel.
-    """
-    query = f"""
-    SELECT ?i ?iLabel ?formel ?deTitle ?enTitle WHERE {{
-      {pattern}
-      OPTIONAL {{ ?i wdt:P274 ?formel . }}
-      OPTIONAL {{ ?ade schema:about ?i ; schema:isPartOf <https://de.wikipedia.org/> ;
-                       schema:name ?deTitle . }}
-      OPTIONAL {{ ?aen schema:about ?i ; schema:isPartOf <https://en.wikipedia.org/> ;
-                       schema:name ?enTitle . }}
-      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
-    }}
-    """
-    resp = get_with_retry(WIKIDATA_SPARQL, {"query": query, "format": "json"})
-    gefunden = {}
-    for b in resp.json()["results"]["bindings"]:
-        qid = b["i"]["value"].rsplit("/", 1)[-1]
-        eintrag = gefunden.setdefault(qid, {
-            "qid": qid,
-            "label": b.get("iLabel", {}).get("value", qid),
-            "formula": "",
-            "title_de": "",
-            "title_en": "",
-        })
-        for feld, schluessel in (("formel", "formula"), ("deTitle", "title_de"),
-                                 ("enTitle", "title_en")):
-            if feld in b and not eintrag[schluessel]:
-                eintrag[schluessel] = b[feld]["value"]
-    # Stabile Reihenfolge: erst die mit Artikel (dort ist etwas zu holen),
-    # dann nach QID - so ist ein abgebrochener Lauf reproduzierbar.
-    alle = sorted(gefunden.values(),
-                  key=lambda e: (not e["title_de"], int(e["qid"][1:])))
-    return alle[:limit] if limit else alle
-
-
-def items_der_gruppe(gruppe: str, limit: Optional[int] = None) -> list:
-    """Itemliste einer Gruppe - aus SPARQL oder aus einer Wikipedia-Liste."""
-    info = WERKSTOFFGRUPPEN[gruppe]
-    if info.get("items"):
-        items, ohne_item = info["items"]()
-        if ohne_item:
-            # Das ist der eigentliche Ertrag der Prueflisten-Gruppe: Namen,
-            # fuer die es in Wikidata noch gar kein Item gibt. Anlegen kann
-            # dieses Werkzeug sie nicht - es arbeitet nur an bestehenden
-            # Items -, aber sie gehoeren ins Protokoll.
-            print(f"  {len(ohne_item)} Eintraege der Liste haben KEIN "
-                  f"Wikidata-Item: {', '.join(ohne_item)}", file=sys.stderr)
-        items = items[:limit] if limit else items
-    else:
-        items = fetch_group_items(info["pattern"], limit)
-
-    mit_formel = sum(1 for e in items if e["formula"])
-    mit_artikel = sum(1 for e in items if e["title_de"] or e["title_en"])
-    print(f"{len(items)} Items in Gruppe '{gruppe}' - {info['beschreibung']} "
-          f"({mit_formel} mit Summenformel, {mit_artikel} mit Wikipedia-Artikel).",
-          file=sys.stderr)
-    return items
-
-
-def pruefe_legierungsklasse(gruppe: str, items: list) -> list:
-    """Meldet Items, die nicht als Legierung klassifiziert sind.
-
-    Nur fuer die Prueflisten-Gruppe sinnvoll: dort steht durch die Herkunft
-    fest, dass es sich um Legierungen HANDELN SOLL. In den SPARQL-Gruppen ist
-    die Klassifikation per Definition schon erfuellt.
-
-    Vorgeschlagen wird NICHTS - die Einordnung eines Werkstoffs in die
-    Klassenhierarchie ist eine fachliche Entscheidung, und
-    [[Wikidata:WikiProject Materials/Materials]] verlangt dafuer eine
-    differenzierte Einhaengung (Ferrous alloy, Alloy steel, ...), die sich
-    aus dem Basismetall allein nicht ableiten laesst. Gemeldet wird nur.
-    """
-    if not WERKSTOFFGRUPPEN[gruppe].get("items") or not items:
-        return []
-
-    werte = " ".join(f"wd:{e['qid']}" for e in items)
-    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
-    SELECT DISTINCT ?i WHERE {{
-      VALUES ?i {{ {werte} }}
-      {{ ?i wdt:P31/wdt:P279* wd:{LEGIERUNG_QID} }} UNION
-      {{ ?i wdt:P279* wd:{LEGIERUNG_QID} }}
-    }}
-    """})
-    klassifiziert = {b["i"]["value"].rsplit("/", 1)[-1]
-                     for b in resp.json()["results"]["bindings"]}
-    fehlend = [e for e in items if e["qid"] not in klassifiziert]
-    if fehlend:
-        print(f"  {len(fehlend)} Items sind NICHT als Legierung (Q{LEGIERUNG_QID[1:]}) "
-              f"klassifiziert - bitte fachlich pruefen, hier wird nichts "
-              f"vorgeschlagen:", file=sys.stderr)
-        for e in fehlend:
-            basis = f" [Basis: {e['basis']}]" if e.get("basis") else ""
-            print(f"    {e['qid']:<12}{e['label'][:34]:<36}{basis}",
-                  file=sys.stderr)
-    return []
-
+# ---------------------------------------------------------------------------
+# Hauptlogik: Vorschlaege zusammenstellen
+# ---------------------------------------------------------------------------
 
 def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           wikipedia: bool = True, cod: bool = True,
@@ -2225,7 +188,9 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           nur_stabil: bool = True, max_entries: int = 1,
                           formel: bool = True, metaklasse_an: bool = True,
                           metaklasse_auch_mit_p31: bool = False,
-                          punktgruppe_an: bool = True):
+                          punktgruppe_an: bool = True, nist: bool = True,
+                          auch_vorhandene: bool = False,
+                          ausschluss: bool = True):
     """Vorschlaege fuer eine Werkstoffgruppe (Generator).
 
     Dieselbe Quellenkaskade wie sonst; welche Stufe traegt, haengt an der
@@ -2234,13 +199,14 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
     nur 10 von 568 Items eine Formel haben - siehe fetch_group_items. Dafuer
     greift dort die umgekehrte Ableitung: Formel AUS den Bestandteilen.
     """
-    items = items_der_gruppe(gruppe, limit)
+    items = items_der_gruppe(gruppe, limit, ausschluss=ausschluss)
     yield from pruefe_legierungsklasse(gruppe, items)
     yield from build_proposals_for_items(
         items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries,
         formel=formel, metaklasse_an=metaklasse_an,
         metaklasse_auch_mit_p31=metaklasse_auch_mit_p31,
-        punktgruppe_an=punktgruppe_an)
+        punktgruppe_an=punktgruppe_an, nist=nist,
+        auch_vorhandene=auch_vorhandene)
 
 
 def build_proposals_for_items(items: list, wikipedia: bool = True,
@@ -2251,7 +217,9 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                               formel: bool = True,
                               metaklasse_an: bool = True,
                               metaklasse_auch_mit_p31: bool = False,
-                              punktgruppe_an: bool = True):
+                              punktgruppe_an: bool = True,
+                              nist: bool = True,
+                              auch_vorhandene: bool = False):
     """Vorschlaege fuer eine fertige Itemliste (Generator).
 
     Von build_group_proposals abgetrennt, damit der Chargenbetrieb dieselbe
@@ -2282,10 +250,23 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
         except (RuntimeError, ValueError, requests.RequestException) as fehler:
             print(f"  P527-Aussagen nicht vorgeladen - {fehler}",
                   file=sys.stderr)
+    # Der Aussagenbestand aller Items auf einmal: eine Anfrage je 50 statt je
+    # Item. Daraus speist sich sowohl "traegt das Item die Property schon?"
+    # als auch der Siedepunkt.
+    try:
+        wikidata.claims_vorladen([e["qid"] for e in items])
+    except (RuntimeError, ValueError, requests.RequestException) as fehler:
+        print(f"  Aussagenbestand nicht vorgeladen - {fehler}", file=sys.stderr)
+    # Und die CAS-Nummern, mit denen die NIST-Stufe sucht.
+    if nist:
+        try:
+            wikidata.cas_vorladen([e["qid"] for e in items])
+        except (RuntimeError, ValueError, requests.RequestException) as fehler:
+            print(f"  CAS-Nummern nicht vorgeladen - {fehler}", file=sys.stderr)
     # Dasselbe fuer die Raumgruppen am Item, aus denen die Punktgruppe folgt.
     if punktgruppe_an:
         try:
-            item_raumgruppen_vorladen([e["qid"] for e in items])
+            wikidata.item_raumgruppen_vorladen([e["qid"] for e in items])
         except (RuntimeError, ValueError, requests.RequestException) as fehler:
             print(f"  Raumgruppen nicht vorgeladen - {fehler}",
                   file=sys.stderr)
@@ -2355,9 +336,21 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                 print(f"  {eintrag['qid']}: Punktgruppe uebersprungen - "
                       f"{fehler}", file=sys.stderr)
 
-        if cod and eintrag["formula"]:
+        # Quellen, die nichts mehr beitragen koennen, werden gar nicht erst
+        # befragt - siehe wikidata.stufe_kann_nichts_beitragen. Mit --auch-vorhandene
+        # laeuft wieder jede Stufe, dann steht in Abschnitt 2 des Entwurfs
+        # auch wirklich alles Gepruefte.
+        def ueberspringen(stufe, qid=eintrag["qid"]):
+            if auch_vorhandene:
+                return False
+            still = wikidata.stufe_kann_nichts_beitragen(qid, stufe)
+            if still:
+                wikidata._UEBERSPRUNGEN[stufe] += 1
+            return still
+
+        if cod and eintrag["formula"] and not ueberspringen("cod"):
             try:
-                treffer = fetch_cod_entries(formula=eintrag["formula"])
+                treffer = cod_quelle.fetch_cod_entries(formula=eintrag["formula"])
                 if treffer:
                     # pids_belegt enthaelt hier, was die beiden Ableitungen
                     # aus dem Item selbst schon geliefert haben. Bei der
@@ -2366,7 +359,7 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                     # findet aber ueberwiegend Diamant. Dann gilt, was am
                     # Item steht; die abweichende COD-Raumgruppe bleibt als
                     # eigene Zeile sichtbar.
-                    for zeile in cod_proposals_for_item(wd_match, treffer,
+                    for zeile in cod_quelle.cod_proposals_for_item(wd_match, treffer,
                                                         skip_pids=pids_belegt):
                         pids_belegt.add(zeile["_pid"])
                         n_cod += 1
@@ -2376,19 +369,21 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                       file=sys.stderr)
 
         zusammensetzung = parse_formula(eintrag["formula"])
+        if zusammensetzung and ueberspringen("mp"):
+            zusammensetzung = None
         if zusammensetzung:
             # MP filtert ueber die enthaltenen Elemente, nicht ueber die
             # Formel. Zurueck kommen also auch andere Phasen desselben
             # Systems - uebernommen wird nur, was in der Zusammensetzung
             # wirklich uebereinstimmt.
             try:
-                for material in fetch_mp_materials(
+                for material in mp_quelle.fetch_mp_materials(
                         sorted(zusammensetzung), max_entries,
                         nur_experimentell=nur_experimentell,
                         nur_stabil=nur_stabil):
                     if parse_formula(material.get("formula", "")) != zusammensetzung:
                         continue
-                    for zeile in proposals_for_material(material, wd_match,
+                    for zeile in mp_quelle.proposals_for_material(material, wd_match,
                                                         skip_pids=pids_belegt):
                         pids_belegt.add(zeile["_pid"])
                         n_mp += 1
@@ -2399,9 +394,25 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                 print(f"  {eintrag['qid']}: MP uebersprungen - {fehler}",
                       file=sys.stderr)
 
-        if wikipedia and (eintrag["title_de"] or eintrag["title_en"]):
+        # NIST WebBook: zwei Groessen, die keine andere Stufe liefert. Nur
+        # wo eine CAS-Nummer am Item steht - danach sucht das WebBook.
+        n_nist = 0
+        if nist and not ueberspringen("nist"):
             try:
-                zeilen, zaehler = wikipedia_fallback_proposals(
+                for zeile in nist_quelle.nist_proposals_for_item(
+                        wd_match, wikidata.cas_nummer(eintrag["qid"]),
+                        eintrag["formula"], skip_pids=pids_belegt):
+                    pids_belegt.add(zeile["_pid"])
+                    n_nist += 1
+                    yield zeile
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {eintrag['qid']}: NIST uebersprungen - {fehler}",
+                      file=sys.stderr)
+
+        if (wikipedia and (eintrag["title_de"] or eintrag["title_en"])
+                and not ueberspringen("wikipedia")):
+            try:
+                zeilen, zaehler = infobox.wikipedia_fallback_proposals(
                     wd_match, pids_belegt,
                     de_title=eintrag["title_de"], en_title=eintrag["title_en"],
                 )
@@ -2412,1294 +423,11 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
 
         print(f"  [{i}/{gesamt}] {eintrag['qid']} "
               f"{eintrag['label'][:28]}: Formel {n_formel}, P31 {n_p31}, "
-              f"P589 {n_p589}, COD {n_cod}, MP {n_mp}"
+              f"P589 {n_p589}, COD {n_cod}, MP {n_mp}, NIST {n_nist}"
               + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
                  if wikipedia else ""),
               file=sys.stderr)
 
-
-def fetch_element_qids() -> dict:
-    """{Elementsymbol: {qid, label, name_en}} fuer alle chemischen Elemente.
-
-    name_en adressiert die englische Vorlage "Template:Infobox <name>",
-    title_de den deutschen Artikel (per Sitelink, nicht geraten).
-
-    Ueber das Symbol (P246) statt ueber die Summenformel - fuer Reinstoffe
-    ist das eindeutig und umgeht die Formel-Normalisierung (Datenbanken
-    schreiben "O2Ti", Wikidata P274 "TiO₂") vollstaendig.
-
-    Geprueft am 2026-08-14: 174 Items mit P31=Q11344 und P246, KEIN Symbol
-    doppelt vergeben - die Abbildung ist damit kollisionsfrei.
-
-    ABER: 56 dieser 174 sind gar keine Elemente, sondern systematische
-    IUPAC-Platzhalter fuer UNENTDECKTE Elemente - "Ubb" (Unbibium, Z=122),
-    "Uue" (Ununennium, Z=119) und so fort. Wikidata fuehrt sie voellig
-    korrekt als P31=Q11344, es gibt sie nur nicht. Materials Project
-    beantwortet eine Abfrage danach mit HTTP 400 ("Please provide a
-    comma-seperated list of elements") und riss so einen Periodensystem-Lauf
-    bei Element 112 von 174 ab.
-
-    Aussortiert werden sie an der Symbollaenge: echte Elementsymbole haben
-    ein oder zwei Zeichen, die systematischen Platzhalter immer drei. Am
-    Bestand geprueft (2026-08-15) trennt das exakt - 118 echte Elemente,
-    genau die Zahl der bekannten, und 56 Platzhalter.
-    """
-    query = """
-    SELECT ?e ?sym ?eLabel ?enLabel ?deTitle WHERE {
-      ?e wdt:P31 wd:Q11344 ; wdt:P246 ?sym ; rdfs:label ?enLabel .
-      FILTER(LANG(?enLabel) = "en")
-      OPTIONAL {
-        ?art schema:about ?e ;
-             schema:isPartOf <https://de.wikipedia.org/> ;
-             schema:name ?deTitle .
-      }
-      SERVICE wikibase:label { bd:serviceParam wikibase:language "de,en". }
-    }
-    """
-    resp = get_with_retry(WIKIDATA_SPARQL, {"query": query, "format": "json"})
-    out = {}
-    platzhalter = []
-    for b in resp.json()["results"]["bindings"]:
-        qid = b["e"]["value"].rsplit("/", 1)[-1]
-        symbol = b["sym"]["value"]
-        if not _ECHTES_ELEMENTSYMBOL.fullmatch(symbol):
-            platzhalter.append(symbol)
-            continue
-        out[symbol] = {
-            "qid": qid,
-            "label": b.get("eLabel", {}).get("value", qid),
-            "name_en": b["enLabel"]["value"],
-            # Sitelink statt geratenem Titel: Titan liegt unter
-            # "Titan (Element)".
-            "title_de": b.get("deTitle", {}).get("value", ""),
-        }
-    if platzhalter:
-        print(
-            f"  {len(platzhalter)} systematische Platzhalter fuer unentdeckte "
-            f"Elemente uebersprungen ({', '.join(sorted(platzhalter)[:3])} ...)",
-            file=sys.stderr,
-        )
-    return out
-
-
-# ---------------------------------------------------------------------------
-# Formel-Normalisierung
-# ---------------------------------------------------------------------------
-#
-# Datenbanken und Wikidata schreiben dieselbe Verbindung unterschiedlich auf -
-# in Zeichensatz ("TiO2" gegen "TiO₂") wie in Reihenfolge ("O2Ti" gegen
-# "TiO₂"). Ein direkter Stringvergleich muss daran scheitern. Deshalb wird die
-# Formel in ihre Zusammensetzung {Element: Anzahl} zerlegt und daraus werden
-# die plausiblen Schreibweisen ERZEUGT, gegen die dann abgefragt wird.
-# Belege und Trefferzahlen: README, "Formel-Normalisierung".
-
-_TIEFGESTELLT = str.maketrans("0123456789", "₀₁₂₃₄₅₆₇₈₉")
-_NORMALZIFFERN = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
-
-# Elektronegativitaet nach Pauling - sie entscheidet, wer in der
-# konventionellen Schreibweise vorn steht. Edelgase und einige Actinoide
-# haben keinen etablierten Wert; sie fallen auf _EN_UNBEKANNT zurueck und
-# werden dadurch nur ueber die alphabetische Variante gefunden.
-_EN_UNBEKANNT = 2.2
-PAULING = {
-    "H": 2.20, "Li": 0.98, "Be": 1.57, "B": 2.04, "C": 2.55, "N": 3.04,
-    "O": 3.44, "F": 3.98, "Na": 0.93, "Mg": 1.31, "Al": 1.61, "Si": 1.90,
-    "P": 2.19, "S": 2.58, "Cl": 3.16, "K": 0.82, "Ca": 1.00, "Sc": 1.36,
-    "Ti": 1.54, "V": 1.63, "Cr": 1.66, "Mn": 1.55, "Fe": 1.83, "Co": 1.88,
-    "Ni": 1.91, "Cu": 1.90, "Zn": 1.65, "Ga": 1.81, "Ge": 2.01, "As": 2.18,
-    "Se": 2.55, "Br": 2.96, "Kr": 3.00, "Rb": 0.82, "Sr": 0.95, "Y": 1.22,
-    "Zr": 1.33, "Nb": 1.60, "Mo": 2.16, "Tc": 1.90, "Ru": 2.20, "Rh": 2.28,
-    "Pd": 2.20, "Ag": 1.93, "Cd": 1.69, "In": 1.78, "Sn": 1.96, "Sb": 2.05,
-    "Te": 2.10, "I": 2.66, "Xe": 2.60, "Cs": 0.79, "Ba": 0.89, "La": 1.10,
-    "Ce": 1.12, "Pr": 1.13, "Nd": 1.14, "Pm": 1.13, "Sm": 1.17, "Eu": 1.20,
-    "Gd": 1.20, "Tb": 1.10, "Dy": 1.22, "Ho": 1.23, "Er": 1.24, "Tm": 1.25,
-    "Yb": 1.10, "Lu": 1.27, "Hf": 1.30, "Ta": 1.50, "W": 2.36, "Re": 1.90,
-    "Os": 2.20, "Ir": 2.20, "Pt": 2.28, "Au": 2.54, "Hg": 2.00, "Tl": 1.62,
-    "Pb": 2.33, "Bi": 2.02, "Po": 2.00, "At": 2.20, "Fr": 0.70, "Ra": 0.90,
-    "Ac": 1.10, "Th": 1.30, "Pa": 1.50, "U": 1.38, "Np": 1.36, "Pu": 1.28,
-    "Am": 1.13, "Cm": 1.28, "Bk": 1.30, "Cf": 1.30, "Es": 1.30, "Fm": 1.30,
-    "Md": 1.30, "No": 1.30, "Lr": 1.30,
-}
-
-# Ein Token ist entweder ein Elementsymbol mit optionaler Anzahl oder eine
-# Klammer mit optionaler Anzahl. Alles andere macht die Formel unbrauchbar.
-_FORMEL_TOKEN = re.compile(r"([A-Z][a-z]?)(\d*)|(\()|(\)(\d*))")
-
-
-def parse_formula(formula: str) -> Optional[dict]:
-    """Summenformel -> {Element: Anzahl}, oder None wenn nicht deutbar.
-
-    Versteht beide Ziffernarten und geschachtelte Klammern ("Ca(OH)₂").
-    Bewusst streng: Hydratpunkte ("CuSO4·5H2O"), Ladungen, Freitext und
-    unbekannte Elementsymbole fuehren zu None statt zu einer geratenen
-    Zusammensetzung - ein falsch gedeuteter Treffer waere schlimmer als
-    gar keiner.
-    """
-    if not formula:
-        return None
-    s = formula.strip().translate(_NORMALZIFFERN)
-    if not s or not re.fullmatch(r"[A-Za-z0-9()]+", s):
-        return None
-
-    stapel = [collections.Counter()]
-    pos = 0
-    while pos < len(s):
-        m = _FORMEL_TOKEN.match(s, pos)
-        if not m or m.end() == pos:
-            return None
-        pos = m.end()
-        symbol, anzahl, klammer_auf, klammer_zu, klammer_anzahl = m.groups()
-        if symbol:
-            if symbol not in PAULING and symbol not in ("He", "Ne", "Ar", "Rn"):
-                return None  # kein Elementsymbol -> Formel nicht deutbar
-            stapel[-1][symbol] += int(anzahl) if anzahl else 1
-        elif klammer_auf:
-            stapel.append(collections.Counter())
-        elif klammer_zu:
-            if len(stapel) == 1:
-                return None  # schliessende Klammer ohne oeffnende
-            gruppe = stapel.pop()
-            faktor = int(klammer_anzahl) if klammer_anzahl else 1
-            for el, n in gruppe.items():
-                stapel[-1][el] += n * faktor
-    if len(stapel) != 1:
-        return None  # nicht geschlossene Klammer
-    return dict(stapel[0]) or None
-
-
-def _formel_schreiben(zusammensetzung: dict, reihenfolge: list,
-                      tiefgestellt: bool) -> str:
-    teile = []
-    for el in reihenfolge:
-        n = zusammensetzung[el]
-        ziffern = "" if n == 1 else str(n)
-        teile.append(el + (ziffern.translate(_TIEFGESTELLT)
-                           if tiefgestellt else ziffern))
-    return "".join(teile)
-
-
-def formula_candidates(zusammensetzung: dict) -> list:
-    """Plausible Schreibweisen einer Zusammensetzung, beste zuerst.
-
-    Jeweils tief- und normalgestellt, in dieser Reihenfolge:
-
-      Hill (C, dann H, dann alphabetisch): "C₁₅H₂₂O₃" - fuer ORGANISCHE
-        Verbindungen, also solche mit Kohlenstoff UND Wasserstoff. Nur dort
-        ist Hill die Konvention; ein Carbid wie SiC waere als "CSi" nirgends
-        auffindbar.
-      konventionell, elektropositiver Partner zuerst: "TiO₂", "Al₂O₃",
-        "NaCl", "SiC", "CO₂" - fuer alles Anorganische.
-      alphabetisch: "O₂Ti" - so liefern manche Datenbanken, und vereinzelt
-        steht es auch in Wikidata.
-
-    Erzeugt werden immer alle drei; die Reihenfolge bestimmt nur, welche
-    Schreibweise zuerst probiert wird. Doppelte fallen raus - bei NaCl
-    bleiben so zwei Kandidaten statt sechs.
-    """
-    elemente = sorted(zusammensetzung)
-
-    hill = ["C"] + (["H"] if "H" in zusammensetzung else [])
-    hill += [el for el in elemente if el not in ("C", "H")]
-    konventionell = sorted(
-        elemente, key=lambda el: (PAULING.get(el, _EN_UNBEKANNT), el))
-
-    organisch = "C" in zusammensetzung and "H" in zusammensetzung
-    ordnungen = ([hill, konventionell] if organisch
-                 else [konventionell] + ([hill] if "C" in zusammensetzung
-                                         else []))
-
-    kandidaten = []
-    for reihenfolge in ordnungen + [elemente]:
-        for tiefgestellt in (True, False):
-            s = _formel_schreiben(zusammensetzung, reihenfolge, tiefgestellt)
-            if s not in kandidaten:
-                kandidaten.append(s)
-    return kandidaten
-
-
-# ---------------------------------------------------------------------------
-# "enthaelt Elemente von" (P2670) aus der Summenformel ableiten
-# ---------------------------------------------------------------------------
-#
-# Welche Elemente ein Stoff enthaelt, steht schon in seiner Summenformel - es
-# braucht dafuer keine externe Quelle. Erzeugt wird Element + Anzahl (P1114),
-# nach dem Vorbild von Kohlenstoffdioxid (Q1997).
-#
-# Warum dafuer ein ZWEITER Parser neben parse_formula noetig ist, wie
-# Mischreihen behandelt werden und wie weit das traegt (gemessen an 5700
-# Formeln): README, "enthaelt Elemente von (P2670) aus der Summenformel".
-#
-# Kurzfassung der Regel, die der Code unten umsetzt:
-#   Element sicher, Menge sicher  -> P2670 mit P1114
-#   Element sicher, Menge offen   -> P2670 ohne P1114
-#   Element nur eine Moeglichkeit -> nichts, nur Klaerungsvermerk
-# Sicher ist ein Element, wenn es mindestens einmal AUSSERHALB jeder
-# Kommagruppe steht - oder in JEDEM Zweig einer Kommagruppe vorkommt.
-
-_TIEFZIFFERN = str.maketrans("₀₁₂₃₄₅₆₇₈₉", "0123456789")
-# Hochgestellte Ziffern und Vorzeichen sind IMMER Ladungen ("Fe³⁺"), nie
-# Stoechiometrie; das Leerstellensymbol ☐ steht fuer eine unbesetzte
-# Gitterposition. Beides traegt zur Zusammensetzung nichts bei.
-_LADUNG_UND_LEERSTELLE = str.maketrans("", "", "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻☐□◻ ")
-# Hydratschreibweisen: der Punkt trennt die Formeleinheit vom Kristallwasser.
-# "*" kommt in Wikidata vereinzelt statt des Punktes vor.
-_HYDRAT_TRENNER = re.compile(r"[·⋅•∙*]")
-_KLAMMER_AUF, _KLAMMER_ZU = "([{", ")]}"
-_EDELGAS_OHNE_EN = ("He", "Ne", "Ar", "Rn")
-
-
-class _MengeUnbestimmt(Exception):
-    """Ein Index ist eine Variable ("Cu₂₋ₓ") - die Menge ist nicht ableitbar."""
-
-
-def elemente_aus_formel(formel: str) -> Optional[tuple]:
-    """Summenformel -> ({Element: Anzahl oder None}, {unsichere Elemente}).
-
-    Erster Rueckgabewert sind die Elemente, die SICHER enthalten sind; steht
-    dort None statt einer Zahl, ist das Element sicher und nur seine Menge
-    unbestimmt. Zweiter Rueckgabewert sind Elemente, die bloss eine
-    Moeglichkeit einer Mischreihe sind - fuer die darf nichts behauptet
-    werden.
-
-    None, wenn die Formel gar nicht deutbar ist.
-    """
-    if not formel:
-        return None
-    rest = formel.strip().translate(_TIEFZIFFERN).translate(
-        _LADUNG_UND_LEERSTELLE)
-    # ASCII-Ladungen ("Te6+"): eine Ziffernfolge unmittelbar vor + oder - ist
-    # nie ein stoechiometrischer Index, sondern eine Oxidationsstufe.
-    rest = re.sub(r"\d+[+-]", "", rest)
-    if not rest:
-        return None
-
-    sicher_mit_menge = collections.Counter()
-    nur_moeglich = set()
-    menge_offen = set()
-
-    for i, teil in enumerate(_HYDRAT_TRENNER.split(rest)):
-        if not teil:
-            continue
-        faktor = 1
-        if i > 0:
-            # Die Zahl direkt hinter dem Punkt multipliziert den Hydratanteil:
-            # "·8H₂O" sind acht Formeleinheiten Wasser.
-            treffer = re.match(r"\d+", teil)
-            if treffer:
-                faktor, teil = int(treffer.group()), teil[treffer.end():]
-            else:
-                # "·nH₂O" - variable Wassermenge. Die Elemente stehen fest,
-                # ihre Anzahl nicht.
-                ohne_variable = re.sub(r"^[a-z]+", "", teil)
-                if ohne_variable != teil:
-                    teil, faktor = ohne_variable, None
-        if not teil:
-            continue
-        if not re.fullmatch(r"[A-Za-z0-9.()\[\]{},]+", teil):
-            return None
-        try:
-            fest, offen, alternativ = _formelausdruck(teil)
-        except _MengeUnbestimmt:
-            return None
-        if fest is None:
-            return None
-
-        if faktor is None:
-            # Alles aus diesem Abschnitt ist da, aber unbestimmt oft.
-            for element in fest:
-                sicher_mit_menge.setdefault(element, 0)
-            menge_offen |= set(fest) | offen
-        else:
-            for element, anzahl in fest.items():
-                sicher_mit_menge[element] += anzahl * faktor
-            menge_offen |= offen
-        nur_moeglich |= alternativ
-
-    if not sicher_mit_menge and not nur_moeglich:
-        return None
-
-    # Ein Element, das irgendwo unbedingt vorkommt, IST enthalten - auch wenn
-    # es zusaetzlich in einer Mischreihe auftaucht. Dann steht nur seine
-    # Gesamtmenge nicht fest: in "Al₁₃Si₅O₂₀(OH,F)₁₈Cl" ist Sauerstoff durch
-    # O₂₀ gesichert, wie viel davon aus (OH,F) dazukommt aber nicht.
-    sicher = {
-        element: (None if element in menge_offen or element in nur_moeglich
-                  else anzahl)
-        for element, anzahl in sicher_mit_menge.items()
-    }
-    return sicher, {e for e in nur_moeglich if e not in sicher_mit_menge}
-
-
-def _formelausdruck(rest: str) -> tuple:
-    """(feste Zusammensetzung, Elemente mit offener Menge, Alternativen).
-
-    Rekursiv ueber die Klammerebenen. Die feste Zusammensetzung enthaelt nur,
-    was unbedingt vorkommt; alles aus einer Kommagruppe landet je nach
-    Zweigvergleich in den beiden anderen Mengen.
-    """
-    fest = collections.Counter()
-    offen, alternativ = set(), set()
-    pos = 0
-    while pos < len(rest):
-        zeichen = rest[pos]
-        if zeichen in _KLAMMER_AUF:
-            ende = _klammer_ende(rest, pos)
-            if ende is None:
-                return None, offen, alternativ
-            inhalt, pos = rest[pos + 1:ende], ende + 1
-            faktor, pos = _index_lesen(rest, pos)
-            zweige = [_formelausdruck(z) for z in _komma_zerlegen(inhalt)]
-            if not zweige or any(f is None for f, _, _ in zweige):
-                return None, offen, alternativ
-            gruppe, g_offen, g_alternativ = _zweige_vereinen(zweige)
-            if faktor is None:
-                offen |= set(gruppe)
-                faktor = 1
-            for element, anzahl in gruppe.items():
-                fest[element] += anzahl * faktor
-            offen |= g_offen
-            alternativ |= g_alternativ
-        elif zeichen in _KLAMMER_ZU or zeichen == ",":
-            return None, offen, alternativ  # Kommas trennt _komma_zerlegen
-        else:
-            treffer = re.match(r"([A-Z][a-z]?)(\d+\.\d+|\d*)", rest[pos:])
-            if not treffer or not treffer.group(1):
-                return None, offen, alternativ
-            symbol = treffer.group(1)
-            if symbol not in PAULING and symbol not in _EDELGAS_OHNE_EN:
-                return None, offen, alternativ
-            pos += treffer.end()
-            if re.match(r"[a-z]", rest[pos:]):
-                raise _MengeUnbestimmt
-            index = treffer.group(2)
-            if "." in index:
-                # Nichtstoechiometrische Phase ("Ag₁.₁Hg₀.₉"): das Element ist
-                # da, eine gebrochene Anzahl gehoert aber nicht in P1114.
-                offen.add(symbol)
-                fest[symbol] += 1
-            else:
-                fest[symbol] += int(index) if index else 1
-    return fest, offen, alternativ
-
-
-def _zweige_vereinen(zweige: list) -> tuple:
-    """Fasst die Zweige einer Kommagruppe zusammen.
-
-    Was in JEDEM Zweig steht, ist gesichert - "(V⁵⁺,V⁴⁺)" ist zweimal
-    Vanadium. Nur wo die Zweige sich in der Anzahl unterscheiden, bleibt die
-    Menge offen. Alles Uebrige ist eine blosse Moeglichkeit.
-    """
-    if len(zweige) == 1:
-        return zweige[0]
-
-    gemeinsam = set.intersection(*(set(f) for f, _, _ in zweige))
-    gruppe = collections.Counter()
-    g_offen = set().union(*(o for _, o, _ in zweige))
-    g_alternativ = set().union(*(a for _, _, a in zweige))
-    for element in gemeinsam:
-        mengen = {f[element] for f, _, _ in zweige}
-        if len(mengen) == 1:
-            gruppe[element] = mengen.pop()
-        else:
-            gruppe[element] = 0
-            g_offen.add(element)
-    for fest, _, _ in zweige:
-        g_alternativ |= set(fest) - gemeinsam
-    return gruppe, g_offen, g_alternativ
-
-
-def _klammer_ende(rest: str, start: int) -> Optional[int]:
-    """Position der zugehoerigen schliessenden Klammer, oder None."""
-    tiefe = 0
-    for i in range(start, len(rest)):
-        if rest[i] in _KLAMMER_AUF:
-            tiefe += 1
-        elif rest[i] in _KLAMMER_ZU:
-            tiefe -= 1
-            if tiefe == 0:
-                return i
-    return None
-
-
-def _index_lesen(rest: str, pos: int) -> tuple:
-    """(Faktor, neue Position) hinter einer schliessenden Klammer.
-
-    Faktor None heisst: dort steht eine Variable statt einer Zahl.
-    """
-    treffer = re.match(r"\d+\.\d+|\d+", rest[pos:])
-    if treffer:
-        wert = treffer.group()
-        return (None if "." in wert else int(wert)), pos + treffer.end()
-    if re.match(r"[a-z]", rest[pos:]):
-        raise _MengeUnbestimmt
-    return 1, pos
-
-
-def _komma_zerlegen(rest: str) -> list:
-    """Teilt an den Kommas der OBERSTEN Ebene."""
-    teile, tiefe, letzter = [], 0, 0
-    for i, zeichen in enumerate(rest):
-        if zeichen in _KLAMMER_AUF:
-            tiefe += 1
-        elif zeichen in _KLAMMER_ZU:
-            tiefe -= 1
-        elif zeichen == "," and tiefe == 0:
-            teile.append(rest[letzter:i])
-            letzter = i + 1
-    teile.append(rest[letzter:])
-    return [t for t in teile if t]
-
-
-_ELEMENT_QID_CACHE = None
-
-
-def element_qids() -> dict:
-    """fetch_element_qids mit Zwischenspeicher.
-
-    Die Ableitung laeuft ueber Tausende Items; ohne Cache ginge je Item eine
-    SPARQL-Abfrage fuer dieselbe unveraenderliche Elementtabelle raus.
-    """
-    global _ELEMENT_QID_CACHE
-    if _ELEMENT_QID_CACHE is None:
-        _ELEMENT_QID_CACHE = fetch_element_qids()
-    return _ELEMENT_QID_CACHE
-
-
-def formel_proposals_for_item(wd_match: dict, formel: str,
-                              skip_pids: Optional[set] = None) -> list:
-    """P2670-Vorschlaege aus der Summenformel des Items.
-
-    Anders als alle uebrigen Stufen holt diese NICHTS von aussen: der Wert
-    wird aus einer Angabe abgeleitet, die am Item schon steht. Deshalb geht
-    die Aussage OHNE S-Beleg raus - siehe OHNE_BELEG_DATENTYPEN, dieselbe
-    Ueberlegung wie bei den Identifikatoren. Ein "importiert aus Wikidata"
-    waere zirkulaer, und die Ableitung ist am Item selbst nachpruefbar: die
-    Formel steht in der Notiz.
-
-    Elemente, die nur EINE Moeglichkeit einer Mischreihe sind, werden nicht
-    vorgeschlagen, sondern zur Klaerung ausgewiesen - bei "(Fe,Mg)₂SiO₄"
-    haengt es vom Glied der Reihe ab, ob Eisen oder Magnesium drinsteckt.
-    """
-    skip_pids = skip_pids or set()
-    prop_info = PROPERTY_MAP["has_part_of_class"]
-    if prop_info["pid"] in skip_pids:
-        return []
-
-    zerlegt = elemente_aus_formel(formel)
-    if zerlegt is None:
-        return []
-    sicher, unsicher = zerlegt
-    if not sicher and not unsicher:
-        return []
-
-    symbole = element_qids()
-    # Das Item traegt P2670 schon: dann wird nichts ergaenzt - wer die
-    # Zusammensetzung dort von Hand gepflegt hat, weiss mehr als diese
-    # Ableitung. Ein bestehendes P527 blockiert dagegen NICHT mehr: zeigt es
-    # auf Elemente, stellt die Umstellungsstufe es um (siehe
-    # umstellung_proposals_for_item); zeigt es auf Verbindungen (Quarz ->
-    # Siliciumdioxid), ist es eine andere Aussage und steht daneben.
-    vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
-    # Was die Umstellungsstufe schon aus P527 uebernimmt, hier nicht doppeln.
-    schon_umgestellt = {e for e in p527_elemente(wd_match["qid"])}
-    proposals = []
-
-    for symbol in sorted(sicher):
-        element = symbole.get(symbol)
-        if element is None:
-            continue  # Elementsymbol ohne Wikidata-Item - nicht raten
-        if element["qid"] in schon_umgestellt:
-            continue
-        anzahl = sicher[symbol]
-        qualifiers = ([("P1114", str(anzahl), f"Anzahl {anzahl}")]
-                      if anzahl is not None else [])
-        hinweis = "" if anzahl is not None else ", Anzahl nicht bestimmbar"
-        proposals.append(make_row(
-            "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
-            "Formel", wd_match, prop_info, element["qid"], element["label"],
-            Reference(
-                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P274",
-                note=f"abgeleitet aus der Summenformel {formel} "
-                     f"(P274 am Item){hinweis}",
-            ),
-            formula=formel, entry_id=f"formel-{symbol}",
-            qualifiers=qualifiers, ohne_beleg=True,
-        ))
-
-    if unsicher:
-        # Nicht still verschlucken: dass die Formel eine Mischreihe enthaelt,
-        # ist die interessanteste Aussage ueber sie.
-        namen = ", ".join(
-            symbole[s]["label"] if s in symbole else s for s in sorted(unsicher)
-        )
-        proposals.append(make_row(
-            f"MANUELLE_KLAERUNG_NOETIG (Mischreihe in {formel}: {namen} "
-            f"stehen zur Wahl, nicht nebeneinander)",
-            "Formel", wd_match, prop_info, "", namen,
-            Reference(
-                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P274",
-                note=f"Mischreihe in {formel} - Elemente nicht ableitbar",
-            ),
-            formula=formel, entry_id="formel-mischreihe",
-            qualifiers=[], ohne_beleg=True,
-        ))
-    return proposals
-
-
-# ---------------------------------------------------------------------------
-# Umstellung P527 -> P2670 an bestehenden Aussagen
-# ---------------------------------------------------------------------------
-#
-# 24538 Aussagen im Bestand sagen "Stoff P527 Element" (gemessen 2026-08-21).
-# Sie meinen die Zusammensetzung, sagen aber mereologisch etwas anderes: das
-# Item eines Elements ist die KLASSE seiner Atome. Richtig ist P2670. Diese
-# Stufe stellt bestehende Aussagen um - als EINZIGE im ganzen Werkzeug
-# erzeugt sie dabei auch Loeschzeilen.
-#
-# Uebernommen wird nur, was QuickStatements verlustfrei umsetzen kann:
-# Anzahl (P1114) ja, Belege und andere Qualifikatoren nein - die liessen sich
-# nicht mitnehmen, deshalb gehen solche Aussagen zur Klaerung statt zur
-# Umstellung. Zahlen: README, "Umstellung P527 -> P2670".
-
-_P527_CACHE = {}
-P527_CHARGE = 200
-
-
-def fetch_p527_elemente(qids: list) -> dict:
-    """{QID: {Element-QID: {anzahl, beleg, andere, schon_p2670}}}.
-
-    Nur Werte, die ein chemisches Element sind - ein P527 auf eine Verbindung
-    (Quarz -> Siliciumdioxid) ist eine andere Aussage und bleibt unberuehrt.
-    """
-    if not qids:
-        return {}
-    nach_qid = {info["qid"] for info in element_qids().values()}
-    werte = " ".join(f"wd:{q}" for q in qids)
-    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
-    SELECT ?i ?e ?anzahl ?beleg ?anderer ?p2670 WHERE {{
-      VALUES ?i {{ {werte} }}
-      {{
-        ?i p:P527 ?st . ?st ps:P527 ?e .
-        OPTIONAL {{ ?st pq:P1114 ?anzahl }}
-        OPTIONAL {{ ?st prov:wasDerivedFrom ?beleg }}
-        OPTIONAL {{
-          ?st ?q ?qv .
-          FILTER(STRSTARTS(STR(?q), "http://www.wikidata.org/prop/qualifier/"))
-          # Ohne diese Zeile zaehlt der Wertknoten JEDER Mengenangabe als
-          # fremder Qualifikator: P1114 haengt zusaetzlich unter
-          # .../qualifier/value/P1114, und daran ist die Umstellung von
-          # Wasser (Q283) zuerst gescheitert.
-          FILTER(!STRSTARTS(STR(?q), "http://www.wikidata.org/prop/qualifier/value"))
-          FILTER(?q != pq:P1114)
-          BIND(?q AS ?anderer)
-        }}
-      }} UNION {{
-        ?i wdt:P2670 ?e . BIND(true AS ?p2670)
-      }}
-    }}
-    """})
-    out = {q: {} for q in qids}
-    for b in resp.json()["results"]["bindings"]:
-        qid = b["i"]["value"].rsplit("/", 1)[-1]
-        element = b["e"]["value"].rsplit("/", 1)[-1]
-        if element not in nach_qid:
-            continue  # keine Elementaussage - geht diese Stufe nichts an
-        eintrag = out[qid].setdefault(
-            element, {"anzahl": None, "beleg": False, "andere": False,
-                      "schon_p2670": False, "p527": False})
-        if "p2670" in b:
-            eintrag["schon_p2670"] = True
-            continue
-        eintrag["p527"] = True
-        if "anzahl" in b:
-            eintrag["anzahl"] = b["anzahl"]["value"]
-        eintrag["beleg"] = eintrag["beleg"] or "beleg" in b
-        eintrag["andere"] = eintrag["andere"] or "anderer" in b
-    return out
-
-
-def p527_vorladen(qids: list) -> None:
-    """Elementaussagen vieler Items auf einmal holen und merken."""
-    offen = [q for q in qids if q not in _P527_CACHE]
-    for start in range(0, len(offen), P527_CHARGE):
-        _P527_CACHE.update(
-            fetch_p527_elemente(offen[start:start + P527_CHARGE]))
-
-
-def p527_elemente(qid: str) -> dict:
-    """Elementaussagen EINES Items, aus dem Zwischenspeicher oder frisch."""
-    if qid not in _P527_CACHE:
-        _P527_CACHE.update(fetch_p527_elemente([qid]))
-    return _P527_CACHE.get(qid, {})
-
-
-def umstellung_proposals_for_item(wd_match: dict, formel: str = "",
-                                  skip_pids: Optional[set] = None) -> list:
-    """Bestehende P527-Elementaussagen auf P2670 umstellen.
-
-    Je Aussage zwei Zeilen: die neue P2670-Aussage samt Anzahl und die
-    Loeschzeile fuer die alte. Beide gehoeren zusammen - wer nur die eine
-    einspielt, hat entweder eine Dublette oder eine Luecke.
-
-    Umgestellt wird nur an STOFFEN, erkennbar an einer Summenformel oder an
-    der Einordnung als Legierung. Der Grund steht im Bestand: "Alkalimetalle"
-    (Q19557) fuehrt seine MITGLIEDER mit P527 - Caesium, Lithium und so fort.
-    Das ist dort die richtige Aussage; "Alkalimetalle enthaelt Teile der
-    Klasse Caesium" waere es nicht. Solche Sammelbegriffe haengen wegen des
-    bekannten Modellierungsfehlers mitten in der Legierungsgruppe.
-    """
-    skip_pids = skip_pids or set()
-    if not formel and not metaklassen(wd_match["qid"])["legierung"]:
-        return []
-    neu_info = PROPERTY_MAP["has_part_of_class"]
-    alt_info = PROPERTY_MAP["has_part"]
-    if neu_info["pid"] in skip_pids:
-        return []
-
-    symbole = {info["qid"]: info for info in element_qids().values()}
-    proposals = []
-    for element, lage in sorted(p527_elemente(wd_match["qid"]).items()):
-        if not lage["p527"]:
-            continue
-        name = symbole.get(element, {}).get("label", element)
-        beleg = Reference(
-            url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P527",
-            note=f"Umstellung der bestehenden Aussage P527 -> {name} auf "
-                 f"P2670; das Element-Item ist die Klasse seiner Atome",
-        )
-
-        if lage["beleg"] or lage["andere"]:
-            # QuickStatements kann Belege und Qualifikatoren einer
-            # bestehenden Aussage nicht mitnehmen. Umstellen hiesse hier,
-            # sie zu verlieren - das entscheidet ein Mensch.
-            fehlt = " und ".join(
-                t for t in (("Beleg" if lage["beleg"] else ""),
-                            ("weitere Qualifikatoren" if lage["andere"] else ""))
-                if t)
-            proposals.append(make_row(
-                f"MANUELLE_KLAERUNG_NOETIG (P527 -> {name} traegt {fehlt}; "
-                f"eine Umstellung per QuickStatements wuerde das verlieren - "
-                f"von Hand umhaengen)",
-                "Umstellung", wd_match, alt_info, element, name, beleg,
-                entry_id=f"umstellung-{element}", qualifiers=[],
-                ohne_beleg=True,
-            ))
-            continue
-
-        if not lage["schon_p2670"]:
-            anzahl = lage["anzahl"]
-            qualifiers = ([("P1114", str(int(float(anzahl))),
-                            f"Anzahl {int(float(anzahl))}")]
-                          if anzahl and re.fullmatch(r"\d+(\.0*)?", anzahl)
-                          else [])
-            proposals.append(make_row(
-                "VORSCHLAG", "Umstellung", wd_match, neu_info, element, name,
-                beleg, entry_id=f"umstellung-{element}",
-                qualifiers=qualifiers, ohne_beleg=True,
-            ))
-
-        proposals.append(make_row(
-            "VORSCHLAG", "Umstellung", wd_match, alt_info, element, name,
-            Reference(
-                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P527",
-                note=f"ERSETZT durch P2670 -> {name}; diese Zeile ENTFERNT "
-                     f"die alte Aussage",
-            ),
-            entry_id=f"umstellung-{element}", qualifiers=[], ohne_beleg=True,
-            entfernen=True,
-        ))
-    return proposals
-
-
-# ---------------------------------------------------------------------------
-# Chemische Metaklasse (P31) fuer Legierungen
-# ---------------------------------------------------------------------------
-#
-# [[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]]
-# verlangt an JEDEM Item einer chemischen Entitaet genau EINE Metaklasse ueber
-# P31 - und fuer Gemische ausdruecklich eine eigene, nicht die der reinen
-# Stoffe. Eine Legierung ist per Definition ein Gemisch (Q37756: "mixture or
-# metallic solid solution"), die Metaklasse ist damit eindeutig bestimmt und
-# muss nicht geraten werden. Zahlen, Abgrenzung und die Faelle, die bewusst
-# offenbleiben: README, "Chemische Metaklasse (P31) fuer Legierungen".
-
-# Wikidata fuehrt Q11426 "Metall" als Unterklasse von Q37756 "Legierung".
-# Ueber diesen Knoten haengt alles Metallische unter der Legierung - auch
-# Sammelbegriffe wie "Platinmetalle" oder "metals of antiquity", die gar keine
-# Werkstoffe sind, sondern Aufzaehlungen. Ihnen die Gemisch-Metaklasse zu
-# geben waere schlicht falsch. Der Knoten wird deshalb beim Pruefen der
-# Klassenzugehoerigkeit ausgespart, siehe legierungs_qids.
-METALL_QID = "Q11426"
-
-
-def legierungs_qids(qids: list) -> set:
-    """Welche der Items sind Legierungen - ohne den Umweg ueber "Metall"?
-
-    Gefragt ist nicht bloss, ob das Item irgendwie unter Q37756 haengt: das
-    tut wegen Q11426 (siehe METALL_QID) jeder Sammelbegriff fuer Metalle. Die
-    Kante ueber Q11426 wird deshalb ausgespart und der Rest des Klassenwegs
-    hier durchlaufen - in SPARQL laesst sich ein AUSGESPARTER Knoten in einem
-    Pfad nicht ausdruecken.
-
-    Ein simples "hat gar keinen Metall-Weg" reicht nicht: Stahl hat einen,
-    kommt aber ausserdem ueber Ferrolegierung an die Legierung heran und ist
-    selbstverstaendlich eine.
-    """
-    if not qids:
-        return set()
-    werte = " ".join(f"wd:{q}" for q in qids)
-    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
-    SELECT DISTINCT ?von ?nach WHERE {{
-      VALUES ?i {{ {werte} }}
-      {{ ?i (wdt:P31|wdt:P279) ?nach . BIND(?i AS ?von) }}
-      UNION
-      {{ ?i (wdt:P31|wdt:P279)/wdt:P279* ?von .
-         FILTER(?von != wd:{METALL_QID})
-         ?von wdt:P279 ?nach . }}
-    }}
-    """})
-    kanten = collections.defaultdict(set)
-    for b in resp.json()["results"]["bindings"]:
-        von = b["von"]["value"].rsplit("/", 1)[-1]
-        kanten[von].add(b["nach"]["value"].rsplit("/", 1)[-1])
-
-    gefunden = set()
-    for qid in qids:
-        if qid == METALL_QID:
-            # Der Ausgangsknoten selbst: "Metalle" haengt nur ueber die
-            # defekte Kante unter der Legierung. Ohne diesen Sonderfall
-            # bekaeme ausgerechnet Q11426 die Gemisch-Metaklasse.
-            continue
-        gesehen, offen = set(), list(kanten.get(qid, ()))
-        while offen:
-            knoten = offen.pop()
-            if knoten == LEGIERUNG_QID:
-                gefunden.add(qid)
-                break
-            if knoten in gesehen or knoten == METALL_QID:
-                continue
-            gesehen.add(knoten)
-            offen.extend(kanten.get(knoten, ()))
-    return gefunden
-
-
-# Die Metaklasse fuer Gemische. Q119896085 ("Art von Polymer") ist ihre
-# einzige Unterklasse in der Guideline und fuer Legierungen nicht gemeint.
-GEMISCH_METAKLASSE = "Q119892838"   # "definiertes Gemisch chemischer Substanzen"
-
-# Alle Chemie-Metaklassen der Guideline. Traegt ein Item schon eine davon,
-# wird KEINE zweite vorgeschlagen: "Every item should have only one metaclass
-# from the above. No other chemistry-related metaclass should be present."
-CHEMIE_METAKLASSEN = {
-    "Q113145171": "definierte chemische Substanz",
-    GEMISCH_METAKLASSE: "definiertes Gemisch chemischer Substanzen",
-    "Q119896085": "Art von Polymer",
-    "Q47154513": "offene Klasse (Struktur)",
-    "Q56256173": "offene Klasse (Funktion)",
-    "Q56256178": "offene Klasse (Herkunft)",
-    "Q55640599": "geschlossene Klasse",
-    "Q15711994": "geschlossene Klasse (Summenformel)",
-    "Q59199015": "geschlossene Klasse (Stereoisomere)",
-    "Q55662456": "geschlossene Klasse (ortho/meta/para)",
-    "Q74892521": "unpraezise Klasse chemischer Substanzen",
-}
-
-# Mineralarten bleiben aussen vor: sie sind ueber die IMA modelliert
-# (P31 = Q12089225), und ob ein Mineral zusaetzlich eine Chemie-Metaklasse
-# tragen soll, ist eine Frage an das Mineralprojekt, nicht an dieses Werkzeug.
-MINERALART_QID = "Q12089225"
-
-
-def fetch_metaklassen(qids: list) -> dict:
-    """{QID: {"p31": [QID, ...], "legierung": bool}} fuer die Items.
-
-    Eine Abfrage fuer die P31-Werte, eine fuer die Klassenzugehoerigkeit -
-    beide fuer die ganze Charge statt je Item.
-    """
-    if not qids:
-        return {}
-    werte = " ".join(f"wd:{q}" for q in qids)
-    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
-    SELECT ?i ?klasse WHERE {{
-      VALUES ?i {{ {werte} }}
-      ?i wdt:P31 ?klasse .
-    }}
-    """})
-    p31 = {q: [] for q in qids}
-    for b in resp.json()["results"]["bindings"]:
-        qid = b["i"]["value"].rsplit("/", 1)[-1]
-        klasse = b["klasse"]["value"].rsplit("/", 1)[-1]
-        if klasse not in p31[qid]:
-            p31[qid].append(klasse)
-
-    legierungen = legierungs_qids(qids)
-    return {q: {"p31": p31[q], "legierung": q in legierungen} for q in qids}
-
-
-_METAKLASSE_CACHE = {}
-# 200 Items je Abfrage - wie bei den Raumgruppen.
-METAKLASSE_CHARGE = 200
-
-
-def metaklassen_vorladen(qids: list) -> None:
-    """Metaklassen vieler Items auf einmal holen und merken."""
-    offen = [q for q in qids if q not in _METAKLASSE_CACHE]
-    for start in range(0, len(offen), METAKLASSE_CHARGE):
-        _METAKLASSE_CACHE.update(
-            fetch_metaklassen(offen[start:start + METAKLASSE_CHARGE]))
-
-
-def metaklassen(qid: str) -> dict:
-    """Metaklassen-Lage EINES Items, aus dem Zwischenspeicher oder frisch."""
-    if qid not in _METAKLASSE_CACHE:
-        _METAKLASSE_CACHE.update(fetch_metaklassen([qid]))
-    return _METAKLASSE_CACHE.get(qid, {"p31": [], "legierung": False})
-
-
-GUIDELINE_URL = ("https://www.wikidata.org/wiki/Wikidata:WikiProject_Chemistry/"
-                 "Guidelines/Basic_metaclasses_and_relations")
-
-
-def melde_metaklassen_luecke(items: list, auch_mit_p31: bool) -> None:
-    """Zaehlt auf stderr, was der Standardumfang bewusst auslaesst.
-
-    Sonst sieht niemand, dass die Guideline auch an diesen Items eine
-    Metaklasse verlangt - sie faenden sich einfach nicht in der CSV wieder.
-    """
-    if auch_mit_p31:
-        return
-    offen = [
-        e for e in items
-        if metaklassen(e["qid"])["legierung"]
-        and MINERALART_QID not in metaklassen(e["qid"])["p31"]
-        and metaklassen(e["qid"])["p31"]
-        and not [k for k in metaklassen(e["qid"])["p31"]
-                 if k in CHEMIE_METAKLASSEN]
-    ]
-    if offen:
-        print(f"  {len(offen)} Legierungen tragen ein P31, aber keine "
-              f"Chemie-Metaklasse - hier wird nichts vorgeschlagen "
-              f"(--metaklasse-auch-mit-p31 nimmt sie dazu).", file=sys.stderr)
-
-
-def metaklasse_proposals_for_item(wd_match: dict,
-                                  skip_pids: Optional[set] = None,
-                                  auch_mit_p31: bool = False) -> list:
-    """P31-Vorschlag: die Gemisch-Metaklasse fuer eine Legierung.
-
-    Vorgeschlagen wird NUR die Metaklasse, nie eine inhaltliche Einordnung
-    ("Kupferlegierung", "Werkzeugstahl") - die ist eine fachliche
-    Entscheidung, siehe pruefe_legierungsklasse.
-
-    Standardmaessig nur an Items, die GAR KEIN P31 tragen. Wo schon eines
-    steht, ist es in aller Regel eine richtige Klassenzugehoerigkeit
-    ("P31 = Legierung"), und die Metaklasse waere eine ZWEITE P31-Aussage
-    daneben - fuer die spricht die Guideline, aber es ist eine Massenaenderung
-    an 565 Items, und genau dort sitzt auch der Schrott (Stahlrohr,
-    Markenzeichen). Mit auch_mit_p31=True kommen sie dazu; die Zahlen stehen
-    im README.
-
-    Traegt das Item bereits eine ANDERE Chemie-Metaklasse, wird nichts
-    vorgeschlagen, sondern zur Klaerung ausgewiesen: die Guideline laesst nur
-    eine zu, und die falsche zu entfernen ist nichts, was dieses Werkzeug
-    nebenbei tut.
-    """
-    skip_pids = skip_pids or set()
-    prop_info = PROPERTY_MAP["metaklasse"]
-    if prop_info["pid"] in skip_pids:
-        return []
-
-    info = metaklassen(wd_match["qid"])
-    if not info["legierung"] or MINERALART_QID in info["p31"]:
-        return []
-
-    def zeile(status, wert, wert_label, notiz):
-        return make_row(
-            status, "Metaklasse", wd_match, prop_info, wert, wert_label,
-            Reference(url=GUIDELINE_URL, note=notiz),
-            entry_id="metaklasse", qualifiers=[], ohne_beleg=True,
-        )
-
-    vorhanden = [k for k in info["p31"] if k in CHEMIE_METAKLASSEN]
-    if GEMISCH_METAKLASSE in vorhanden:
-        return [zeile("BEREITS_VORHANDEN", GEMISCH_METAKLASSE,
-                      CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE],
-                      "Metaklasse steht bereits am Item")]
-    if vorhanden:
-        namen = ", ".join(f"{k} ({CHEMIE_METAKLASSEN[k]})" for k in vorhanden)
-        return [zeile(
-            f"MANUELLE_KLAERUNG_NOETIG (Item traegt bereits die Metaklasse "
-            f"{namen}; fuer ein Gemisch ist {GEMISCH_METAKLASSE} vorgesehen, "
-            f"und die Guideline laesst nur EINE zu - die bestehende muesste "
-            f"also weichen)",
-            "", namen, f"abweichende Chemie-Metaklasse am Item: {namen}")]
-
-    if info["p31"] and not auch_mit_p31:
-        return []   # traegt schon eine Einordnung - siehe Docstring
-
-    return [zeile(
-        "VORSCHLAG", GEMISCH_METAKLASSE,
-        CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE],
-        "Legierung, also ein Gemisch (Q37756) - Metaklasse nach "
-        "WikiProject Chemistry, Basic metaclasses and relations")]
-
-
-# ---------------------------------------------------------------------------
-# Punktgruppe (P589) aus der Raumgruppe (P690) am Item
-# ---------------------------------------------------------------------------
-#
-# Dieselbe Bauart wie die beiden Ableitungen davor: der Wert steht schon am
-# Item, nur in einer anderen Property. Jede der 230 Raumgruppen gehoert zu
-# genau einer der 32 kristallographischen Punktgruppen, und Wikidata fuehrt
-# diese Zuordnung bereits an den Raumgruppen-Items selbst (230 von 236 tragen
-# P589). Es ist also nichts abzuleiten, sondern nur nachzuschlagen.
-#
-# Warum das lohnt (gemessen 2026-08-19): 2876 Items tragen eine Raumgruppe,
-# aber nur 18 davon auch eine Punktgruppe. Fuer 2851 laesst sie sich
-# nachschlagen, darunter 2602 Mineralarten. Zahlen und Grenzen: README,
-# "Punktgruppe (P589) aus der Raumgruppe".
-
-_ITEM_RAUMGRUPPE_CACHE = {}
-# Wie bei den Bestandteilen: eine Abfrage je 200 Items statt je Item.
-RAUMGRUPPE_CHARGE = 200
-
-
-def fetch_item_raumgruppen(qids: list) -> dict:
-    """{QID: [Raumgruppen-QID, ...]} - die P690-Werte der Items."""
-    if not qids:
-        return {}
-    werte = " ".join(f"wd:{q}" for q in qids)
-    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
-    SELECT ?i ?sg WHERE {{
-      VALUES ?i {{ {werte} }}
-      ?i wdt:P690 ?sg .
-    }}
-    """})
-    out = {q: [] for q in qids}
-    for b in resp.json()["results"]["bindings"]:
-        qid = b["i"]["value"].rsplit("/", 1)[-1]
-        sg = b["sg"]["value"].rsplit("/", 1)[-1]
-        if sg not in out[qid]:
-            out[qid].append(sg)
-    return out
-
-
-def item_raumgruppen_vorladen(qids: list) -> None:
-    """Raumgruppen vieler Items auf einmal holen und merken."""
-    offen = [q for q in qids if q not in _ITEM_RAUMGRUPPE_CACHE]
-    for start in range(0, len(offen), RAUMGRUPPE_CHARGE):
-        _ITEM_RAUMGRUPPE_CACHE.update(
-            fetch_item_raumgruppen(offen[start:start + RAUMGRUPPE_CHARGE]))
-
-
-def item_raumgruppen(qid: str) -> list:
-    """Raumgruppen EINES Items, aus dem Zwischenspeicher oder frisch."""
-    if qid not in _ITEM_RAUMGRUPPE_CACHE:
-        _ITEM_RAUMGRUPPE_CACHE.update(fetch_item_raumgruppen([qid]))
-    return _ITEM_RAUMGRUPPE_CACHE.get(qid, [])
-
-
-def punktgruppe_proposals_for_item(wd_match: dict,
-                                   skip_pids: Optional[set] = None) -> list:
-    """P589-Vorschlag aus der Raumgruppe (P690), die am Item schon steht.
-
-    Holt nichts von aussen ausser dem Nachschlagewerk selbst und geht deshalb
-    - wie die uebrigen abgeleiteten Aussagen - OHNE S-Beleg raus.
-
-    Traegt das Item MEHRERE Raumgruppen (56 Items am Bestand, meist mehrere
-    Modifikationen an einem Item), wird nichts vorgeschlagen: welche gemeint
-    ist, entscheidet die Fachfrage, nicht das Skript.
-    """
-    skip_pids = skip_pids or set()
-    prop_info = PROPERTY_MAP["point_group"]
-    if prop_info["pid"] in skip_pids:
-        return []
-
-    raumgruppen = item_raumgruppen(wd_match["qid"])
-    if not raumgruppen:
-        return []
-    tabelle = raumgruppen_nach_qid()
-
-    if len(raumgruppen) > 1:
-        namen = ", ".join(
-            tabelle[q]["label"] if q in tabelle else q for q in raumgruppen)
-        return [make_row(
-            f"MANUELLE_KLAERUNG_NOETIG (mehrere Raumgruppen am Item: {namen} "
-            f"- welche Modifikation gemeint ist, entscheidet die Fachfrage)",
-            "Raumgruppe", wd_match, prop_info, "", namen,
-            Reference(
-                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P690",
-                note=f"mehrere Raumgruppen am Item ({namen}) - Punktgruppe "
-                     f"nicht eindeutig",
-            ),
-            entry_id="punktgruppe", qualifiers=[], ohne_beleg=True,
-        )]
-
-    sg = tabelle.get(raumgruppen[0])
-    if sg is None or not sg["pg_qid"]:
-        return []  # Raumgruppe ohne Punktgruppe am Item - nicht raten
-
-    vorhanden = item_has_statement(wd_match["qid"], prop_info["pid"])
-    return [make_row(
-        "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
-        "Raumgruppe", wd_match, prop_info, sg["pg_qid"], sg["pg_label"],
-        Reference(
-            url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P690",
-            note=f"aus der Raumgruppe {sg['label']} (P690 am Item); die "
-                 f"Punktgruppe steht am Raumgruppen-Item selbst (P589)",
-        ),
-        entry_id="punktgruppe", qualifiers=[], ohne_beleg=True,
-    )]
-
-
-# ---------------------------------------------------------------------------
-# Schritt 2b: Bestehendes Wikidata-Item ueber Formel finden
-# ---------------------------------------------------------------------------
-
-def find_wikidata_item_by_formula(formula: str) -> Optional[dict]:
-    """Sucht ein BESTEHENDES Wikidata-Item mit passender chemischer Formel
-    (P274). Legt NIEMALS ein neues Item an.
-    """
-    if not formula:
-        return None
-
-    # Ueber die Zusammensetzung statt ueber den rohen String suchen - sonst
-    # scheitert der Vergleich an Ziffernart und Elementreihenfolge (siehe
-    # Abschnitt "Formel-Normalisierung"). Laesst sich die Formel nicht
-    # deuten, bleibt der urspruengliche Wortlaut als einziger Kandidat.
-    zusammensetzung = parse_formula(formula)
-    kandidaten = (formula_candidates(zusammensetzung) if zusammensetzung
-                  else [formula])
-    values = " ".join(f'"{k}"' for k in kandidaten)
-
-    # Die Sitelinks werden gleich mitgeholt: die Wikipedia-Fallbackstufen
-    # brauchen den echten Artikeltitel, und geraten werden darf er nicht
-    # (Titan liegt unter "Titan (Element)"). Ein zweiter Abruf je Item
-    # waere reine Verschwendung.
-    sparql = f"""
-    SELECT ?item ?itemLabel ?formel ?deTitle ?enTitle WHERE {{
-      VALUES ?formel {{ {values} }}
-      ?item wdt:P274 ?formel .
-      OPTIONAL {{
-        ?deArt schema:about ?item ;
-               schema:isPartOf <https://de.wikipedia.org/> ;
-               schema:name ?deTitle .
-      }}
-      OPTIONAL {{
-        ?enArt schema:about ?item ;
-               schema:isPartOf <https://en.wikipedia.org/> ;
-               schema:name ?enTitle .
-      }}
-      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
-    }}
-    LIMIT 50
-    """
-    resp = get_with_retry(WIKIDATA_SPARQL, {"query": sparql, "format": "json"})
-    bindings = resp.json().get("results", {}).get("bindings", [])
-
-    # Gegenprobe: die gefundene Formel zurueckparsen und die Zusammensetzung
-    # vergleichen. Ein Kandidat kann durch eine Nachlaessigkeit auf beiden
-    # Seiten danebenliegen; die Zusammensetzung luegt nicht.
-    if zusammensetzung:
-        bindings = [
-            b for b in bindings
-            if parse_formula(b.get("formel", {}).get("value", ""))
-            == zusammensetzung
-        ]
-    if not bindings:
-        return None
-
-    # Nach ITEMS unterscheiden, nicht nach Zeilen: mehrere Schreibweisen
-    # desselben Items und die OPTIONAL-Bloecke wuerden es sonst faelschlich
-    # als mehrdeutig erscheinen lassen.
-    treffer = {}
-    for b in bindings:
-        qid = b["item"]["value"].rsplit("/", 1)[-1]
-        treffer.setdefault(qid, b)
-
-    # Stichentscheid bei Mehrdeutigkeit: Isotopologe tragen dieselbe Formel
-    # UND dieselbe P31 wie der echte Stoff ("Carbon-13C dioxide",
-    # "sodium chloride na-24", "Sodium (³⁵Cl)chloride" - alle P31
-    # Q113145171 "definierte chemische Substanz"). Ueber die Klasse sind sie
-    # also nicht auszusortieren, wohl aber ueber den Artikel: diese
-    # Bot-Anlagen haben keinen.
-    #
-    # Greift nur, WENN es mehrdeutig ist und mindestens ein Item mit Artikel
-    # dabei ist. Ein einzelner artikelloser Treffer bleibt damit gueltig -
-    # gefiltert wird nur, wo ohnehin eine Auswahl noetig waere. Loest die
-    # Filterung auf genau ein Item auf, ist die Sache klar; sonst bleibt es
-    # mehrdeutig, aber wenigstens ohne Rauschen in der Kandidatenliste.
-    if len(treffer) > 1:
-        mit_artikel = {q: b for q, b in treffer.items()
-                       if b.get("deTitle") or b.get("enTitle")}
-        if mit_artikel:
-            treffer = mit_artikel
-
-    if len(treffer) > 1:
-        # Mehrdeutig (z. B. Polymorphe, Minerale) -> zur manuellen Klaerung.
-        # Die Kandidaten kommen mit in die Zeile, sonst ist sie nicht
-        # abarbeitbar.
-        return {
-            "ambiguous": True,
-            "candidates": [
-                f"{qid} ({b.get('itemLabel', {}).get('value', qid)})"
-                for qid, b in treffer.items()
-            ],
-        }
-    qid, b = next(iter(treffer.items()))
-    return {
-        "qid": qid,
-        "label": b.get("itemLabel", {}).get("value", qid),
-        "ambiguous": False,
-        "formel_wikidata": b.get("formel", {}).get("value", ""),
-        "title_de": b.get("deTitle", {}).get("value", ""),
-        "title_en": b.get("enTitle", {}).get("value", ""),
-    }
-
-
-# ---------------------------------------------------------------------------
-# Schritt 3: Pruefen, ob das Statement schon existiert
-# ---------------------------------------------------------------------------
-
-_CLAIM_CACHE: dict = {}
-
-
-def fetch_item_pids(qid: str) -> set:
-    """Alle P-Nummern, zu denen das Item bereits eine Aussage hat.
-
-    Einmal pro Item statt einmal pro Property abfragen - im
-    Periodensystem-Lauf spart das rund drei Viertel der Requests.
-    """
-    if qid not in _CLAIM_CACHE:
-        resp = get_with_retry(
-            WIKIDATA_API,
-            {"action": "wbgetclaims", "entity": qid, "format": "json"},
-        )
-        _CLAIM_CACHE[qid] = set(resp.json().get("claims", {}))
-    return _CLAIM_CACHE[qid]
-
-
-def item_has_statement(qid: str, pid: str) -> bool:
-    return pid in fetch_item_pids(qid)
-
-
-# ---------------------------------------------------------------------------
-# Keine Festkoerper-Kennwerte an Stoffen, die bei Raumtemperatur Gas sind
-# ---------------------------------------------------------------------------
-#
-# Diese Groessen beschreiben den FESTKOERPER und gehoeren nicht an ein Item,
-# dessen Stoff bei Normalbedingungen ein Gas ist - MP rechnet dann die
-# Tieftemperaturphase. Welche Groesse aus welchem Grund gesperrt ist und warum
-# Schallgeschwindigkeit und COD-ID BEWUSST fehlen: README, "Keine
-# Festkoerper-Kennwerte an Gasen".
-NUR_FESTKOERPER = ("bulk_modulus", "shear_modulus", "poisson_ratio",
-                   "density", "crystal_system", "space_group", "point_group",
-                   "linear_thermal_expansion")
-RAUMTEMPERATUR_K = 293.15
-
-# P2102 wird in Wikidata in drei Einheiten gefuehrt (am Bestand: 32x Celsius,
-# 27x Fahrenheit, 11x Kelvin). Wikidatas normalisierte Werte (psn:) helfen
-# nicht: Celsius -> Kelvin ist eine Verschiebung, und normalisiert wird nur
-# multiplikativ. Deshalb hier selbst umrechnen - sonst gilt Fluor mit "-307"
-# (Fahrenheit) als absurd kalt und Iod mit "184,4" (Celsius) als Gas.
-TEMPERATUR_NACH_KELVIN = {
-    "Q11579": lambda x: x,                      # Kelvin
-    "Q25267": lambda x: x + 273.15,             # Grad Celsius
-    "Q42289": lambda x: (x - 32) * 5 / 9 + 273.15,   # Grad Fahrenheit
-}
-
-_SIEDEPUNKT_CACHE = {}
-
-
-def siedepunkt_kelvin(qid: str) -> Optional[float]:
-    """Siedepunkt des Items in Kelvin, oder None wenn nicht ermittelbar.
-
-    Gibt es mehrere Angaben (verschiedene Quellen oder Druecke), gilt die
-    niedrigste - fuer die Frage "bei Raumtemperatur schon gasfoermig?" ist
-    das die vorsichtige Richtung.
-    """
-    if qid in _SIEDEPUNKT_CACHE:
-        return _SIEDEPUNKT_CACHE[qid]
-    if "P2102" not in fetch_item_pids(qid):
-        _SIEDEPUNKT_CACHE[qid] = None
-        return None
-
-    resp = get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
-    SELECT ?wert ?einheit WHERE {{
-      wd:{qid} p:P2102/psv:P2102 [ wikibase:quantityAmount ?wert ;
-                                   wikibase:quantityUnit ?einheit ] .
-    }}
-    """})
-    kelvin = []
-    for b in resp.json()["results"]["bindings"]:
-        umrechnen = TEMPERATUR_NACH_KELVIN.get(
-            b["einheit"]["value"].rsplit("/", 1)[-1])
-        if umrechnen:
-            kelvin.append(umrechnen(float(b["wert"]["value"])))
-    _SIEDEPUNKT_CACHE[qid] = min(kelvin) if kelvin else None
-    return _SIEDEPUNKT_CACHE[qid]
-
-
-def ist_bei_raumtemperatur_gas(qid: str) -> bool:
-    """True, wenn der Stoff bei 20 C sicher gasfoermig ist.
-
-    Ohne Siedepunkt wird NICHTS behauptet und damit auch nichts unterdrueckt:
-    nur 70 der 118 Elemente fuehren P2102, unter den fehlenden sind Sauerstoff
-    und die schweren Edelgase. Lieber ein Vorschlag zu viel, der beim
-    Durchsehen auffaellt, als eine still verschluckte Zeile.
-    """
-    siede = siedepunkt_kelvin(qid)
-    return siede is not None and siede <= RAUMTEMPERATUR_K
-
-
-# ---------------------------------------------------------------------------
-# Bewusst NICHT umgesetzt: die chemische Metaklasse (P31)
-# ---------------------------------------------------------------------------
-#
-# P31 = "type of chemical entity" (Q113145171) wird bewusst NICHT
-# vorgeschlagen: die Definition widerspricht sich zwischen Projektseite und
-# Guideline. Wer das wieder aufgreift, faengt bei dieser Klaerung an, nicht
-# beim Code - Zahlen und Belege im README, "Bewusst nicht umgesetzt".
-
-
-def verfeinere_zentrierung(system, hm_symbol) -> str:
-    """'cubic' -> 'fcc'/'bcc' anhand des Hermann-Mauguin-Symbols.
-
-    MPs Feld crystal_system sagt nur "Cubic" und verschenkt damit die
-    Unterscheidung zwischen Kupfer und Wolfram. Der ERSTE Buchstabe des
-    Raumgruppensymbols nennt aber genau die Bravais-Zentrierung:
-
-        P  primitiv            Fe (Im-3m) -> bcc
-        F  flaechenzentriert   Cu (Fm-3m) -> fcc
-        I  raumzentriert       W  (Im-3m) -> bcc
-
-    Nur fuer kubische Systeme angewandt; bei allem anderen bleibt es beim
-    Kristallsystem. Ein unbekannter Anfangsbuchstabe aendert nichts.
-    """
-    if system != "cubic" or not hm_symbol:
-        return system
-    return {"F": "fcc", "I": "bcc"}.get(str(hm_symbol).strip()[:1], system)
-
-
-def mp_value(raw, faktor):
-    """Rohwert aus dem MP-Dokument -> Wert in der Wikidata-Einheit.
-
-    faktor None kennzeichnet itemwertige Groessen (Kristallsystem); die
-    werden nicht gerechnet, sondern spaeter ueber die value_map abgebildet.
-    MP schreibt sie gross ("Tetragonal"), die value_map klein.
-    """
-    if raw is None:
-        return None
-    if faktor is None:
-        return str(raw).strip().lower()
-    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
-        return None  # kein Zahlwert -> nicht deuten
-    return raw * faktor
-
-
-# ---------------------------------------------------------------------------
-# Hauptlogik: Vorschlaege zusammenstellen
-# ---------------------------------------------------------------------------
 
 def build_proposals(elements: Optional[list], max_entries: int,
                     wikipedia: bool = True, nur_experimentell: bool = True,
@@ -3715,7 +443,7 @@ def build_proposals(elements: Optional[list], max_entries: int,
     Generator: die Zeilen werden sofort weitergereicht, damit ein langer Lauf
     auch bei Abbruch bereits Geschriebenes behaelt.
     """
-    materials = fetch_mp_materials(
+    materials = mp_quelle.fetch_mp_materials(
         elements, max_entries,
         nur_experimentell=nur_experimentell, nur_stabil=nur_stabil,
     )
@@ -3736,7 +464,7 @@ def build_proposals(elements: Optional[list], max_entries: int,
         if not formel:
             continue
         if formel not in aufgeloest:
-            aufgeloest[formel] = find_wikidata_item_by_formula(formel)
+            aufgeloest[formel] = wikidata.find_wikidata_item_by_formula(formel)
         wd_match = aufgeloest[formel]
         if wd_match is None:
             continue  # kein bestehendes Item -> gemaess Vorgabe ueberspringen
@@ -3765,9 +493,9 @@ def build_proposals(elements: Optional[list], max_entries: int,
             # COD zuerst - siehe build_periodic_table_proposals.
             formel = next((m.get("formula") for m in gruppe if m.get("formula")), "")
             try:
-                treffer = fetch_cod_entries(formula=formel)
+                treffer = cod_quelle.fetch_cod_entries(formula=formel)
                 if treffer:
-                    for proposal in cod_proposals_for_item(wd_match, treffer):
+                    for proposal in cod_quelle.cod_proposals_for_item(wd_match, treffer):
                         pids_belegt.add(proposal["_pid"])
                         n_cod += 1
                         yield proposal
@@ -3777,7 +505,7 @@ def build_proposals(elements: Optional[list], max_entries: int,
 
         n_mp = 0
         for material in gruppe:
-            for proposal in proposals_for_material(material, wd_match,
+            for proposal in mp_quelle.proposals_for_material(material, wd_match,
                                                    skip_pids=pids_belegt):
                 pids_belegt.add(proposal["_pid"])
                 n_mp += 1
@@ -3785,7 +513,7 @@ def build_proposals(elements: Optional[list], max_entries: int,
 
         zaehler = collections.Counter()
         if wikipedia:
-            zeilen, zaehler = wikipedia_fallback_proposals(
+            zeilen, zaehler = infobox.wikipedia_fallback_proposals(
                 wd_match, pids_belegt,
                 de_title=wd_match.get("title_de", ""),
                 en_title=wd_match.get("title_en", ""),
@@ -3801,238 +529,11 @@ def build_proposals(elements: Optional[list], max_entries: int,
         )
 
 
-def proposals_for_material(material: dict, wd_match: dict,
-                           skip_pids: Optional[set] = None) -> list:
-    """Erzeugt die Vorschlagszeilen fuer EIN MP-Material gegen EIN
-    bestehendes Wikidata-Item. Gemeinsam genutzt von Formel- und
-    Periodensystem-Modus.
-
-    `skip_pids` sind Properties, die eine bessere Quelle schon geliefert hat
-    - in der Praxis die COD-Stufe fuer Raumgruppe und Kristallsystem. MP ist
-    dort nur noch Rueckfall.
-
-    Belegt wird mit der Referenzpublikation der Datenbank plus der mp-ID -
-    einzelne MP-Materialien haben keine eigene DOI. Die Notiz nennt
-    zusaetzlich, ob das Material experimentell nachgewiesen und stabil ist,
-    damit beim Durchsehen nicht nachgeschlagen werden muss.
-    """
-    mp_id = material.get("material_id", "?")
-    # "berechnet (DFT)" steht bewusst an erster Stelle. MP-Werte sind
-    # DFT-Rechnungen bei 0 K am idealen Einkristall, keine Messungen. Fuer
-    # Dichte und Kristallsystem faellt das kaum ins Gewicht (am Bestand
-    # geprueft: Cu/Fe/Ti weichen um 0,4-3,6 % vom Handbuchwert ab), fuer die
-    # elastischen Moduln und die Poissonzahl sehr wohl - dort sind es 17-41 %
-    # (Ti-Schubmodul 62 statt 44 GPa). Wer die Zeile durchsieht, muss das
-    # sehen, ohne es zu wissen.
-    belege = [f"Materials Project {mp_id}", "berechnet (DFT)"]
-    if material.get("theoretical") is False:
-        belege.append("experimentell nachgewiesen")
-    if material.get("is_stable"):
-        belege.append("stabil (auf der konvexen Huelle)")
-    icsd = [i for i in (material.get("database_IDs") or {}).get("icsd", [])]
-    if icsd:
-        belege.append(f"ICSD {', '.join(str(i) for i in icsd[:3])}")
-    mp_reference = Reference(doi=MP_DOI, note="; ".join(belege))
-
-    # Gerechnete Aussagen tragen P459 - siehe "Bestimmungsmethode".
-    mp_qualifiers = [(DETERMINATION_PID, DFT_QID, DFT_LABEL)]
-
-    skip_pids = skip_pids or set()
-    # MP rechnet nur Festkoerper. Ist der Stoff bei 20 C ein Gas, beschreiben
-    # die elastischen Moduln die Tieftemperaturphase - siehe NUR_FESTKOERPER.
-    gasfoermig = ist_bei_raumtemperatur_gas(wd_match["qid"])
-    proposals = []
-    for mp_field, (internal_key, faktor) in MP_FIELD_MAP.items():
-        prop_info = PROPERTY_MAP.get(internal_key)
-        if prop_info is None or prop_info["pid"] in skip_pids:
-            continue
-        if gasfoermig and internal_key in NUR_FESTKOERPER:
-            continue
-        value = mp_value(_dig(material, mp_field), faktor)
-        if value is None:
-            continue
-        if internal_key == "crystal_system":
-            # Spezifischer als "kubisch", wo die Raumgruppe es hergibt.
-            value = verfeinere_zentrierung(
-                value, _dig(material, "symmetry.symbol"))
-
-        # Literaturbeleg statt Rechnung, wo die Rechnung die schlechtere
-        # Quelle waere - siehe LITERATUR_BELEG.
-        lit = LITERATUR_BELEG.get(internal_key)
-        if lit:
-            reference = Reference(
-                isbn=lit["isbn"],
-                note=f"{lit['werk']}; Wert aus der Symmetrieanalyse von "
-                     f"Materials Project {mp_id} - Modifikation gegen das "
-                     f"Werk pruefen",
-            )
-            qualifiers = []  # kein "berechnet (DFT)" auf einem Literaturwert
-        elif internal_key in MP_DATASET_DOI:
-            # Datensatz mit eigener Zitierpflicht - siehe MP_DATASET_DOI.
-            zusatz = MP_DATASET_DOI[internal_key]
-            reference = Reference(
-                doi=MP_DOI, dataset_doi=zusatz,
-                note="; ".join(belege + [MP_DATASET_WERK[zusatz]]),
-            )
-            qualifiers = list(mp_qualifiers)
-        else:
-            reference = mp_reference
-            qualifiers = list(mp_qualifiers)
-
-        if internal_key == "density":
-            # P2054 verlangt Temperatur und Aggregatzustand. Hier NICHT die
-            # 20-°C-Vorgabe: eine DFT-Rechnung liefert das Volumen des
-            # relaxierten Grundzustands, also 0 K. Genau daher ruehrt auch
-            # die systematische Abweichung von den Handbuchwerten - bei
-            # Raumtemperatur ist die Zelle thermisch geweitet.
-            # MP fuehrt ausschliesslich kristalline Festkoerper, "fest" ist
-            # hier also keine Annahme.
-            qualifiers += [DFT_TEMPERATUR, (AGGREGAT_PID, AGGREGAT_FEST, "fest")]
-
-        if internal_key == "poisson_ratio":
-            # Die Poissonzahl haengt an der Temperatur - bei Stahl steigt sie
-            # zwischen Raumtemperatur und 500 °C messbar an -, und der
-            # Elastizitaetsdatensatz (de Jong et al. 2015) ist wie alles bei
-            # MP bei 0 K gerechnet. Ohne Qualifikator stuende in Wikidata eine
-            # temperaturlose Zahl, die stillschweigend als Raumtemperaturwert
-            # gelesen wuerde - gerade hier weicht die Rechnung aber am
-            # staerksten ab (17-41 %, siehe oben).
-            # P5593 kennt keinen Qualifikator-Constraint; am Bestand tragen 4
-            # der 226 Aussagen bereits P2076 (gemessen 2026-08-19).
-            qualifiers.append(DFT_TEMPERATUR)
-
-        pid = prop_info["pid"]
-        value_label = ""
-
-        if prop_info.get("datatype") == "item":
-            # Item-wertige Property: MP-String -> QID. Unbekannte
-            # Auspraegungen werden nicht geraten.
-            mapped = prop_info.get("value_map", {}).get(str(value))
-            if mapped is None:
-                proposals.append(
-                    make_row(
-                        f"MANUELLE_KLAERUNG_NOETIG (Wert '{value}' "
-                        f"nicht in value_map fuer {pid})",
-                        "MaterialsProject", wd_match, prop_info, value, "",
-                        reference, formula=material.get("formula", ""),
-                        entry_id=mp_id, qualifiers=qualifiers,
-                    )
-                )
-                continue
-            value, value_label = mapped
-        else:
-            value = round_significant(value)
-            # Physikalisch Unmoegliches nie vorschlagen - siehe PLAUSIBEL.
-            if not ist_plausibel(internal_key, value):
-                grenzen = PLAUSIBEL[internal_key]
-                proposals.append(
-                    make_row(
-                        f"MANUELLE_KLAERUNG_NOETIG (unplausibler Wert "
-                        f"{value:g}, erwartet {grenzen[0]:g}..{grenzen[1]:g} "
-                        f"- Rechnung in {mp_id} vermutlich fehlgeschlagen)",
-                        "MaterialsProject", wd_match, prop_info, value, "",
-                        reference, formula=material.get("formula", ""),
-                        entry_id=mp_id, qualifiers=qualifiers,
-                    )
-                )
-                continue
-
-        already_present = item_has_statement(wd_match["qid"], pid)
-
-        proposals.append(
-            make_row(
-                "BEREITS_VORHANDEN" if already_present else "VORSCHLAG",
-                "MaterialsProject", wd_match, prop_info, value, value_label,
-                reference, formula=material.get("formula", ""),
-                entry_id=mp_id, qualifiers=qualifiers,
-            )
-        )
-    return proposals
-
-
-def round_significant(value: float, digits: int = 6) -> float:
-    """Auf signifikante Stellen runden, nicht auf Nachkommastellen.
-
-    Die Groessen hier reichen von 1e-8 (spezifischer Widerstand in Ohm*m)
-    bis 1e11 (Kompressionsmodul in Pascal). round(x, 6) wuerde den
-    Widerstand zu 0.0 machen.
-    """
-    return float(f"{value:.{digits}g}")
-
-
-def make_row(status, source, wd_match, prop_info, value, value_label,
-             reference, formula="", entry_id="", qualifiers=None,
-             ohne_beleg=False, entfernen=False):
-    """Baut eine Vorschlagszeile - einheitlich fuer alle Quellen.
-
-    qualifiers ist eine Liste (pid, quickstatements_wert, klartext). Der Wert
-    steht bereits in QuickStatements-Schreibweise - "Q1048589" fuer eine
-    itemwertige, "20U25267" fuer eine mengenwertige Angabe. Er landet sowohl
-    lesbar in der CSV-Spalte "bestimmungsmethode" als auch maschinenlesbar
-    im QuickStatements-Entwurf.
-
-    ohne_beleg erzwingt den belegfreien Modus auch fuer Datentypen, die nicht
-    in OHNE_BELEG_DATENTYPEN stehen. Gebraucht wird das fuer AUS DEM ITEM
-    ABGELEITETE Aussagen (P2670 aus der Summenformel): dort gibt es keine
-    externe Quelle, die man zitieren koennte.
-
-    entfernen macht aus der Zeile eine LOESCHZEILE: im Entwurf steht sie mit
-    fuehrendem "-", QuickStatements nimmt die Aussage damit vom Item. Das
-    braucht genau eine Stufe - die Umstellung P527 -> P2670 -, und nur dort
-    darf es gesetzt werden.
-    """
-    qualifiers = qualifiers or []
-    datentyp = prop_info.get("datatype", "quantity")
-    row = {
-        "status": status,
-        "source": source,
-        "qid": wd_match["qid"],
-        "label": wd_match["label"],
-        "property": f"{prop_info['pid']} ({prop_info['label']})",
-        "value": value,
-        "value_label": value_label,
-        "datatype": datentyp,
-        "unit_qid": prop_info["unit_qid"],
-        "formula": formula,
-        "bestimmungsmethode": "; ".join(
-            f"{pid}={wert} ({text})" for pid, wert, text in qualifiers
-        ),
-        "entry_id": entry_id,
-    }
-
-    ohne_beleg = ohne_beleg or datentyp in OHNE_BELEG_DATENTYPEN
-    if ohne_beleg:
-        # Belegspalten leer lassen - eine gefuellte ref_doi wuerde beim
-        # Durchsehen suggerieren, dass ein Beleg mitgeschrieben wird.
-        # Die HERKUNFT bleibt in ref_note stehen, damit die Zeile pruefbar
-        # ist; sie ist nur kein Beleg im Sinne von Wikidata.
-        row.update({
-            "ref_mode": ("ohne Beleg (Identifikator)"
-                         if datentyp in OHNE_BELEG_DATENTYPEN
-                         else "ohne Beleg (aus dem Item abgeleitet)"),
-            "ref_doi": "", "ref_isbn": "", "ref_url": "", "ref_retrieved": "",
-            "ref_note": reference.note,
-        })
-    else:
-        row.update(reference.as_csv_fields())
-
-    row["_ref"] = reference
-    row["_pid"] = prop_info["pid"]
-    row["_qualifiers"] = qualifiers
-    row["_ohne_beleg"] = ohne_beleg
-    row["_entfernen"] = entfernen
-    if entfernen:
-        # Der Status bleibt "VORSCHLAG" - die Zeile ist einspielbar und
-        # gehoert in Abschnitt 1. Dass hier etwas WEGGEHT, steht in der
-        # Property-Spalte, im Entwurf am fuehrenden "-" und in der Notiz.
-        row["property"] = f"{prop_info['pid']} ({prop_info['label']}) - ENTFERNEN"
-    return row
-
-
 def build_periodic_table_proposals(
     max_per_element: int = 1, only: Optional[list] = None,
     wikipedia: bool = True, nur_experimentell: bool = True,
     nur_stabil: bool = True, cod: bool = True, nur_metalle: bool = True,
+    nist: bool = True, auch_vorhandene: bool = False,
 ):
     """Vorschlaege fuer die metallischen Elemente (Generator).
 
@@ -4065,7 +566,7 @@ def build_periodic_table_proposals(
     Groessen fuehrt (u. a. spezifische Waermekapazitaet, elektrische
     Leitfaehigkeit, Schallgeschwindigkeit, CAS-Nummer).
     """
-    symbols = fetch_element_qids()
+    symbols = wikidata.fetch_element_qids()
     print(f"{len(symbols)} chemische Elemente in Wikidata gefunden.", file=sys.stderr)
 
     todo = sorted(only) if only else sorted(symbols)
@@ -4080,6 +581,13 @@ def build_periodic_table_proposals(
         print(f"Auswahl: {len(todo)} Metalle und Halbmetalle "
               f"(davon {len(halb)} Halbmetalle: {', '.join(halb)}); "
               f"{weg} Nichtmetalle uebersprungen.", file=sys.stderr)
+    # Aussagenbestand aller Elemente auf einmal - 118 Elemente sind drei
+    # Anfragen statt 118 (siehe wikidata.claims_vorladen).
+    try:
+        wikidata.claims_vorladen([symbols[s]["qid"] for s in todo if s in symbols])
+    except (RuntimeError, ValueError, requests.RequestException) as fehler:
+        print(f"  Aussagenbestand nicht vorgeladen - {fehler}", file=sys.stderr)
+
     gescheitert = []
     for i, sym in enumerate(todo, 1):
         if sym not in symbols:
@@ -4100,10 +608,10 @@ def build_periodic_table_proposals(
         # Fehler bei Element 112 warf bisher alles Weitere weg, obwohl die
         # uebrigen 6 voellig in Ordnung gewesen waeren. Genau so ist es
         # passiert (HTTP 400 auf einen Platzhalter, siehe
-        # fetch_element_qids). Fehlender Schluessel bleibt toedlich - der
+        # wikidata.fetch_element_qids). Fehlender Schluessel bleibt toedlich - der
         # trifft jedes Element, da waere Weitermachen sinnlos.
         try:
-            materials = fetch_mp_materials(
+            materials = mp_quelle.fetch_mp_materials(
                 None, max_per_element, pure_element=sym,
                 nur_experimentell=nur_experimentell, nur_stabil=nur_stabil,
             )
@@ -4115,15 +623,23 @@ def build_periodic_table_proposals(
                   file=sys.stderr)
             continue
 
+        def ueberspringen(stufe, qid=info["qid"]):
+            if auch_vorhandene:
+                return False
+            still = wikidata.stufe_kann_nichts_beitragen(qid, stufe)
+            if still:
+                wikidata._UEBERSPRUNGEN[stufe] += 1
+            return still
+
         pids_belegt = set()
         n_cod = 0
-        if cod:
+        if cod and not ueberspringen("cod"):
             # COD zuerst - siehe Docstring. Faellt die Stufe aus, laeuft der
             # Rest unveraendert weiter; MP springt dann wieder ein.
             try:
-                treffer = fetch_cod_entries(element_symbol=sym)
+                treffer = cod_quelle.fetch_cod_entries(element_symbol=sym)
                 if treffer:
-                    for proposal in cod_proposals_for_item(wd_match, treffer):
+                    for proposal in cod_quelle.cod_proposals_for_item(wd_match, treffer):
                         pids_belegt.add(proposal["_pid"])
                         n_cod += 1
                         yield proposal
@@ -4132,17 +648,32 @@ def build_periodic_table_proposals(
                       file=sys.stderr)
 
         n_mp = 0
-        for material in materials:
-            for proposal in proposals_for_material(material, wd_match,
+        for material in (materials if not ueberspringen("mp") else []):
+            for proposal in mp_quelle.proposals_for_material(material, wd_match,
                                                    skip_pids=pids_belegt):
                 pids_belegt.add(proposal["_pid"])
                 n_mp += 1
                 yield proposal
 
-        zaehler = collections.Counter()
-        if wikipedia:
+        # NIST WebBook: 116 der 118 Elemente tragen eine CAS-Nummer, das ist
+        # hier die ergiebigste Gruppe ueberhaupt.
+        n_nist = 0
+        if nist and not ueberspringen("nist"):
             try:
-                zeilen, zaehler = wikipedia_fallback_proposals(
+                for proposal in nist_quelle.nist_proposals_for_item(
+                        wd_match, wikidata.cas_nummer(info["qid"]), sym,
+                        skip_pids=pids_belegt):
+                    pids_belegt.add(proposal["_pid"])
+                    n_nist += 1
+                    yield proposal
+            except (RuntimeError, ValueError, requests.RequestException) as fehler:
+                print(f"  {sym}: NIST uebersprungen - {fehler}",
+                      file=sys.stderr)
+
+        zaehler = collections.Counter()
+        if wikipedia and not ueberspringen("wikipedia"):
+            try:
+                zeilen, zaehler = infobox.wikipedia_fallback_proposals(
                     wd_match, pids_belegt,
                     de_title=info["title_de"], en_element=info["name_en"],
                 )
@@ -4158,6 +689,7 @@ def build_periodic_table_proposals(
             f"  [{i}/{len(todo)}] {sym} ({info['qid']} {info['label']}): "
             + (f"COD {n_cod}, " if cod else "")
             + f"MP {n_mp}"
+            + (f", NIST {n_nist}" if nist else "")
             + (f", de.wp {zaehler['de.wp']}, en.wp {zaehler['en.wp']}"
                if wikipedia else ""),
             file=sys.stderr,
@@ -4173,326 +705,6 @@ def build_periodic_table_proposals(
             f"{' '.join(gescheitert)}",
             file=sys.stderr,
         )
-
-
-def _dig(d: dict, dotted_path: str):
-    """Liest verschachtelte dict-Werte anhand eines 'a.b.c'-Pfads."""
-    cur = d
-    for part in dotted_path.split("."):
-        if not isinstance(cur, dict) or part not in cur:
-            return None
-        cur = cur[part]
-    return cur
-
-
-# ---------------------------------------------------------------------------
-# Ausgabe
-# ---------------------------------------------------------------------------
-
-CSV_FIELDS = [
-    "status",
-    "source",
-    "qid",
-    "label",
-    "property",
-    "value",
-    "value_label",
-    "datatype",
-    "unit_qid",
-    "formula",
-    # Qualifikator der Aussage: bei gerechneten Werten P459 -> DFT.
-    # Leer bei Literaturwerten aus der Wikipedia.
-    "bestimmungsmethode",
-    # Nur bei MANUELLE_KLAERUNG_NOETIG belegt: die in Frage kommenden Items,
-    # damit die Zeile ohne eigene Recherche abarbeitbar ist.
-    "kandidaten",
-    "entry_id",
-    # Referenz: DOI wenn vorhanden, sonst URL + Abrufdatum
-    "ref_mode",
-    "ref_doi",
-    "ref_isbn",
-    "ref_url",
-    "ref_retrieved",
-    "ref_note",
-]
-
-
-def write_csv_streaming(proposals, path: str = "vorschlaege.csv") -> list:
-    """Schreibt jede Zeile SOFORT und gibt sie zusaetzlich gesammelt zurueck.
-
-    Ein Periodensystem-Lauf dauert je nach Drosselung viele Minuten. Wuerde
-    erst am Ende geschrieben, waere bei Abbruch (Ctrl-C, Netzfehler) alles
-    verloren - genau das ist beim Lauf ueber 44 von 174 Elementen passiert.
-    Deshalb Zeile fuer Zeile mit flush().
-    """
-    gesammelt = []
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
-        writer.writeheader()
-        f.flush()
-        for row in proposals:
-            writer.writerow(row)
-            f.flush()
-            gesammelt.append(row)
-    print(
-        f"Vorschlagsliste geschrieben nach: {path} ({len(gesammelt)} Zeilen)",
-        file=sys.stderr,
-    )
-    return gesammelt
-
-
-def write_csv(proposals: list, path: str = "vorschlaege.csv") -> None:
-    write_csv_streaming(proposals, path)
-
-
-def quickstatements_value(row: dict) -> str:
-    """Wert einer Aussage in QuickStatements-V1-Schreibweise.
-
-    Mengenwerte MUESSEN ihre Einheit tragen: QuickStatements erwartet
-    "<zahl>U<QID-Nummer>", also z. B. "1357.77U11579" fuer Kelvin (Q11579).
-    Ohne das "U..." landet der Wert als einheitenlose Zahl in Wikidata -
-    eine Dichte stuende dann als blosse 8.96 da.
-
-    Ausserdem wird die Exponentialschreibweise aufgeloest: Python schreibt
-    den spezifischen Widerstand als "1.678e-08", QuickStatements liest das
-    nicht als Zahl. Ueber Decimal wird daraus "0.00000001678".
-
-    Item-wertige Aussagen (z. B. P556 Kristallsystem) stehen als blankes
-    QID - dort waere eine Einheit sinnlos.
-    """
-    value = row["value"]
-    if row.get("datatype") == "item":
-        return str(value)
-    if row.get("datatype") in ("external-id", "string"):
-        # Zeichenketten (z. B. CAS-Nummer) gehoeren in Anfuehrungszeichen,
-        # sonst liest QuickStatements sie als Zahl oder QID.
-        return f'"{value}"'
-
-    try:
-        zahl = format(Decimal(str(value)), "f")
-    except (InvalidOperation, ValueError):
-        return str(value)
-
-    unit_qid = (row.get("unit_qid") or "").strip()
-    if not unit_qid.startswith("Q"):
-        return zahl  # dimensionslose Groesse
-    return f"{zahl}U{unit_qid[1:]}"
-
-
-def clear_quickstatements_draft(path: str) -> None:
-    """Setzt den Entwurf vor dem Lauf auf einen Platzhalter.
-
-    Der Entwurf entsteht erst am Ende. Ohne dieses Leeren stuende nach einem
-    Abbruch der vollstaendige Entwurf des VORIGEN Laufs neben der frisch und
-    nur teilweise geschriebenen CSV - zwei Dateien, die nicht zusammengehoeren
-    und deren Unterschied niemandem auffaellt.
-    """
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("# Lauf noch nicht abgeschlossen - dieser Entwurf ist leer "
-                "und unvollstaendig.\n")
-
-
-_TRENNER = "# " + "=" * 70
-
-
-def _abschnitt_kopf(titel: str, anzahl: int, erklaerung: list,
-                    einheit: tuple = ("Zeile", "Zeilen")) -> list:
-    """Auskommentierter Abschnittskopf mit Zaehler und Begruendung."""
-    zeilen = [
-        "",
-        _TRENNER,
-        f"# {titel} ({anzahl} {einheit[0] if anzahl == 1 else einheit[1]})",
-    ]
-    zeilen += [f"# {z}" for z in erklaerung]
-    zeilen.append(_TRENNER)
-    return zeilen
-
-
-def _vorhandene_zeile(row: dict) -> str:
-    """Eine BEREITS_VORHANDEN-Zeile, vollstaendig auskommentiert."""
-    ref = row.get("_ref")
-    herkunft = f" | Quelle: {row.get('source', '?')}"
-    if ref is not None:
-        herkunft += f" ({ref.mode})"
-    return (f"# {row.get('qid', '')}\t{row.get('_pid', '')}\t"
-            f"{row.get('value', '')}{herkunft}")
-
-
-def _klaerungs_zeilen(row: dict) -> list:
-    """Eine MANUELLE_KLAERUNG-Zeile, vollstaendig auskommentiert.
-
-    Zwei Auspraegungen: eine mehrdeutige Formel (dann steht kein Item fest,
-    dafuer die Kandidaten) und ein Wert ohne Abbildung in der value_map
-    (dann steht das Item fest, aber der Wert laesst sich nicht setzen).
-    """
-    grund = row.get("status", "").replace("MANUELLE_KLAERUNG_NOETIG", "").strip()
-    grund = grund.strip("()") or "unklar"
-    if row.get("kandidaten"):
-        zeilen = [f"# Formel {row.get('formula', '?')}: {grund}"]
-        for kandidat in row["kandidaten"].split("; "):
-            zeilen.append(f"#     {kandidat}")
-        zeilen.append(f"#     Eintrag {row.get('entry_id', '?')}, "
-                      f"DOI {row.get('ref_doi') or '?'}")
-        return zeilen
-    return [
-        f"# {row.get('qid', '')} {row.get('label', '')}: {grund}",
-        f"#     Property {row.get('property', '?')}, Rohwert "
-        f"{row.get('value', '?')!r}, Quelle {row.get('source', '?')}",
-    ]
-
-
-def write_quickstatements_draft(proposals: list, path: str = "quickstatements_entwurf.txt") -> None:
-    """Erzeugt einen QuickStatements-V1-Entwurf aus ALLEN Zeilen.
-
-    Einspielbar ist nur, was status == 'VORSCHLAG' hat (bestehendes Item,
-    Property noch nicht gesetzt, Beleg vorhanden). Die beiden anderen
-    Status kommen mit in die Datei, aber in eigene, durchgehend
-    auskommentierte Abschnitte:
-
-      BEREITS_VORHANDEN         geprueft und bewusst nicht vorgeschlagen
-      MANUELLE_KLAERUNG_NOETIG  Entscheidung noetig, die das Skript nicht
-                                treffen darf
-
-    Sie stehen dort zur Kenntnis, nicht zur Ausfuehrung: ausserhalb des
-    ersten Abschnitts beginnt JEDE Zeile mit '#'. Die Datei laesst sich
-    dadurch komplett nach QuickStatements kopieren, ohne dass aus einer
-    dieser Zeilen versehentlich eine Aussage wird.
-
-    Die Datei bleibt ein ENTWURF - vor dem Einspielen jede Zeile pruefen!
-    """
-    vorschlaege = [r for r in proposals if r.get("status") == "VORSCHLAG"]
-    vorhanden = [r for r in proposals
-                 if r.get("status") == "BEREITS_VORHANDEN"]
-    klaerung = [r for r in proposals
-                if "KLAERUNG" in (r.get("status") or "")]
-
-    lines = [
-        _TRENNER,
-        "# ENTWURF - vor Verwendung jede Zeile manuell pruefen!",
-        "#",
-        "# Aufbau dieser Datei:",
-        f"#   ABSCHNITT 1  EINSPIELBAR .......... {len(vorschlaege):4d}  "
-        "(die einzigen ausfuehrbaren Zeilen)",
-        f"#   ABSCHNITT 2  BEREITS VORHANDEN .... {len(vorhanden):4d}  "
-        "(auskommentiert)",
-        f"#   ABSCHNITT 3  MANUELLE KLAERUNG .... {len(klaerung):4d}  "
-        "(auskommentiert)",
-        "#",
-        "# Ausserhalb von Abschnitt 1 beginnt jede Zeile mit '#'.",
-        "#",
-        "# Mengenwerte tragen ihre Einheit als '<zahl>U<QID-Nummer>',",
-        "# z. B. 1357.77U11579 = 1357.77 Kelvin (Q11579).",
-        "# Beleg, in dieser Rangfolge: S356 = DOI, S212/S957 = ISBN-13/-10",
-        "# (beide aus dem Wikipedia-Einzelnachweis des Wertes), sonst",
-        "# S143+S4656 = Wikimedia-Import mit Permalink auf die Artikelversion.",
-        "#",
-        f"# {DETERMINATION_PID} {DFT_QID} als QUALIFIKATOR heisst: der Wert ist",
-        f"# gerechnet ({DFT_LABEL}), nicht gemessen. Diese Aussagen",
-        "# stammen aus dem Materials Project und beschreiben den idealen",
-        "# Einkristall bei 0 K. Kristallsystem und Dichte liegen dicht am",
-        "# Handbuchwert, elastische Moduln und Poissonzahl koennen deutlich",
-        "# abweichen (Titan-Schubmodul 62 statt 44 GPa) - diese Zeilen vor",
-        "# der Uebernahme gegen Literatur pruefen.",
-        "# Zeilen OHNE diesen Qualifikator sind Literaturwerte aus einer",
-        "# Wikipedia-Infobox - dort Wert und Modifikation gegenpruefen.",
-        _TRENNER,
-    ]
-
-    geloescht = [r for r in vorschlaege if r.get("_entfernen")]
-    erklaerung = ["Nur diese Zeilen sind QuickStatements-Syntax. Trotzdem gilt:",
-                  "erst nach zeilenweiser Pruefung einspielen."]
-    if geloescht:
-        # Eine Loeschzeile nimmt etwas vom Item. Das muss im Kopf stehen,
-        # nicht nur am unscheinbaren Minuszeichen der Zeile selbst.
-        erklaerung += [
-            "",
-            f"ACHTUNG: {len(geloescht)} dieser Zeilen beginnen mit '-' und",
-            "ENTFERNEN eine bestehende Aussage (Umstellung P527 -> P2670).",
-            "Sie gehoeren mit der zugehoerigen P2670-Zeile zusammen - nur",
-            "eine von beiden einzuspielen hinterlaesst Dublette oder Luecke.",
-        ]
-    lines += _abschnitt_kopf(
-        "ABSCHNITT 1: EINSPIELBAR", len(vorschlaege), erklaerung,
-        einheit=("Aussage", "Aussagen"),
-    )
-    ohne_einheit = []
-    for row in vorschlaege:
-        ref = row["_ref"]
-        # Item-wertige Aussagen stehen als blankes QID (z. B. Q473227),
-        # Mengenwerte als Zahl + Einheit. Ein in Anfuehrungszeichen gesetztes
-        # QID wuerde QuickStatements als Zeichenkette interpretieren.
-        wert = quickstatements_value(row)
-        # Nur melden, wenn eine Einheit HINTERLEGT ist, aber nicht in der
-        # Zeile landet. Echt dimensionslose Groessen (Poissonzahl) haben
-        # bewusst keine und sind kein Fehler.
-        if row.get("unit_qid") and "U" not in wert:
-            ohne_einheit.append(f"{row['qid']} {row['_pid']}")
-        # Reihenfolge in QuickStatements V1: Aussage, dann Qualifikatoren
-        # (P-Praefix), dann Belege (S-Praefix) - alles in EINER Zeile.
-        qual = "".join(
-            f"\t{pid}\t{wert_qid}"
-            for pid, wert_qid, _ in row.get("_qualifiers") or []
-        )
-        # Identifikatoren gehen ohne S-Angabe raus - siehe
-        # OHNE_BELEG_DATENTYPEN. Die Herkunft steht trotzdem im Kommentar.
-        beleg = "" if row.get("_ohne_beleg") else ref.as_quickstatements()
-        if row.get("_entfernen"):
-            # Loeschzeile: fuehrendes "-", und ohne Qualifikatoren und Beleg -
-            # QuickStatements sucht die Aussage ueber Property und Wert.
-            lines.append(f"-{row['qid']}\t{row['_pid']}\t{wert}")
-        else:
-            lines.append(
-                f"{row['qid']}\t{row['_pid']}\t{wert}{qual}{beleg}"
-            )
-        klartext = f" ({row['value_label']})" if row.get("value_label") else ""
-        if not row.get("_ohne_beleg"):
-            modus = ref.mode
-        elif row.get("datatype") in OHNE_BELEG_DATENTYPEN:
-            modus = "ohne Beleg, Identifikator"
-        else:
-            modus = "ohne Beleg, aus dem Item abgeleitet"
-        lines.append(
-            f"# Quelle: {row['source']} ({modus}) - {ref.note}{klartext}")
-    if not vorschlaege:
-        lines.append("# (keine)")
-
-    lines += _abschnitt_kopf(
-        "ABSCHNITT 2: BEREITS VORHANDEN - NICHT EINSPIELEN", len(vorhanden),
-        ["Das Item traegt diese Property schon. Hier nur, damit",
-         "nachvollziehbar ist, was geprueft und verworfen wurde."],
-    )
-    lines += [_vorhandene_zeile(r) for r in vorhanden] or ["# (keine)"]
-
-    lines += _abschnitt_kopf(
-        "ABSCHNITT 3: MANUELLE KLAERUNG NOETIG - NICHT EINSPIELEN",
-        len(klaerung),
-        ["Hier ist eine fachliche Entscheidung noetig, die das Skript",
-         "nicht treffen darf - etwa welches Polymorph gemeint ist.",
-         "Nach der Entscheidung die Aussage von Hand ergaenzen."],
-    )
-    for row in klaerung:
-        lines += _klaerungs_zeilen(row)
-    if not klaerung:
-        lines.append("# (keine)")
-
-    if ohne_einheit:
-        # Sichtbar machen statt still durchgehen lassen - eine Mengenaussage
-        # ohne Einheit ist in Wikidata praktisch immer ein Fehler.
-        print(
-            f"WARNUNG: {len(ohne_einheit)} Mengenaussage(n) ohne Einheit: "
-            f"{', '.join(ohne_einheit[:5])}"
-            + (" ..." if len(ohne_einheit) > 5 else ""),
-            file=sys.stderr,
-        )
-
-    with open(path, "w", encoding="utf-8") as f:
-        f.write("\n".join(lines) + "\n")
-    print(
-        f"QuickStatements-Entwurf geschrieben nach: {path} "
-        f"({len(vorschlaege)} einspielbar, {len(vorhanden)} vorhanden, "
-        f"{len(klaerung)} zur Klaerung)",
-        file=sys.stderr,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -4541,7 +753,8 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
         offset = stand.get("erledigt", 0)
         print(f"Setze fort bei Item {offset + 1}.", file=sys.stderr)
 
-    items = items_der_gruppe(args.group, args.limit)
+    items = items_der_gruppe(args.group, args.limit,
+                             ausschluss=not args.mit_ueberschneidungen)
     gesamt = len(items)
     offen = items[offset:]
     if not offen:
@@ -4574,7 +787,8 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
             nummer_ab=erstes, gesamt=gesamt, formel=args.formel,
             metaklasse_an=args.metaklasse,
             metaklasse_auch_mit_p31=args.metaklasse_auch_mit_p31,
-            punktgruppe_an=args.punktgruppe,
+            punktgruppe_an=args.punktgruppe, nist=args.nist,
+            auch_vorhandene=args.auch_vorhandene,
         )
         try:
             zeilen = write_csv_streaming(zeilen_gen, csv_pfad)
@@ -4609,6 +823,8 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
               f"{klaerung} zur Klaerung. Stand: {erledigt}/{gesamt}.",
               file=sys.stderr)
 
+    wikidata.melde_uebersprungene_stufen()
+    nist_quelle.melde_nist_quellen()
     print(f"\nAlle Chargen fertig. Insgesamt {gesamt_neu} neue Vorschlaege, "
           f"{gesamt_vorhanden} bereits vorhanden, {gesamt_klaerung} zur "
           f"Klaerung.\nFortschritt: {fortschritt_datei}", file=sys.stderr)
@@ -4742,6 +958,35 @@ def main():
         "vorgeschlagen. Default: an",
     )
     parser.add_argument(
+        "--mit-ueberschneidungen",
+        action="store_true",
+        help="Items auch dann bearbeiten, wenn sie in einer anderen "
+        "Werkstoffgruppe stehen, die einen eigenen Aufruf hat. "
+        "Standardmaessig laesst 'minerale' die Items der Gruppe 'oxide' aus - "
+        "sie laufen dort mit, und zweimal dasselbe vorzuschlagen hilft "
+        "niemandem",
+    )
+    parser.add_argument(
+        "--auch-vorhandene",
+        action="store_true",
+        help="auch Quellen befragen, deren Properties das Item schon "
+        "vollstaendig traegt. Standardmaessig werden sie uebersprungen - das "
+        "spart den teuersten Teil der Laufzeit, dafuer steht in Abschnitt 2 "
+        "des Entwurfs dann nur noch, was beim Suchen nebenbei anfiel",
+    )
+    parser.add_argument(
+        "--nist",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Standardbildungsenthalpie (P3078) und molare Standardentropie "
+        "(P3071) aus dem NIST Chemistry WebBook holen, je Aggregatzustand "
+        "(P515 als Qualifikator). Gesucht wird ueber die CAS-Nummer am Item; "
+        "belegt wird NIE mit dem WebBook, sondern mit der Originalarbeit, der "
+        "es den Wert zuschreibt (JANAF bzw. CODATA) - die NIST-Daten sind "
+        "urheberrechtlich geschuetzt. Kostet je Item mit CAS zwei Abrufe mit "
+        "5 s Wartezeit (robots.txt). Default: an",
+    )
+    parser.add_argument(
         "--nur-metalle",
         action=argparse.BooleanOptionalAction,
         default=True,
@@ -4775,12 +1020,15 @@ def main():
             args.experimentell, args.stabil, args.max, formel=args.formel,
             metaklasse_an=args.metaklasse,
             metaklasse_auch_mit_p31=args.metaklasse_auch_mit_p31,
-            punktgruppe_an=args.punktgruppe,
+            punktgruppe_an=args.punktgruppe, nist=args.nist,
+            auch_vorhandene=args.auch_vorhandene,
+            ausschluss=not args.mit_ueberschneidungen,
         )
     elif args.periodic_table:
         proposals = build_periodic_table_proposals(
             args.per_element, args.elements, args.wikipedia,
             args.experimentell, args.stabil, args.cod, args.nur_metalle,
+            nist=args.nist, auch_vorhandene=args.auch_vorhandene,
         )
     else:
         proposals = build_proposals(
@@ -4814,6 +1062,8 @@ def main():
         return 1
 
     write_quickstatements_draft(proposals, qs_out)
+    wikidata.melde_uebersprungene_stufen()
+    nist_quelle.melde_nist_quellen()
 
     neu = [p for p in proposals if p.get("status") == "VORSCHLAG"]
     n_vorhanden = sum(1 for p in proposals if p.get("status") == "BEREITS_VORHANDEN")

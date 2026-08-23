@@ -1,0 +1,394 @@
+qid,label,problem,evidence,current_property,current_value,suggested_property,suggested_value,suggested_value_label,alle_kandidaten
+Q1000364,Buckypapier,moegliche spezifischere Subklasse,description (en) enthaelt 'aggregate',P279,Q214609,P279,Q866298,aggregate,Q866298=aggregate; Q539430=Nanoröhre; Q105821963=Sheet; Q24489=Kohle; Q5849500=Stoff
+Q10350153,Piçarra,moegliche spezifischere Subklasse,description (de) enthaelt 'Gestein',P279,Q214609,P279,Q8063,Gestein,Q8063=Gestein; Q22731=Stein; Q3757650=Stein
+Q10376600,Layered materials,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q105840205,PVC fabric,moegliche spezifischere Subklasse,name (en) enthaelt 'fabric',P279,Q214609,P279,Q136764162,fabric,Q136764162=fabric
+Q106549312,air-sensitive substance,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q56256173=Klasse von chemischen Verbindungen mit ähnlichen Anwendungen oder Funktionen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q10675206,Inhaltsstoff,moegliche spezifischere Subklasse,name (de) enthaelt 'Stoff',P279,Q214609,P279,Q5849500,Stoff,Q5849500=Stoff
+Q106819724,feinkörniges Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q2995529=grain
+Q106819789,grobkörniges Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q2995529=grain
+Q106819845,mittelkörniges Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q117316442=medium; Q5460003=Mater; Q2995529=grain
+Q107158420,perovskite,moegliche spezifischere Subklasse,description (en) enthaelt 'crystal',P279,Q214609,P279,Q359572,crystal,Q359572=crystal; Q97794245=compo
+Q107470276,electromaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q110728867,Formgedächtniskeramik,moegliche spezifischere Subklasse,name (de) enthaelt 'Keramik',P279,Q214609,P279,Q45621,Keramik,Q45621=Keramik
+Q110867630,copper plated steel,moegliche spezifischere Subklasse,name (en) enthaelt 'copper',P279,Q214609,P279,Q753,copper,Q753=copper; Q3827429=plate
+Q110867743,nickel brass clad nickel centre in copper-nickel ring,moegliche spezifischere Subklasse,name (en) enthaelt 'nickel brass',P279,Q214609,P279,Q6047522,nickel brass,Q6047522=nickel brass; Q16829513=material; Q744=nickel; Q753=copper; Q97794245=compo
+Q110867753,aluminium-bronze center in copper-nickel ring,moegliche spezifischere Subklasse,name (en) enthaelt 'aluminium',P279,Q214609,P279,Q663,aluminium,Q663=aluminium; Q16829513=material; Q744=nickel; Q753=copper; Q34095=bronze
+Q110867986,brass plated steel,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q3827429=plate; Q39782=brass
+Q110868305,bronze plated steel,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q34095=bronze; Q3827429=plate
+Q110870125,nickel plated steel,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q744=nickel; Q3827429=plate
+Q110899391,Bronze plated nickel,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q744=nickel; Q34095=bronze; Q3827429=plate
+Q110899513,Nickel plated copper-nickel,moegliche spezifischere Subklasse,name (en) enthaelt 'nickel plated copper',P279,Q214609,P279,Q111398734,nickel plated copper,Q111398734=nickel plated copper; Q16829513=material; Q744=nickel; Q753=copper; Q3827429=plate
+Q110900113,Nickel clad steel,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q744=nickel
+Q110981251,brass plated steel centre in nickel plated steel ring,moegliche spezifischere Subklasse,name (en) enthaelt 'nickel plated steel',P279,Q214609,P279,Q110870125,nickel plated steel,Q110870125=nickel plated steel; Q110867986=brass plated steel; Q1924900=metallic material; Q16829513=material; Q744=nickel
+Q110981338,copper plated zinc,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q753=copper; Q3827429=plate
+Q110981338,copper plated zinc,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q37756=Legierung,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q110996919,"Aluminium-bronze (90% Copper, 8% Aluminium, 2% Zinc)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q753=copper; Q34095=bronze
+Q111020388,nickel plated zinc,moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q744=nickel; Q11426=metal; Q3827429=plate
+Q111076597,"Brass plated steel (72.5% Copper, 27.5% Steel)",moegliche spezifischere Subklasse,name (en) enthaelt 'brass plated steel',P279,Q214609,P279,Q110867986,brass plated steel,Q110867986=brass plated steel; Q1924900=metallic material; Q16829513=material; Q753=copper; Q11426=metal
+Q111080615,Copper clad steel,moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q753=copper; Q11426=metal
+Q111182590,"Aluminium (96% Aluminum, 3.5% Magnesium, 0.5% Manganese)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q11426=metal; Q190527=alum
+Q111182828,"Nickel brass (75% Copper, 4% Nickel, 21% Zinc)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q6047522=nickel brass; Q16829513=material; Q744=nickel; Q753=copper
+Q111182945,Acmonital (austenitic),moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q11426=metal; Q2652014=ital
+Q111210502,ancient materials,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q45190=cement
+Q111210503,cellular material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q111381606,"Nickel brass (70% Copper, 18% Zinc, 12% Nickel)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q6047522=nickel brass; Q16829513=material; Q744=nickel; Q753=copper
+Q111398539,"Aluminium-bronze (92% Copper, 6% Aluminum, 2% Nickel)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q744=nickel; Q753=copper
+Q111398734,nickel plated copper,moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q744=nickel; Q753=copper; Q11426=metal
+Q111475048,"Brass plated steel (Plating: 72.5% Copper, 27.5% Zinc)",moegliche spezifischere Subklasse,name (en) enthaelt 'brass plated steel',P279,Q214609,P279,Q110867986,brass plated steel,Q110867986=brass plated steel; Q1924900=metallic material; Q16829513=material; Q753=copper; Q11426=metal
+Q111475245,"Aluminium (Aluminium 98%, Other Metals 2%)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q11426=metal; Q190527=alum
+Q111475488,Brass clad steel,moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q11426=metal; Q39782=brass
+Q111475492,"Aluminium-bronze (88.4% Copper, 5% Aluminum, 5% Nickel, 0.6% Manganese)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q744=nickel; Q753=copper
+Q111475513,"Nickel plated steel (Plating: 95% Iron, 5% Nickel)",moegliche spezifischere Subklasse,name (en) enthaelt 'nickel plated steel',P279,Q214609,P279,Q110870125,nickel plated steel,Q110870125=nickel plated steel; Q1924900=metallic material; Q16829513=material; Q744=nickel; Q11426=metal
+Q111550836,Nickel plated iron,moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q744=nickel; Q11426=metal; Q3827429=plate
+Q111679199,"Aluminium-bronze (91.5% Copper, 8.5% Aluminum)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q753=copper; Q34095=bronze
+Q111679211,Plated steel (brass and copper plated),moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q753=copper; Q11426=metal; Q3827429=plate
+Q111679507,"Brass (58% Copper, 40% Zinc, 2% Manganese)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q753=copper; Q11426=metal; Q39782=brass
+Q111684391,"Aluminium-magnesium (98.5% Aluminium, 1.5% Magnesium)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q11426=metal; Q190527=alum
+Q111696369,copper-nickel plated nickel,moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q744=nickel; Q753=copper; Q11426=metal
+Q111709094,Aluminium-bronze (Cu884 Ni50 Al50 Fe10 Mn6),moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q34095=bronze; Q11426=metal
+Q111725350,deposit,moegliche spezifischere Subklasse,description (en) enthaelt 'process',P279,Q214609,P279,Q619671,process,Q619671=process; Q231250=lace
+Q112166866,matrix,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q905592=filler; Q11428978=filler
+Q112166889,"Copper-nickel (74.50% copper, 25.25% nickel)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q744=nickel; Q753=copper; Q11426=metal
+Q112225193,Werkstoffeigenschaft,moegliche spezifischere Subklasse,name (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q2746643=Feige; Q5849500=Stoff; Q635343=rope
+Q112225193,Werkstoffeigenschaft,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q96253971=Typ von Eigenschaft,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q112233954,"Copper-aluminium (91% Copper, 9% Aluminium)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q753=copper; Q11426=metal
+Q112309212,"Nickel brass (79% Copper, 20% Zinc, 1% Nickel)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q6047522=nickel brass; Q16829513=material; Q744=nickel; Q753=copper
+Q112310011,"Copper clad aluminium (48% Copper, 52% Aluminium)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q753=copper; Q11426=metal
+Q112310511,"Bronze (97% Copper, 0.5% Tin, 2.5% Zinc)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q753=copper; Q34095=bronze; Q11426=metal
+Q1123417,feuerfester Werkstoff,moegliche spezifischere Subklasse,name (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q45621=Keramik; Q175166=tempera; Q97794245=compo; Q5849500=Stoff
+Q11236878,Lack,moegliche spezifischere Subklasse,description (en) enthaelt 'powder coating',P279,Q214609,P279,Q44685131,powder coating,Q44685131=powder coating; Q1570182=Beschichtung; Q16829513=material; Q2908004=Pulver; Q5849500=Stoff
+Q112651323,optoelectronic material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q112651323,optoelectronic material,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q214609=Material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q112730895,heterogenous material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q112829710,biosilica,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q1131303,Lehm,moegliche spezifischere Subklasse,description (en) enthaelt 'compo',P279,Q214609,P279,Q97794245,compo,Q97794245=compo; Q34679=Sand; Q36133=soil; Q7098415=opor; Q42302=clay
+Q1131303,Lehm,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q10926413=Bodentyp,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q113158687,Moldable wood,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q287=wood
+Q113263271,embedding medium,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q1762457=bedding; Q117316442=medium
+Q11361800,incombustible material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q113996626,micromaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q114081747,Nickel brass clad copper,moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q6047522=nickel brass; Q16829513=material; Q744=nickel; Q753=copper
+Q114151272,Aluminium (Etial 30),moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q663=aluminium; Q16829513=material; Q11426=metal; Q190527=alum
+Q114162023,"Nickel brass (60% Copper, 20% Nickel, 20% Zinc)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q6047522=nickel brass; Q16829513=material; Q744=nickel; Q753=copper
+Q11421,Magnet,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q114210275,"Copper-nickel (Copper 92%, nickel 8%)",moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q744=nickel; Q753=copper; Q11426=metal
+Q114267129,Silver (.500),moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q11426=metal
+Q114267198,Silver (.100),moegliche spezifischere Subklasse,description (en) enthaelt 'metallic material',P279,Q214609,P279,Q1924900,metallic material,Q1924900=metallic material; Q16829513=material; Q11426=metal
+Q11456,Halbleiter,moegliche spezifischere Subklasse,description (en) enthaelt 'electrical conductivity',P279,Q214609,P279,Q4593291,electrical conductivity,Q4593291=electrical conductivity; Q178150=Nichtleiter; Q12767712=insulator; Q16829513=material; Q26717101=Leiter
+Q11469,Glas,moegliche spezifischere Subklasse,description (de) enthaelt 'Stoff',P279,Q214609,P279,Q5849500,Stoff,Q5849500=Stoff
+Q11469,Glas,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q214609=Material; Q15831577=Nichtklassischer Aggregatzustand; Q63981612=Produktkategorie,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q11474,Kunststoff,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5849500=Stoff
+Q11474,Kunststoff,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q1783121=organische Masse,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1153946,Leinwandbindung,moegliche spezifischere Subklasse,name (de) enthaelt 'Leinwand',P279,Q214609,P279,Q12321255,Leinwand,Q12321255=Leinwand; Q619671=process; Q1391831=thread; Q11180103=Popel; Q3715160=Tuch
+Q1155083,granulare Materie,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q1503599=Klei
+Q115590870,Massengut,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q1725382=Masse; Q2005160=Nunt
+Q115625159,organic binding media,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q131790=adhesive; Q1570182=coating; Q905592=filler; Q11428978=filler
+Q116483820,Opuntienleder,moegliche spezifischere Subklasse,description (de) enthaelt 'Feige',P279,Q214609,P279,Q2746643,Feige,Q2746643=Feige; Q286=Leder
+Q116483820,Opuntienleder,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q1792537=Kunstleder,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q11660423,electric material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q119828231,new material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q619671=process
+Q12021600,inert material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q12046275,polymeric material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q81163=polymer
+Q12054798,slime,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q250423=lime
+Q120907375,electrochemically active material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q1209132,Diarahmen,moegliche spezifischere Subklasse,description (de) enthaelt 'Klei',P279,Q214609,P279,Q1503599,Klei,Q1503599=Klei
+Q12101201,dispersed media,moegliche spezifischere Subklasse,description (en) enthaelt 'medium',P279,Q214609,P279,Q117316442,medium,Q117316442=medium; Q3514037=tain; Q6123113=Seco
+Q124695,Wachs,moegliche spezifischere Subklasse,description (en) enthaelt 'plastic',P279,Q214609,P279,Q11474,plastic,Q11474=plastic; Q175166=tempera; Q97794245=compo
+Q124695,Wachs,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q41014950=ChEBI Ontology term; Q56256173=Klasse von chemischen Verbindungen mit ähnlichen Anwendungen oder Funktionen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q125272422,Künstliche Materialien,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q125302059,Unbekanntes Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q125302170,Unbestimmtes Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q12541099,Q12541099,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q1969448=Benennung,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q12572660,Q12572660,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q3121375=Kern
+Q12572660,Q12572660,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q137424905=type of material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q126391504,Schrämklein,moegliche spezifischere Subklasse,description (de) enthaelt 'Lende',P279,Q214609,P279,Q1574029,Lende,Q1574029=Lende; Q24489=Kohle; Q2995529=grain; Q1503599=Klei
+Q1269650,Dämmstoff,moegliche spezifischere Subklasse,description (de) enthaelt 'Wärmeleitfähigkeit',P279,Q214609,P279,Q487005,Wärmeleitfähigkeit,Q487005=Wärmeleitfähigkeit; Q16829513=material; Q5460003=Mater; Q5849500=Stoff
+Q12719558,Q12719558,moegliche spezifischere Subklasse,description (en) enthaelt 'varnish',P279,Q214609,P279,Q81683,varnish,Q81683=varnish; Q11236878=Lack
+Q12719558,Q12719558,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q5962346=Klassifikation,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q12767712,Isoliermaterial,moegliche spezifischere Subklasse,description (en) enthaelt 'insulator',P279,Q214609,P279,Q178150,insulator,Q178150=insulator; Q962002=Isolator; Q5460003=Mater; Q3514037=tain; Q12709589=Soun
+Q127980,Fette,moegliche spezifischere Subklasse,description (en) enthaelt 'Cronut',P279,Q214609,P279,Q14524937,Cronut,Q14524937=Cronut; Q5849500=Stoff
+Q127980,Fette,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q136908428=nutrient group,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q128698437,Span,moegliche spezifischere Subklasse,description (en) enthaelt 'chip',P279,Q214609,P279,Q30703616,chip,Q30703616=chip
+Q1297687,structural material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q33123524=support
+Q130531030,Kohlepapier,moegliche spezifischere Subklasse,name (de) enthaelt 'Kohle',P279,Q214609,P279,Q24489,Kohle,Q24489=Kohle
+Q130757621,plasmonic substrate,moegliche spezifischere Subklasse,name (en) enthaelt 'substrate',P279,Q214609,P279,Q2362275,substrate,Q2362275=substrate; Q436625=substrate; Q8334343=substrate; Q2096056=substrate; Q2578270=substrate
+Q13078381,Glaskeramik,moegliche spezifischere Subklasse,description (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q45621=Keramik; Q359572=crystal; Q5849500=Stoff; Q11469=Glas
+Q131375030,ajiro,moegliche spezifischere Subklasse,description (en) enthaelt 'panel',P279,Q214609,P279,Q1348059,panel,Q1348059=panel; Q106857709=panel; Q287=wood; Q655040=oden
+Q131375030,ajiro,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q28823=Textilie; Q1348059=Holztafel; Q72926076=Holzbrett,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q131574951,Gehäusematerial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q128698437=Span; Q1225294=Span; Q85785034=Span
+Q13169402,quarantine material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q13174497,bul,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q133067,Mosaik,moegliche spezifischere Subklasse,description (en) enthaelt 'colored glass',P279,Q214609,P279,Q135778532,colored glass,Q135778532=colored glass; Q16829513=material; Q11469=glass; Q22731=stone; Q3757650=stone
+Q133067,Mosaik,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q11177771=künstlerische Technik; Q116474095=Art eines Kunstwerkes,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1337073,Leinölkitt,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q1427914=sealant; Q905592=filler; Q34667244=Ölkitt; Q11428978=filler
+Q133865035,tenebrescent material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q134895492,thermoplastic paint,moegliche spezifischere Subklasse,name (en) enthaelt 'thermoplastic',P279,Q214609,P279,Q380677,thermoplastic,Q380677=thermoplastic; Q11474=plastic; Q174219=paint
+Q13509984,DARVA-Glass,moegliche spezifischere Subklasse,name (en) enthaelt 'glass',P279,Q214609,P279,Q11469,glass,Q11469=glass; Q37756=alloy
+Q1354051,flammhemmendes Mittel,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q214609=Material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q136348599,modified wood,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q287=wood
+Q136348599,modified wood,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q3406743=manufactured product,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q136935133,Weld,moegliche spezifischere Subklasse,description (en) enthaelt 'Base metal',P279,Q214609,P279,Q137162607,Base metal,Q137162607=Base metal; Q428855=base metal; Q16829513=material; Q111725350=deposit; Q11426=metal
+Q136935133,Weld,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q1924900=Metallischer Werkstoff,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q137373957,engineering material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q137382389,ceramic fabric,moegliche spezifischere Subklasse,description (en) enthaelt 'inclusion',P279,Q214609,P279,Q728944,inclusion,Q728944=inclusion; Q45621=ceramic; Q136764162=fabric; Q42302=clay
+Q1374261,Stereom,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q137464088,carbon materials,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q137719740,Bein (Werkstoff),moegliche spezifischere Subklasse,name (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q5849500=Stoff
+Q137800230,wiederverwendbares Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q137800230,wiederverwendbares Material,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q137424905=type of material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1378670,Wertstoff,moegliche spezifischere Subklasse,description (en) enthaelt 'recyclable material',P279,Q214609,P279,Q57305800,recyclable material,Q57305800=recyclable material; Q16829513=material; Q5849500=Stoff
+Q1389392,Walzrunden,moegliche spezifischere Subklasse,name (en) enthaelt 'roll',P279,Q214609,P279,Q115499544,roll,Q115499544=roll; Q114023789=roll
+Q1398005,Besatzmaterial,moegliche spezifischere Subklasse,description (de) enthaelt 'Paillette',P279,Q214609,P279,Q674273,Paillette,Q674273=Paillette; Q1122919=Posament; Q177496=Besatz; Q5460003=Mater; Q40763=Samen
+Q140354071,Etikettenmaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q131790=adhesive; Q29000384=Ketten; Q251473=Folie; Q5460003=Mater
+Q1408064,Futter,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q136764162=fabric; Q5849500=Stoff; Q1503599=Klei
+Q1427914,Dichtstoff,moegliche spezifischere Subklasse,description (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q5849500=Stoff
+Q1427914,Dichtstoff,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q50413986=Spezialanwendung von Chemikalien,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1452237,Fritte,moegliche spezifischere Subklasse,description (en) enthaelt 'porous glass',P279,Q214609,P279,Q2105561,porous glass,Q2105561=porous glass; Q11469=Glas; Q1207302=Glas
+Q1455598,frequenzselektive Oberfläche,moegliche spezifischere Subklasse,description (de) enthaelt 'Elektromagnet',P279,Q214609,P279,Q178032,Elektromagnet,Q178032=Elektromagnet; Q11421=Magnet
+Q145958,Polyimide,moegliche spezifischere Subklasse,description (de) enthaelt 'Polymer',P279,Q214609,P279,Q81163,Polymer,Q81163=Polymer; Q4173974=Aroma
+Q145958,Polyimide,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q47154513=Strukturklasse von chemischen Verbindungen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1505624,Siegellack,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q1725382=Masse; Q11236878=Lack; Q145205=Harz
+Q1514145,Leonische Waren,moegliche spezifischere Subklasse,description (de) enthaelt 'Messing',P279,Q214609,P279,Q39782,Messing,Q39782=Messing; Q551997=Draht
+Q152079,Asche,moegliche spezifischere Subklasse,description (en) enthaelt 'waste product',P279,Q214609,P279,Q319936,waste product,Q319936=waste product; Q45701=waste; Q5460003=Mater
+Q1529908,Hüpfender Kitt,moegliche spezifischere Subklasse,description (de) enthaelt 'Knetmasse',P279,Q214609,P279,Q60121,Knetmasse,Q60121=Knetmasse; Q840688=Knetmasse; Q146439=silicone; Q81163=polymer; Q1337073=putty
+Q1529908,Hüpfender Kitt,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q167270=Markenzeichen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q15303351,Künstlerbedarf,moegliche spezifischere Subklasse,description (en) enthaelt 'ingredient',P279,Q214609,P279,Q10675206,ingredient,Q10675206=ingredient; Q16829513=material; Q5460003=Mater
+Q1550712,Grundstoff,moegliche spezifischere Subklasse,description (en) enthaelt 'raw material',P279,Q214609,P279,Q192355,raw material,Q192355=raw material; Q28213828=commodity; Q16829513=material; Q5460003=Mater; Q5849500=Stoff
+Q1550712,Grundstoff,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q63981612=Produktkategorie,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q15727343,organische nicht-mineralische Verbindung,moegliche spezifischere Subklasse,name (en) enthaelt 'compo',P279,Q214609,P279,Q97794245,compo,Q97794245=compo
+Q15727345,anorganische nicht-mineralische Verbindung,moegliche spezifischere Subklasse,name (de) enthaelt 'organische nicht-mineralische Verbindung',P279,Q214609,P279,Q15727343,organische nicht-mineralische Verbindung,Q15727343=organische nicht-mineralische Verbindung; Q97794245=compo
+Q15809796,Flicken,moegliche spezifischere Subklasse,description (de) enthaelt 'Mater',P279,Q214609,P279,Q5460003,Mater,Q5460003=Mater; Q5849500=Stoff
+Q15825043,Laichsubstrat,moegliche spezifischere Subklasse,name (de) enthaelt 'Substrat',P279,Q214609,P279,Q2362275,Substrat,Q2362275=Substrat; Q8334343=Substrat
+Q15903075,macromolecular materials,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q15903075,macromolecular materials,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q214609=Material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q162908,Elektrolyt,moegliche spezifischere Subklasse,description (en) enthaelt 'medium',P279,Q214609,P279,Q117316442,medium,Q117316442=medium
+Q162908,Elektrolyt,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q79529=chemischer Stoff,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q16331076,anisotropic material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q16331841,Supraleiter,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q175166=Tempera; Q26717101=Leiter; Q5460003=Mater
+Q1658591,Verfälschungsmittel,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q133177856=Regulierungsklasse chemischer Stoffe,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1664299,Inokulum,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q1681365,Verbrauchsmaterial,moegliche spezifischere Subklasse,name (de) enthaelt 'Mater',P279,Q214609,P279,Q5460003,Mater,Q5460003=Mater
+Q1681365,Verbrauchsmaterial,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q137424905=type of material; Q137425179=type of good,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q16829513,Werkstoff,moegliche spezifischere Subklasse,description (en) enthaelt 'process',P279,Q214609,P279,Q619671,process,Q619671=process; Q5460003=Mater; Q5849500=Stoff
+Q1696452,Schlichtkleid,moegliche spezifischere Subklasse,name (de) enthaelt 'Klei',P279,Q214609,P279,Q1503599,Klei,Q1503599=Klei
+Q1696452,Schlichtkleid,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q1811014=Lebensphase; Q3303665=Gefieder,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q17009658,Garnier,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q45701=waste; Q5460003=Mater; Q6958744=Nage
+Q17083616,vivarium substrate,moegliche spezifischere Subklasse,name (en) enthaelt 'substrate',P279,Q214609,P279,Q2362275,substrate,Q2362275=substrate; Q436625=substrate; Q8334343=substrate; Q2096056=substrate; Q2578270=substrate
+Q17162844,body piercing material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q1726215,Prozesswerkstoff,moegliche spezifischere Subklasse,name (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q619671=process; Q5849500=Stoff; Q635343=rope
+Q174219,Malfarbe,moegliche spezifischere Subklasse,description (en) enthaelt 'pigment',P279,Q214609,P279,Q161179,pigment,Q161179=pigment; Q2908004=Pulver; Q5849500=Stoff
+Q174219,Malfarbe,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q137424905=type of material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q177496,Besatz,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q4167410=Wikimedia-Begriffsklärungsseite,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1778506,Kohlegrus,moegliche spezifischere Subklasse,name (de) enthaelt 'Kohle',P279,Q214609,P279,Q24489,Kohle,Q24489=Kohle
+Q1792430,Kunstharzfarbe,moegliche spezifischere Subklasse,name (de) enthaelt 'Kunstharz',P279,Q214609,P279,Q1418040,Kunstharz,Q1418040=Kunstharz; Q145205=Harz
+Q1792430,Kunstharzfarbe,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q79529=chemischer Stoff,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1792537,Kunstleder,moegliche spezifischere Subklasse,description (en) enthaelt 'man-made material',P279,Q214609,P279,Q125272422,man-made material,Q125272422=man-made material; Q16829513=material; Q5460003=Mater; Q286=Leder; Q635343=rope
+Q18027753,Schutt,moegliche spezifischere Subklasse,description (en) enthaelt 'accumulation',P279,Q214609,P279,Q116844065,accumulation,Q116844065=accumulation; Q8063=Gestein; Q22731=Stein; Q3757650=Stein; Q16490638=angu
+Q1806889,Latentwärmespeicher,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q10971235=Kissen; Q99895=Kissen
+Q18106590,fictional materials in the Stargate franchise,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q181790,Verbundwerkstoff,moegliche spezifischere Subklasse,name (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q5460003=Mater; Q97794245=compo; Q5849500=Stoff
+Q181790,Verbundwerkstoff,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q137424905=type of material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q18218093,Radierung,moegliche spezifischere Subklasse,name (en) enthaelt 'etching',P279,Q214609,P279,Q186986,etching,Q186986=etching; Q9208434=Druck
+Q18378458,2D-Materialien,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q359572=crystal; Q5460003=Mater
+Q18457359,reduced-activation material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q1857284,nerve channel filling,moegliche spezifischere Subklasse,name (en) enthaelt 'filling',P279,Q214609,P279,Q11332507,filling,Q11332507=filling
+Q18667172,Hartfaserplatte,moegliche spezifischere Subklasse,description (en) enthaelt 'cellulose fiber',P279,Q214609,P279,Q189109,cellulose fiber,Q189109=cellulose fiber; Q1397443=Faserplatte; Q29526929=Zellulose; Q1781014=compress; Q3827429=Platte
+Q186752,Allergen,moegliche spezifischere Subklasse,description (en) enthaelt 'goro',P279,Q214609,P279,Q1345626,goro,Q1345626=goro
+Q186752,Allergen,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q111360549=Objektart,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q186986,Radierung,moegliche spezifischere Subklasse,description (de) enthaelt 'Druck',P279,Q214609,P279,Q9208434,Druck,Q9208434=Druck; Q5919399=KING
+Q186986,Radierung,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q11177771=künstlerische Technik,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1889369,Neutronenreflektor,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q189082,Zellkultur,moegliche spezifischere Subklasse,description (en) enthaelt 'process',P279,Q214609,P279,Q619671,process,Q619671=process; Q115499544=roll; Q374381=Flan; Q114023789=roll
+Q189082,Zellkultur,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q3247516=Labormethode,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q189720,Farbstoff,moegliche spezifischere Subklasse,description (en) enthaelt 'natural material',P279,Q214609,P279,Q2451477,natural material,Q2451477=natural material; Q16829513=material; Q5460003=Mater; Q5849500=Stoff
+Q189720,Farbstoff,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q100434640=class of chemical substances by use,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1899373,flower food,moegliche spezifischere Subklasse,name (en) enthaelt 'food',P279,Q214609,P279,Q2095,food,Q2095=food
+Q190527,Alaun,moegliche spezifischere Subklasse,description (de) enthaelt 'Aluminium',P279,Q214609,P279,Q663,Aluminium,Q663=Aluminium; Q703=Kalium
+Q190527,Alaun,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q47154513=Strukturklasse von chemischen Verbindungen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q190878,Aktivkohle,moegliche spezifischere Subklasse,description (en) enthaelt 'process',P279,Q214609,P279,Q619671,process,Q619671=process; Q24489=Kohle; Q5849500=Stoff; Q12332070=Pore
+Q190878,Aktivkohle,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q12140=Arzneimittel; Q35456=WHO unentbehrliches Arzneimittel; Q169336=Gemisch; Q736556=Filter; Q902638=pharmazeutischer Hilfsstoff,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q1924900,Metallischer Werkstoff,moegliche spezifischere Subklasse,name (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q11426=metal; Q5849500=Stoff
+Q19275827,Schotter,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q3300024=Naturbaustoff,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q193841,Cellulosehydrat,moegliche spezifischere Subklasse,description (de) enthaelt 'Biokunststoff',P279,Q214609,P279,Q413458,Biokunststoff,Q413458=Biokunststoff; Q11474=Kunststoff; Q97794245=compo; Q5849500=Stoff
+Q19708685,Endbearbeitungsmaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q20019601,Druckmaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q9208434=Druck
+Q20098970,inorganische Materie,moegliche spezifischere Subklasse,name (en) enthaelt 'organic matter',P279,Q214609,P279,Q1783121,organic matter,Q1783121=organic matter; Q5460003=Mater
+Q202251,Asphalt,moegliche spezifischere Subklasse,description (en) enthaelt 'petroleum product',P279,Q214609,P279,Q1059843,petroleum product,Q1059843=petroleum product; Q22656=Erdöl; Q8063=rock
+Q2033428,mineral material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q97794245=compo; Q36133=soil
+Q2033925,Halbmetall,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q11426=metal
+Q2033925,Halbmetall,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q806380=Bandstruktur,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q20544752,Rosa Porriño,moegliche spezifischere Subklasse,description (en) enthaelt 'granite',P279,Q214609,P279,Q3115353,granite,Q3115353=granite
+Q206615,Baustoff,moegliche spezifischere Subklasse,description (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q5849500=Stoff
+Q2083902,Pflanzenasche,moegliche spezifischere Subklasse,description (en) enthaelt 'plant material',P279,Q214609,P279,Q28969364,plant material,Q28969364=plant material; Q16829513=material; Q18537=Biomasse; Q152079=Asche; Q1725382=Masse
+Q20918485,growing media,moegliche spezifischere Subklasse,description (en) enthaelt 'substrate',P279,Q214609,P279,Q2362275,substrate,Q2362275=substrate; Q436625=substrate; Q8334343=substrate; Q2096056=substrate; Q2578270=substrate
+Q2095,Nahrung,moegliche spezifischere Subklasse,description (en) enthaelt 'support',P279,Q214609,P279,Q33123524,support,Q33123524=support; Q5849500=Stoff
+Q2108973,Pressspan,moegliche spezifischere Subklasse,description (de) enthaelt 'Zellstoff',P279,Q214609,P279,Q189109,Zellstoff,Q189109=Zellstoff; Q16829513=material; Q5460003=Mater; Q5849500=Stoff; Q128698437=Span
+Q2118097,Pulverlöschanlage,moegliche spezifischere Subklasse,name (de) enthaelt 'Pulver',P279,Q214609,P279,Q2908004,Pulver,Q2908004=Pulver
+Q212254,Kompost,moegliche spezifischere Subklasse,description (en) enthaelt 'scrap',P279,Q214609,P279,Q1378670,scrap,Q1378670=scrap; Q97794245=compo; Q2095=food; Q36133=soil
+Q215414,Schaum,moegliche spezifischere Subklasse,description (en) enthaelt 'tain',P279,Q214609,P279,Q3514037,tain,Q3514037=tain
+Q2234662,Schienenbefestigungen,moegliche spezifischere Subklasse,description (en) enthaelt 'compo',P279,Q214609,P279,Q97794245,compo,Q97794245=compo; Q231250=lace
+Q225666,Zirkonia,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q22731=Stein; Q3757650=Stein
+Q22731,Stein,moegliche spezifischere Subklasse,description (en) enthaelt 'building material',P279,Q214609,P279,Q206615,building material,Q206615=building material; Q16829513=material; Q8063=Gestein; Q3757650=Stein
+Q2325585,Stabsperrholz,moegliche spezifischere Subklasse,description (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q3827429=Platte; Q97794245=compo; Q5849500=Stoff; Q287=Holz
+Q2343427,color-changing material,moegliche spezifischere Subklasse,name (en) enthaelt 'changing mat',P279,Q214609,P279,Q2392679,changing mat,Q2392679=changing mat; Q16829513=material
+Q2352600,Lebensmittelkontaktmaterialien,moegliche spezifischere Subklasse,name (de) enthaelt 'Lebensmittel',P279,Q214609,P279,Q8195619,Lebensmittel,Q8195619=Lebensmittel; Q16829513=material; Q5460003=Mater; Q2095=food
+Q2362275,Substrat,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q619671=process; Q5460003=Mater
+Q2409019,brütbares Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q468402=tile; Q3748266=tile
+Q2409019,brütbares Material,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q108149=Nuklid,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q24503377,Gittergewebe,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q40397=Gewebe; Q1314278=Gewebe; Q11426=metal; Q468402=tile
+Q2451477,natürliches Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q24568869,Wärmeleitmedium,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q97794245=compo
+Q251473,Folie,moegliche spezifischere Subklasse,description (en) enthaelt 'sheet metal',P279,Q214609,P279,Q1884039,sheet metal,Q1884039=sheet metal; Q211367=sheet metal; Q11474=Kunststoff; Q11426=metal; Q105821963=Sheet
+Q25481880,paramagnetic material,moegliche spezifischere Subklasse,name (en) enthaelt 'magnetic material',P279,Q214609,P279,Q949573,magnetic material,Q949573=magnetic material; Q16829513=material; Q11421=magnet; Q635343=rope
+Q25509247,Referenzmaterial,moegliche spezifischere Subklasse,description (de) enthaelt 'Sicherung',P279,Q214609,P279,Q182221,Sicherung,Q182221=Sicherung; Q16829513=material; Q5460003=Mater; Q5849500=Stoff
+Q25530610,diamagnetic material,moegliche spezifischere Subklasse,name (en) enthaelt 'magnetic material',P279,Q214609,P279,Q949573,magnetic material,Q949573=magnetic material; Q16829513=material; Q11421=magnet
+Q2594492,Half-metal,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q11426=metal
+Q26520,Hochbeet,moegliche spezifischere Subklasse,description (en) enthaelt 'soil',P279,Q214609,P279,Q36133,soil,Q36133=soil
+Q26520,Hochbeet,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q268592=Industrie,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q266564,Filterkuchen,moegliche spezifischere Subklasse,name (de) enthaelt 'Kuchen',P279,Q214609,P279,Q10754476,Kuchen,Q10754476=Kuchen; Q5849500=Stoff
+Q26717101,Leiter,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q60848614=Teilchen; Q6059387=Teilchen; Q5849500=Stoff
+Q26828324,Lockstoff,moegliche spezifischere Subklasse,name (de) enthaelt 'Stoff',P279,Q214609,P279,Q5849500,Stoff,Q5849500=Stoff
+Q26828324,Lockstoff,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q378078=Substanz,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q271768,Schlacke,moegliche spezifischere Subklasse,description (en) enthaelt 'glass',P279,Q214609,P279,Q11469,glass,Q11469=glass; Q11426=metal; Q11236878=Lack
+Q2719350,ceramic material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q45621=ceramic
+Q273131,Räucherwerk,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5849500=Stoff
+Q27891524,absorbent,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q4428995=sorbent
+Q2794488,Polsterung,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q50998618=Feder; Q5460003=Mater; Q81025=Feder
+Q2794488,Polsterung,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q28823=Textilie,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q282695,Anguss,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q28823,Textilie,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5849500=Stoff; Q468402=tile; Q3748266=tile
+Q28942423,Isoliermaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q289472,Biogen,moegliche spezifischere Subklasse,description (en) enthaelt 'secretion',P279,Q214609,P279,Q12334861,secretion,Q12334861=secretion; Q619671=process; Q6544682=Life
+Q289472,Biogen,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q17339814=Stoffgruppe; Q104007623=anatomische Entitätsklasse; Q112826905=Klasse anatomischer Entitäten,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q29560509,Schuhstopper,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q18113858=rubber
+Q296859,Ölbinder,moegliche spezifischere Subklasse,name (en) enthaelt 'absorbent',P279,Q214609,P279,Q27891524,absorbent,Q27891524=absorbent; Q4428995=sorbent; Q235693=Binde
+Q2997790,fatty substance,moegliche spezifischere Subklasse,description (en) enthaelt 'lime',P279,Q214609,P279,Q250423,lime,Q250423=lime
+Q3040056,Dentalmaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q136764162=fabric; Q5460003=Mater; Q100274207=Zahn
+Q30673259,Quantenmaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q635343=rope
+Q311935,Kunstrasen,moegliche spezifischere Subklasse,description (en) enthaelt 'synthetic fiber',P279,Q214609,P279,Q5856,synthetic fiber,Q5856=synthetic fiber
+Q31842778,Drahtgewebe,moegliche spezifischere Subklasse,name (de) enthaelt 'Gewebe',P279,Q214609,P279,Q40397,Gewebe,Q40397=Gewebe; Q1314278=Gewebe; Q551997=Draht; Q11426=metal; Q24503377=mesh
+Q3271208,porous medium,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q117316442=medium; Q3514037=tain; Q12332070=Pore
+Q3300022,synthetisches Material,moegliche spezifischere Subklasse,description (en) enthaelt 'man-made material',P279,Q214609,P279,Q125272422,man-made material,Q125272422=man-made material; Q2451477=natural material; Q16829513=material; Q619671=process; Q5460003=Mater
+Q3327760,Beschreibstoff,moegliche spezifischere Subklasse,description (de) enthaelt 'Mater',P279,Q214609,P279,Q5460003,Mater,Q5460003=Mater; Q5849500=Stoff
+Q3328263,Pflaster,moegliche spezifischere Subklasse,description (de) enthaelt 'Stein',P279,Q214609,P279,Q22731,Stein,Q22731=Stein; Q36133=Boden; Q22657=Beton; Q3757650=Stein; Q468402=tile
+Q3332002,Schlacke,moegliche spezifischere Subklasse,description (en) enthaelt 'process',P279,Q214609,P279,Q619671,process,Q619671=process; Q152079=Asche; Q45701=waste; Q11236878=Lack
+Q33526,Stuck,moegliche spezifischere Subklasse,description (en) enthaelt 'aggregate',P279,Q214609,P279,Q866298,aggregate,Q866298=aggregate; Q16829513=material; Q189566=Mörtel
+Q3451297,archival material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q34669510,Formmasse,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q1725382=Masse
+Q3604148,sparking flint,moegliche spezifischere Subklasse,name (en) enthaelt 'spark',P279,Q214609,P279,Q911679,spark,Q911679=spark; Q5919399=KING; Q10815621=lint
+Q372301,Schleifmittel,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q5849500=Stoff; Q128698437=Span; Q1225294=Span
+Q37328283,Rezyklat,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q37328535,recyceltes Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q37328535,recyceltes Material,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q137424905=type of material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q376724,Bandage,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q12105882=dressing; Q33123524=support; Q523536=Verband; Q5460003=Mater
+Q379503,retroreflective sheeting,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q105821963=Sheet
+Q3851760,linear elastic material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q10651359=elastic
+Q389782,Karton,moegliche spezifischere Subklasse,description (de) enthaelt 'Holzschliff',P279,Q214609,P279,Q19703279,Holzschliff,Q19703279=Holzschliff; Q16829513=Werkstoff; Q444632=Altpapier; Q189109=Zellstoff; Q5849500=Stoff
+Q3913535,Matrixisolation,moegliche spezifischere Subklasse,name (en) enthaelt 'matrix',P279,Q214609,P279,Q112166866,matrix,Q112166866=matrix; Q3299231=matrix; Q1060013=matrix; Q1463013=Matrix
+Q39365114,dichroic material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q107105674=mount; Q664571=fuse; Q2793166=Amou; Q182221=fuse
+Q413068,Polyisocyanurate,moegliche spezifischere Subklasse,description (de) enthaelt 'Polymer',P279,Q214609,P279,Q81163,Polymer,Q81163=Polymer; Q11474=plastic
+Q4146210,"petroleum, oils and lubricants",moegliche spezifischere Subklasse,name (en) enthaelt 'petroleum',P279,Q214609,P279,Q22656,petroleum,Q22656=petroleum
+Q43557297,Albuminpapier,moegliche spezifischere Subklasse,description (en) enthaelt 'printing material',P279,Q214609,P279,Q20019601,printing material,Q20019601=printing material; Q16829513=material
+Q436625,Bedruckstoff,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q1570182=coating; Q619671=process; Q5460003=Mater; Q5849500=Stoff
+Q4370255,Q4370255,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q66157003=Packmaterial,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q4428995,sorbent,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q4428995,sorbent,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q100434640=class of chemical substances by use,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q45621,Keramik,moegliche spezifischere Subklasse,description (en) enthaelt 'metal',P279,Q214609,P279,Q11426,metal,Q11426=metal; Q5849500=Stoff
+Q45621,Keramik,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q483394=Genre; Q129133491=ethnologischer Fachbegriff,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q45701,Abfall,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q466714,Moderator,moegliche spezifischere Subklasse,description (en) enthaelt 'beryllium',P279,Q214609,P279,Q569,beryllium,Q569=beryllium; Q5309=graphite; Q117316442=medium; Q2733470=stain; Q3514037=tain
+Q466714,Moderator,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q151885=Begriff,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q46976206,surface preparation material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q4914589,ekomaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q497166,Metamaterial,moegliche spezifischere Subklasse,description (de) enthaelt 'Elektromagnet',P279,Q214609,P279,Q178032,Elektromagnet,Q178032=Elektromagnet; Q16829513=material; Q11421=Magnet; Q5460003=Mater; Q635343=rope
+Q5025838,Bleirute,moegliche spezifischere Subklasse,description (de) enthaelt 'Bleiglasfenster',P279,Q214609,P279,Q488094,Bleiglasfenster,Q488094=Bleiglasfenster; Q392551=Bleiglas; Q35473=Fenster; Q1348059=panel; Q106857709=panel
+Q50379874,biomedical and dental material,moegliche spezifischere Subklasse,name (en) enthaelt 'dental material',P279,Q214609,P279,Q3040056,dental material,Q3040056=dental material; Q16829513=material; Q635343=rope
+Q50379874,biomedical and dental material,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q100434640=class of chemical substances by use,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q5054339,Cauchy-Elastizität,moegliche spezifischere Subklasse,name (de) enthaelt 'Elastizität',P279,Q214609,P279,Q62932,Elastizität,Q62932=Elastizität; Q10651358=Elastizität; Q16829513=material; Q10651359=elastic
+Q50998618,Feder,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q5135573,Kleidungsmaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q5849500=cloth; Q1503599=Klei
+Q52684119,plaster,moegliche spezifischere Subklasse,description (en) enthaelt 'mortar',P279,Q214609,P279,Q189566,mortar,Q189566=mortar; Q126777=pasty
+Q5309,Graphit,moegliche spezifischere Subklasse,description (de) enthaelt 'Kohle',P279,Q214609,P279,Q24489,Kohle,Q24489=Kohle; Q5849500=Stoff; Q140101=Ikat; Q635343=rope
+Q5309,Graphit,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q12089225=Mineralart,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q5327163,Earth materials,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q3820332=earth
+Q5327163,Earth materials,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q1293220=physikalisches Phänomen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q5376832,energetischer Stoff,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q5849500=Stoff; Q107105674=mount; Q2793166=Amou
+Q5376832,energetischer Stoff,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q56256173=Klasse von chemischen Verbindungen mit ähnlichen Anwendungen oder Funktionen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q5428682,Faktis,moegliche spezifischere Subklasse,description (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q5849500=Stoff; Q13211745=Gummi
+Q5449002,film base,moegliche spezifischere Subklasse,description (en) enthaelt 'photographic film',P279,Q214609,P279,Q6293,photographic film,Q6293=photographic film
+Q549563,Mulch,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater; Q36133=soil
+Q551997,Draht,moegliche spezifischere Subklasse,description (de) enthaelt 'Kunststoff',P279,Q214609,P279,Q11474,Kunststoff,Q11474=Kunststoff; Q97794245=compo; Q11426=metal; Q5849500=Stoff
+Q55238861,tape,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q55590127,Trägerfolie,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q29000384=Ketten; Q251473=Folie; Q5919399=KING
+Q56343012,Pagament,moegliche spezifischere Subklasse,description (de) enthaelt 'Mater',P279,Q214609,P279,Q5460003,Mater,Q5460003=Mater
+Q57051271,Grivory GM-4H,moegliche spezifischere Subklasse,description (en) enthaelt 'powder',P279,Q214609,P279,Q2908004,powder,Q2908004=powder; Q97794245=compo; Q188672=bran
+Q57273893,metal replacement,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q45190=cement; Q11426=metal; Q231250=lace
+Q57305800,recyclable material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q57305827,biobased material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q18537=biomass; Q116457430=Biomass
+Q57305858,compostable material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q212254=compost; Q97794245=compo; Q677=iron; Q1865992=cord
+Q57305881,biologisch abbaubares Material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q57306213,Cleartran,moegliche spezifischere Subklasse,description (en) enthaelt 'deposition',P279,Q214609,P279,Q1987070,deposition,Q1987070=deposition; Q111725350=deposit; Q619671=process
+Q57306278,convoluted acoustical foam,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q215414=foam; Q2444108=bing; Q12709589=Soun; Q6705397=Lute
+Q615476,Strass,moegliche spezifischere Subklasse,description (de) enthaelt 'Bleiglas',P279,Q214609,P279,Q392551,Bleiglas,Q392551=Bleiglas; Q22731=stone; Q911679=spark; Q7142958=Paste; Q3757650=stone
+Q615476,Strass,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q6149036=Dekoration,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q64029133,Gelatinesilberabzug,moegliche spezifischere Subklasse,description (en) enthaelt 'process',P279,Q214609,P279,Q619671,process,Q619671=process
+Q64353376,Durapore,moegliche spezifischere Subklasse,description (en) enthaelt 'tape',P279,Q214609,P279,Q55238861,tape,Q55238861=tape; Q37681=silk; Q12332070=Pore; Q4206002=urap
+Q65084729,Entwicklungsfarbstoffe,moegliche spezifischere Subklasse,name (de) enthaelt 'Farbstoff',P279,Q214609,P279,Q189720,Farbstoff,Q189720=Farbstoff; Q5849500=Stoff
+Q65084729,Entwicklungsfarbstoffe,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q17339814=Stoffgruppe,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q65085565,Küpenfarbstoffe,moegliche spezifischere Subklasse,name (de) enthaelt 'Farbstoff',P279,Q214609,P279,Q189720,Farbstoff,Q189720=Farbstoff; Q1797237=vat dye; Q5849500=Stoff
+Q652828,Gelcoat,moegliche spezifischere Subklasse,description (de) enthaelt 'Kunststoff',P279,Q214609,P279,Q11474,Kunststoff,Q11474=Kunststoff; Q16829513=material; Q5849500=Stoff
+Q65768838,paleographical writing material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q1865992=cord
+Q65787050,veneer,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q105821963=Sheet
+Q66157003,Packmaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q10971235=cushion; Q5460003=Mater; Q5919399=KING
+Q6964018,nanocrystalline material,moegliche spezifischere Subklasse,name (en) enthaelt 'nanocrystal',P279,Q214609,P279,Q98276914,nanocrystal,Q98276914=nanocrystal; Q16829513=material; Q359572=crystal
+Q7020535,Newtonian material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q7136957,parge,moegliche spezifischere Subklasse,description (en) enthaelt 'plaster',P279,Q214609,P279,Q52684119,plaster,Q52684119=plaster; Q274988=plaster; Q189566=mortar
+Q7136957,parge,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q4787070=Architekturtechnik,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q71853915,jackfruit wood,moegliche spezifischere Subklasse,name (en) enthaelt 'wood',P279,Q214609,P279,Q287,wood,Q287=wood
+Q71853915,jackfruit wood,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q1493054=Holzart,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q728944,Inklusion,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q7300314,reactive material,moegliche spezifischere Subklasse,description (en) enthaelt 'pyrotechnic composition',P279,Q214609,P279,Q909182,pyrotechnic composition,Q909182=pyrotechnic composition; Q1297687=structural material; Q16829513=material; Q97794245=compo; Q468402=tile
+Q7360130,rolag,moegliche spezifischere Subklasse,description (en) enthaelt 'yarn',P279,Q214609,P279,Q49007,yarn,Q49007=yarn; Q11547758=wool; Q115499544=roll; Q114023789=roll
+Q7406061,saltcrete,moegliche spezifischere Subklasse,description (en) enthaelt 'cement',P279,Q214609,P279,Q45190,cement,Q45190=cement; Q4390435=brine; Q98598328=brin
+Q7406061,saltcrete,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q3317119=Umweltschutzmaßnahmen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q7448105,self-healing material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q7561,Schnee,moegliche spezifischere Subklasse,description (en) enthaelt 'crystal',P279,Q214609,P279,Q359572,crystal,Q359572=crystal
+Q7561,Schnee,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q118733587=type of meteorological phenomenon,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q7580229,Montageschaum,moegliche spezifischere Subklasse,description (en) enthaelt 'building material',P279,Q214609,P279,Q206615,building material,Q206615=building material; Q90733311=polyurethane foam; Q146322=polyurethane; Q16829513=material; Q215414=Schaum
+Q759922,Aufschlagmittel,moegliche spezifischere Subklasse,name (en) enthaelt 'foam',P279,Q214609,P279,Q215414,foam,Q215414=foam; Q3514037=tain
+Q7624687,strongly correlated material,moegliche spezifischere Subklasse,description (en) enthaelt 'electrical properties',P279,Q214609,P279,Q110583288,electrical properties,Q110583288=electrical properties; Q16829513=material; Q635343=rope
+Q7632154,aquarium substrate,moegliche spezifischere Subklasse,name (en) enthaelt 'substrate',P279,Q214609,P279,Q2362275,substrate,Q2362275=substrate; Q436625=substrate; Q8334343=substrate; Q2096056=substrate; Q2578270=substrate
+Q7648839,susceptor,moegliche spezifischere Subklasse,description (en) enthaelt 'electromagnet',P279,Q214609,P279,Q178032,electromagnet,Q178032=electromagnet; Q16829513=material; Q11421=magnet
+Q7880557,ultralight material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q789683,Auxetisches Material,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q7973224,water-reactive substance,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q56256173=Klasse von chemischen Verbindungen mit ähnlichen Anwendungen oder Funktionen,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q7978502,web,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q805282,Ballistische Gelatine,moegliche spezifischere Subklasse,description (en) enthaelt 'medium',P279,Q214609,P279,Q117316442,medium,Q117316442=medium; Q468402=tile; Q3748266=tile
+Q811527,Baumberger Kalksandstein,moegliche spezifischere Subklasse,name (de) enthaelt 'Kalksandstein',P279,Q214609,P279,Q1284824,Kalksandstein,Q1284824=Kalksandstein; Q61270797=Kalksandstein; Q13085=Sandstein; Q22731=Stein; Q901731=umber
+Q811527,Baumberger Kalksandstein,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q214609=Material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q81163,Polymer,moegliche spezifischere Subklasse,description (en) enthaelt 'compo',P279,Q214609,P279,Q97794245,compo,Q97794245=compo; Q1574029=Lende; Q5849500=Stoff; Q184624=peat
+Q81163,Polymer,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q17339814=Stoffgruppe,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q81623716,tracing cloth,moegliche spezifischere Subklasse,description (en) enthaelt 'starch',P279,Q214609,P279,Q41534,starch,Q41534=starch; Q14674=pencil; Q1426327=linen; Q5849500=cloth; Q5919399=KING
+Q82658,Gips,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q12089225=Mineralart,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q831619,Betonzusatzmittel,moegliche spezifischere Subklasse,name (de) enthaelt 'Beton',P279,Q214609,P279,Q22657,Beton,Q22657=Beton
+Q85719061,mineral origin material,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q886220,Blumenerde,moegliche spezifischere Subklasse,description (en) enthaelt 'medium',P279,Q214609,P279,Q117316442,medium,Q117316442=medium; Q5460003=Mater; Q36133=soil
+Q889659,Bodenschatz,moegliche spezifischere Subklasse,description (en) enthaelt 'deposit',P279,Q214609,P279,Q111725350,deposit,Q111725350=deposit; Q3820332=earth; Q36133=Boden; Q3196196=crust; Q991963=crust
+Q889659,Bodenschatz,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q131700004=type of natural resource,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q902144,weiche Materie,moegliche spezifischere Subklasse,name (de) enthaelt 'Mater',P279,Q214609,P279,Q5460003,Mater,Q5460003=Mater; Q123190646=Hani
+Q906323,zertifiziertes Referenzmaterial,moegliche spezifischere Subklasse,name (de) enthaelt 'Referenzmaterial',P279,Q214609,P279,Q25509247,Referenzmaterial,Q25509247=Referenzmaterial; Q16829513=material; Q5460003=Mater
+Q906675,Vulkanfiber,moegliche spezifischere Subklasse,description (de) enthaelt 'Biowerkstoff',P279,Q214609,P279,Q15788728,Biowerkstoff,Q15788728=Biowerkstoff; Q16829513=Werkstoff; Q5849500=Stoff
+Q906675,Vulkanfiber,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q214609=Material,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q908279,Trennmittel,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q15303351=Künstlerbedarf; Q100434640=class of chemical substances by use,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q910229,Molekularsieb,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5849500=Stoff; Q12332070=Pore
+Q910990,Szintillator,moegliche spezifischere Subklasse,description (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material
+Q911679,Funke,moegliche spezifischere Subklasse,description (de) enthaelt 'Teilchen',P279,Q214609,P279,Q60848614,Teilchen,Q60848614=Teilchen; Q6059387=Teilchen
+Q911922,Farbmittel,moegliche spezifischere Subklasse,description (de) enthaelt 'Stoff',P279,Q214609,P279,Q5849500,Stoff,Q5849500=Stoff
+Q9259184,ferromagnetic material,moegliche spezifischere Subklasse,name (en) enthaelt 'magnetic material',P279,Q214609,P279,Q949573,magnetic material,Q949573=magnetic material; Q16829513=material; Q11421=magnet
+Q949573,Magnetwerkstoffe,moegliche spezifischere Subklasse,name (de) enthaelt 'Werkstoff',P279,Q214609,P279,Q16829513,Werkstoff,Q16829513=Werkstoff; Q11421=Magnet; Q5849500=Stoff
+Q967847,Nanomaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater
+Q9698,abgereichertes Uran,moegliche spezifischere Subklasse,description (de) enthaelt 'Kern',P279,Q214609,P279,Q3121375,Kern,Q3121375=Kern
+Q97648592,nickel laterite ore,moegliche spezifischere Subklasse,name (en) enthaelt 'nickel',P279,Q214609,P279,Q744,nickel,Q744=nickel; Q36133=soil; Q8063=rock
+Q979014,Narrabaum,hat P31 (instance of) -> vermutlich physisches Objekt,instance of: Q16521=Taxon,P279,Q214609,P186 (manuell Zielmaterial waehlen!),,,
+Q98108610,Formgedächtnismaterial,moegliche spezifischere Subklasse,name (en) enthaelt 'material',P279,Q214609,P279,Q16829513,material,Q16829513=material; Q5460003=Mater

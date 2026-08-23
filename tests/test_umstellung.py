@@ -1,22 +1,22 @@
 """Umstellung bestehender Aussagen P527 -> P2670. Alles netzwerkfrei."""
 import pytest
 
-from materialswiki import cli
+from materialswiki import ableitungen, cli, netz, wikidata
 from materialswiki.cli import umstellung_proposals_for_item
 
 
 @pytest.fixture(autouse=True)
 def elementtabelle(monkeypatch):
-    monkeypatch.setattr(cli, "element_qids", lambda: {
+    monkeypatch.setattr(wikidata, "element_qids", lambda: {
         "H": {"qid": "Q556", "label": "Wasserstoff", "name_en": "hydrogen",
               "title_de": "Wasserstoff"},
         "O": {"qid": "Q629", "label": "Sauerstoff", "name_en": "oxygen",
               "title_de": "Sauerstoff"},
     })
-    monkeypatch.setattr(cli, "item_has_statement", lambda qid, pid: False)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda qid, pid: False)
     # Der Stoffnachweis laeuft ueber Formel oder Legierungseinordnung; die
     # Tests uebergeben die Formel, die Klassenlage bleibt leer.
-    cli._METAKLASSE_CACHE["Q283"] = {"p31": [], "legierung": False}
+    ableitungen._METAKLASSE_CACHE["Q283"] = {"p31": [], "legierung": False}
 
 
 @pytest.fixture
@@ -27,7 +27,7 @@ def wasser():
 
 def setze_p527(qid, eintraege):
     """eintraege: {Element-QID: (anzahl, beleg, andere, schon_p2670)}"""
-    cli._P527_CACHE[qid] = {
+    ableitungen._P527_CACHE[qid] = {
         e: {"anzahl": a, "beleg": b, "andere": c, "schon_p2670": d,
             "p527": True}
         for e, (a, b, c, d) in eintraege.items()
@@ -117,7 +117,7 @@ def test_sammelbegriffe_werden_nicht_umgestellt(wasser):
 def test_legierung_ohne_formel_wird_umgestellt(wasser):
     """Stahl hat keine Summenformel, ist aber ein Stoff."""
     setze_p527("Q283", {"Q556": (None, False, False, False)})
-    cli._METAKLASSE_CACHE["Q283"] = {"p31": [], "legierung": True}
+    ableitungen._METAKLASSE_CACHE["Q283"] = {"p31": [], "legierung": True}
     assert [z["_pid"] for z in umstellung_proposals_for_item(wasser)] == [
         "P2670", "P527"]
 
@@ -158,30 +158,30 @@ def _b(qid, wert, **extra):
 def test_nur_elementwerte_zaehlen(monkeypatch):
     """Ein P527 auf eine Verbindung (Quarz -> Siliciumdioxid) ist eine andere
     Aussage und bleibt unberuehrt."""
-    monkeypatch.setattr(cli, "get_with_retry", lambda url, params: _antwort([
+    monkeypatch.setattr(netz, "get_with_retry", lambda url, params: _antwort([
         _b("Q283", "Q556", anzahl="2"),
         _b("Q283", "Q11662"),          # Siliciumdioxid: kein Element
     ]))
-    lage = cli.fetch_p527_elemente(["Q283"])["Q283"]
+    lage = ableitungen.fetch_p527_elemente(["Q283"])["Q283"]
 
     assert list(lage) == ["Q556"]
     assert lage["Q556"]["anzahl"] == "2"
 
 
 def test_beleg_und_fremdqualifikator_werden_gemerkt(monkeypatch):
-    monkeypatch.setattr(cli, "get_with_retry", lambda url, params: _antwort([
+    monkeypatch.setattr(netz, "get_with_retry", lambda url, params: _antwort([
         _b("Q283", "Q556", beleg="x"),
         _b("Q283", "Q629", anderer="http://www.wikidata.org/prop/qualifier/P518"),
     ]))
-    lage = cli.fetch_p527_elemente(["Q283"])["Q283"]
+    lage = ableitungen.fetch_p527_elemente(["Q283"])["Q283"]
 
     assert lage["Q556"]["beleg"] is True
     assert lage["Q629"]["andere"] is True
 
 
 def test_bestehendes_p2670_wird_erkannt(monkeypatch):
-    monkeypatch.setattr(cli, "get_with_retry", lambda url, params: _antwort([
+    monkeypatch.setattr(netz, "get_with_retry", lambda url, params: _antwort([
         _b("Q283", "Q556", anzahl="2"),
         _b("Q283", "Q556", p2670="true"),
     ]))
-    assert cli.fetch_p527_elemente(["Q283"])["Q283"]["Q556"]["schon_p2670"]
+    assert ableitungen.fetch_p527_elemente(["Q283"])["Q283"]["Q556"]["schon_p2670"]

@@ -1,0 +1,574 @@
+"""Ableitungen aus dem Item selbst - ohne jede externe Quelle.
+
+Vier Stufen, die nichts holen, sondern nur umformen, was am Item schon
+steht:
+
+    formel_proposals_for_item      Summenformel  -> P2670 je Element
+    umstellung_proposals_for_item  P527 -> P2670 (samt Loeschzeile)
+    metaklasse_proposals_for_item  Legierung     -> P31 Gemisch-Metaklasse
+    punktgruppe_proposals_for_item Raumgruppe    -> P589
+
+Alle vier gehen deshalb OHNE S-Beleg raus: es gibt keine externe Quelle zu
+zitieren, und die Herkunft steht in der Notiz. Begruendungen je Stufe im
+README.
+"""
+
+import collections
+import re
+import sys
+from typing import Optional
+
+import requests
+
+from . import netz, wikidata
+from .ausgabe import Reference, make_row
+from .formeln import elemente_aus_formel
+from .gruppen import LEGIERUNG_QID
+from .konfiguration import WIKIDATA_SPARQL
+from .properties import PROPERTY_MAP
+
+def formel_proposals_for_item(wd_match: dict, formel: str,
+                              skip_pids: Optional[set] = None) -> list:
+    """P2670-Vorschlaege aus der Summenformel des Items.
+
+    Anders als alle uebrigen Stufen holt diese NICHTS von aussen: der Wert
+    wird aus einer Angabe abgeleitet, die am Item schon steht. Deshalb geht
+    die Aussage OHNE S-Beleg raus - siehe OHNE_BELEG_DATENTYPEN, dieselbe
+    Ueberlegung wie bei den Identifikatoren. Ein "importiert aus Wikidata"
+    waere zirkulaer, und die Ableitung ist am Item selbst nachpruefbar: die
+    Formel steht in der Notiz.
+
+    Elemente, die nur EINE Moeglichkeit einer Mischreihe sind, werden nicht
+    vorgeschlagen, sondern zur Klaerung ausgewiesen - bei "(Fe,Mg)₂SiO₄"
+    haengt es vom Glied der Reihe ab, ob Eisen oder Magnesium drinsteckt.
+    """
+    skip_pids = skip_pids or set()
+    prop_info = PROPERTY_MAP["has_part_of_class"]
+    if prop_info["pid"] in skip_pids:
+        return []
+
+    zerlegt = elemente_aus_formel(formel)
+    if zerlegt is None:
+        return []
+    sicher, unsicher = zerlegt
+    if not sicher and not unsicher:
+        return []
+
+    symbole = wikidata.element_qids()
+    # Das Item traegt P2670 schon: dann wird nichts ergaenzt - wer die
+    # Zusammensetzung dort von Hand gepflegt hat, weiss mehr als diese
+    # Ableitung. Ein bestehendes P527 blockiert dagegen NICHT mehr: zeigt es
+    # auf Elemente, stellt die Umstellungsstufe es um (siehe
+    # umstellung_proposals_for_item); zeigt es auf Verbindungen (Quarz ->
+    # Siliciumdioxid), ist es eine andere Aussage und steht daneben.
+    vorhanden = wikidata.item_has_statement(wd_match["qid"], prop_info["pid"])
+    # Was die Umstellungsstufe schon aus P527 uebernimmt, hier nicht doppeln.
+    schon_umgestellt = {e for e in p527_elemente(wd_match["qid"])}
+    proposals = []
+
+    for symbol in sorted(sicher):
+        element = symbole.get(symbol)
+        if element is None:
+            continue  # Elementsymbol ohne Wikidata-Item - nicht raten
+        if element["qid"] in schon_umgestellt:
+            continue
+        anzahl = sicher[symbol]
+        qualifiers = ([("P1114", str(anzahl), f"Anzahl {anzahl}")]
+                      if anzahl is not None else [])
+        hinweis = "" if anzahl is not None else ", Anzahl nicht bestimmbar"
+        proposals.append(make_row(
+            "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
+            "Formel", wd_match, prop_info, element["qid"], element["label"],
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P274",
+                note=f"abgeleitet aus der Summenformel {formel} "
+                     f"(P274 am Item){hinweis}",
+            ),
+            formula=formel, entry_id=f"formel-{symbol}",
+            qualifiers=qualifiers, ohne_beleg=True,
+        ))
+
+    if unsicher:
+        # Nicht still verschlucken: dass die Formel eine Mischreihe enthaelt,
+        # ist die interessanteste Aussage ueber sie.
+        namen = ", ".join(
+            symbole[s]["label"] if s in symbole else s for s in sorted(unsicher)
+        )
+        proposals.append(make_row(
+            f"MANUELLE_KLAERUNG_NOETIG (Mischreihe in {formel}: {namen} "
+            f"stehen zur Wahl, nicht nebeneinander)",
+            "Formel", wd_match, prop_info, "", namen,
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P274",
+                note=f"Mischreihe in {formel} - Elemente nicht ableitbar",
+            ),
+            formula=formel, entry_id="formel-mischreihe",
+            qualifiers=[], ohne_beleg=True,
+        ))
+    return proposals
+
+
+# ---------------------------------------------------------------------------
+# Umstellung P527 -> P2670 an bestehenden Aussagen
+# ---------------------------------------------------------------------------
+#
+# 24538 Aussagen im Bestand sagen "Stoff P527 Element" (gemessen 2026-08-21).
+# Sie meinen die Zusammensetzung, sagen aber mereologisch etwas anderes: das
+# Item eines Elements ist die KLASSE seiner Atome. Richtig ist P2670. Diese
+# Stufe stellt bestehende Aussagen um - als EINZIGE im ganzen Werkzeug
+# erzeugt sie dabei auch Loeschzeilen.
+#
+# Uebernommen wird nur, was QuickStatements verlustfrei umsetzen kann:
+# Anzahl (P1114) ja, Belege und andere Qualifikatoren nein - die liessen sich
+# nicht mitnehmen, deshalb gehen solche Aussagen zur Klaerung statt zur
+# Umstellung. Zahlen: README, "Umstellung P527 -> P2670".
+
+_P527_CACHE = {}
+P527_CHARGE = 200
+
+
+def fetch_p527_elemente(qids: list) -> dict:
+    """{QID: {Element-QID: {anzahl, beleg, andere, schon_p2670}}}.
+
+    Nur Werte, die ein chemisches Element sind - ein P527 auf eine Verbindung
+    (Quarz -> Siliciumdioxid) ist eine andere Aussage und bleibt unberuehrt.
+    """
+    if not qids:
+        return {}
+    nach_qid = {info["qid"] for info in wikidata.element_qids().values()}
+    werte = " ".join(f"wd:{q}" for q in qids)
+    resp = netz.get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT ?i ?e ?anzahl ?beleg ?anderer ?p2670 WHERE {{
+      VALUES ?i {{ {werte} }}
+      {{
+        ?i p:P527 ?st . ?st ps:P527 ?e .
+        OPTIONAL {{ ?st pq:P1114 ?anzahl }}
+        OPTIONAL {{ ?st prov:wasDerivedFrom ?beleg }}
+        OPTIONAL {{
+          ?st ?q ?qv .
+          FILTER(STRSTARTS(STR(?q), "http://www.wikidata.org/prop/qualifier/"))
+          # Ohne diese Zeile zaehlt der Wertknoten JEDER Mengenangabe als
+          # fremder Qualifikator: P1114 haengt zusaetzlich unter
+          # .../qualifier/value/P1114, und daran ist die Umstellung von
+          # Wasser (Q283) zuerst gescheitert.
+          FILTER(!STRSTARTS(STR(?q), "http://www.wikidata.org/prop/qualifier/value"))
+          FILTER(?q != pq:P1114)
+          BIND(?q AS ?anderer)
+        }}
+      }} UNION {{
+        ?i wdt:P2670 ?e . BIND(true AS ?p2670)
+      }}
+    }}
+    """})
+    out = {q: {} for q in qids}
+    for b in resp.json()["results"]["bindings"]:
+        qid = b["i"]["value"].rsplit("/", 1)[-1]
+        element = b["e"]["value"].rsplit("/", 1)[-1]
+        if element not in nach_qid:
+            continue  # keine Elementaussage - geht diese Stufe nichts an
+        eintrag = out[qid].setdefault(
+            element, {"anzahl": None, "beleg": False, "andere": False,
+                      "schon_p2670": False, "p527": False})
+        if "p2670" in b:
+            eintrag["schon_p2670"] = True
+            continue
+        eintrag["p527"] = True
+        if "anzahl" in b:
+            eintrag["anzahl"] = b["anzahl"]["value"]
+        eintrag["beleg"] = eintrag["beleg"] or "beleg" in b
+        eintrag["andere"] = eintrag["andere"] or "anderer" in b
+    return out
+
+
+def p527_vorladen(qids: list) -> None:
+    """Elementaussagen vieler Items auf einmal holen und merken."""
+    offen = [q for q in qids if q not in _P527_CACHE]
+    for start in range(0, len(offen), P527_CHARGE):
+        _P527_CACHE.update(
+            fetch_p527_elemente(offen[start:start + P527_CHARGE]))
+
+
+def p527_elemente(qid: str) -> dict:
+    """Elementaussagen EINES Items, aus dem Zwischenspeicher oder frisch."""
+    if qid not in _P527_CACHE:
+        _P527_CACHE.update(fetch_p527_elemente([qid]))
+    return _P527_CACHE.get(qid, {})
+
+
+def umstellung_proposals_for_item(wd_match: dict, formel: str = "",
+                                  skip_pids: Optional[set] = None) -> list:
+    """Bestehende P527-Elementaussagen auf P2670 umstellen.
+
+    Je Aussage zwei Zeilen: die neue P2670-Aussage samt Anzahl und die
+    Loeschzeile fuer die alte. Beide gehoeren zusammen - wer nur die eine
+    einspielt, hat entweder eine Dublette oder eine Luecke.
+
+    Umgestellt wird nur an STOFFEN, erkennbar an einer Summenformel oder an
+    der Einordnung als Legierung. Der Grund steht im Bestand: "Alkalimetalle"
+    (Q19557) fuehrt seine MITGLIEDER mit P527 - Caesium, Lithium und so fort.
+    Das ist dort die richtige Aussage; "Alkalimetalle enthaelt Teile der
+    Klasse Caesium" waere es nicht. Solche Sammelbegriffe haengen wegen des
+    bekannten Modellierungsfehlers mitten in der Legierungsgruppe.
+    """
+    skip_pids = skip_pids or set()
+    if not formel and not metaklassen(wd_match["qid"])["legierung"]:
+        return []
+    neu_info = PROPERTY_MAP["has_part_of_class"]
+    alt_info = PROPERTY_MAP["has_part"]
+    if neu_info["pid"] in skip_pids:
+        return []
+
+    symbole = {info["qid"]: info for info in wikidata.element_qids().values()}
+    proposals = []
+    for element, lage in sorted(p527_elemente(wd_match["qid"]).items()):
+        if not lage["p527"]:
+            continue
+        name = symbole.get(element, {}).get("label", element)
+        beleg = Reference(
+            url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P527",
+            note=f"Umstellung der bestehenden Aussage P527 -> {name} auf "
+                 f"P2670; das Element-Item ist die Klasse seiner Atome",
+        )
+
+        if lage["beleg"] or lage["andere"]:
+            # QuickStatements kann Belege und Qualifikatoren einer
+            # bestehenden Aussage nicht mitnehmen. Umstellen hiesse hier,
+            # sie zu verlieren - das entscheidet ein Mensch.
+            fehlt = " und ".join(
+                t for t in (("Beleg" if lage["beleg"] else ""),
+                            ("weitere Qualifikatoren" if lage["andere"] else ""))
+                if t)
+            proposals.append(make_row(
+                f"MANUELLE_KLAERUNG_NOETIG (P527 -> {name} traegt {fehlt}; "
+                f"eine Umstellung per QuickStatements wuerde das verlieren - "
+                f"von Hand umhaengen)",
+                "Umstellung", wd_match, alt_info, element, name, beleg,
+                entry_id=f"umstellung-{element}", qualifiers=[],
+                ohne_beleg=True,
+            ))
+            continue
+
+        if not lage["schon_p2670"]:
+            anzahl = lage["anzahl"]
+            qualifiers = ([("P1114", str(int(float(anzahl))),
+                            f"Anzahl {int(float(anzahl))}")]
+                          if anzahl and re.fullmatch(r"\d+(\.0*)?", anzahl)
+                          else [])
+            proposals.append(make_row(
+                "VORSCHLAG", "Umstellung", wd_match, neu_info, element, name,
+                beleg, entry_id=f"umstellung-{element}",
+                qualifiers=qualifiers, ohne_beleg=True,
+            ))
+
+        proposals.append(make_row(
+            "VORSCHLAG", "Umstellung", wd_match, alt_info, element, name,
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P527",
+                note=f"ERSETZT durch P2670 -> {name}; diese Zeile ENTFERNT "
+                     f"die alte Aussage",
+            ),
+            entry_id=f"umstellung-{element}", qualifiers=[], ohne_beleg=True,
+            entfernen=True,
+        ))
+    return proposals
+
+
+# ---------------------------------------------------------------------------
+# Chemische Metaklasse (P31) fuer Legierungen
+# ---------------------------------------------------------------------------
+#
+# [[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]]
+# verlangt an JEDEM Item einer chemischen Entitaet genau EINE Metaklasse ueber
+# P31 - und fuer Gemische ausdruecklich eine eigene, nicht die der reinen
+# Stoffe. Eine Legierung ist per Definition ein Gemisch (Q37756: "mixture or
+# metallic solid solution"), die Metaklasse ist damit eindeutig bestimmt und
+# muss nicht geraten werden. Zahlen, Abgrenzung und die Faelle, die bewusst
+# offenbleiben: README, "Chemische Metaklasse (P31) fuer Legierungen".
+
+# Wikidata fuehrt Q11426 "Metall" als Unterklasse von Q37756 "Legierung".
+# Ueber diesen Knoten haengt alles Metallische unter der Legierung - auch
+# Sammelbegriffe wie "Platinmetalle" oder "metals of antiquity", die gar keine
+# Werkstoffe sind, sondern Aufzaehlungen. Ihnen die Gemisch-Metaklasse zu
+# geben waere schlicht falsch. Der Knoten wird deshalb beim Pruefen der
+# Klassenzugehoerigkeit ausgespart, siehe legierungs_qids.
+METALL_QID = "Q11426"
+
+
+def legierungs_qids(qids: list) -> set:
+    """Welche der Items sind Legierungen - ohne den Umweg ueber "Metall"?
+
+    Gefragt ist nicht bloss, ob das Item irgendwie unter Q37756 haengt: das
+    tut wegen Q11426 (siehe METALL_QID) jeder Sammelbegriff fuer Metalle. Die
+    Kante ueber Q11426 wird deshalb ausgespart und der Rest des Klassenwegs
+    hier durchlaufen - in SPARQL laesst sich ein AUSGESPARTER Knoten in einem
+    Pfad nicht ausdruecken.
+
+    Ein simples "hat gar keinen Metall-Weg" reicht nicht: Stahl hat einen,
+    kommt aber ausserdem ueber Ferrolegierung an die Legierung heran und ist
+    selbstverstaendlich eine.
+    """
+    if not qids:
+        return set()
+    werte = " ".join(f"wd:{q}" for q in qids)
+    resp = netz.get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT DISTINCT ?von ?nach WHERE {{
+      VALUES ?i {{ {werte} }}
+      {{ ?i (wdt:P31|wdt:P279) ?nach . BIND(?i AS ?von) }}
+      UNION
+      {{ ?i (wdt:P31|wdt:P279)/wdt:P279* ?von .
+         FILTER(?von != wd:{METALL_QID})
+         ?von wdt:P279 ?nach . }}
+    }}
+    """})
+    kanten = collections.defaultdict(set)
+    for b in resp.json()["results"]["bindings"]:
+        von = b["von"]["value"].rsplit("/", 1)[-1]
+        kanten[von].add(b["nach"]["value"].rsplit("/", 1)[-1])
+
+    gefunden = set()
+    for qid in qids:
+        if qid == METALL_QID:
+            # Der Ausgangsknoten selbst: "Metalle" haengt nur ueber die
+            # defekte Kante unter der Legierung. Ohne diesen Sonderfall
+            # bekaeme ausgerechnet Q11426 die Gemisch-Metaklasse.
+            continue
+        gesehen, offen = set(), list(kanten.get(qid, ()))
+        while offen:
+            knoten = offen.pop()
+            if knoten == LEGIERUNG_QID:
+                gefunden.add(qid)
+                break
+            if knoten in gesehen or knoten == METALL_QID:
+                continue
+            gesehen.add(knoten)
+            offen.extend(kanten.get(knoten, ()))
+    return gefunden
+
+
+# Die Metaklasse fuer Gemische. Q119896085 ("Art von Polymer") ist ihre
+# einzige Unterklasse in der Guideline und fuer Legierungen nicht gemeint.
+GEMISCH_METAKLASSE = "Q119892838"   # "definiertes Gemisch chemischer Substanzen"
+
+# Alle Chemie-Metaklassen der Guideline. Traegt ein Item schon eine davon,
+# wird KEINE zweite vorgeschlagen: "Every item should have only one metaclass
+# from the above. No other chemistry-related metaclass should be present."
+CHEMIE_METAKLASSEN = {
+    "Q113145171": "definierte chemische Substanz",
+    GEMISCH_METAKLASSE: "definiertes Gemisch chemischer Substanzen",
+    "Q119896085": "Art von Polymer",
+    "Q47154513": "offene Klasse (Struktur)",
+    "Q56256173": "offene Klasse (Funktion)",
+    "Q56256178": "offene Klasse (Herkunft)",
+    "Q55640599": "geschlossene Klasse",
+    "Q15711994": "geschlossene Klasse (Summenformel)",
+    "Q59199015": "geschlossene Klasse (Stereoisomere)",
+    "Q55662456": "geschlossene Klasse (ortho/meta/para)",
+    "Q74892521": "unpraezise Klasse chemischer Substanzen",
+}
+
+# Mineralarten bleiben aussen vor: sie sind ueber die IMA modelliert
+# (P31 = Q12089225), und ob ein Mineral zusaetzlich eine Chemie-Metaklasse
+# tragen soll, ist eine Frage an das Mineralprojekt, nicht an dieses Werkzeug.
+MINERALART_QID = "Q12089225"
+
+
+def fetch_metaklassen(qids: list) -> dict:
+    """{QID: {"p31": [QID, ...], "legierung": bool}} fuer die Items.
+
+    Eine Abfrage fuer die P31-Werte, eine fuer die Klassenzugehoerigkeit -
+    beide fuer die ganze Charge statt je Item.
+    """
+    if not qids:
+        return {}
+    werte = " ".join(f"wd:{q}" for q in qids)
+    resp = netz.get_with_retry(WIKIDATA_SPARQL, {"format": "json", "query": f"""
+    SELECT ?i ?klasse WHERE {{
+      VALUES ?i {{ {werte} }}
+      ?i wdt:P31 ?klasse .
+    }}
+    """})
+    p31 = {q: [] for q in qids}
+    for b in resp.json()["results"]["bindings"]:
+        qid = b["i"]["value"].rsplit("/", 1)[-1]
+        klasse = b["klasse"]["value"].rsplit("/", 1)[-1]
+        if klasse not in p31[qid]:
+            p31[qid].append(klasse)
+
+    legierungen = legierungs_qids(qids)
+    return {q: {"p31": p31[q], "legierung": q in legierungen} for q in qids}
+
+
+_METAKLASSE_CACHE = {}
+# 200 Items je Abfrage - wie bei den Raumgruppen.
+METAKLASSE_CHARGE = 200
+
+
+def metaklassen_vorladen(qids: list) -> None:
+    """Metaklassen vieler Items auf einmal holen und merken."""
+    offen = [q for q in qids if q not in _METAKLASSE_CACHE]
+    for start in range(0, len(offen), METAKLASSE_CHARGE):
+        _METAKLASSE_CACHE.update(
+            fetch_metaklassen(offen[start:start + METAKLASSE_CHARGE]))
+
+
+def metaklassen(qid: str) -> dict:
+    """Metaklassen-Lage EINES Items, aus dem Zwischenspeicher oder frisch."""
+    if qid not in _METAKLASSE_CACHE:
+        _METAKLASSE_CACHE.update(fetch_metaklassen([qid]))
+    return _METAKLASSE_CACHE.get(qid, {"p31": [], "legierung": False})
+
+
+GUIDELINE_URL = ("https://www.wikidata.org/wiki/Wikidata:WikiProject_Chemistry/"
+                 "Guidelines/Basic_metaclasses_and_relations")
+
+
+def melde_metaklassen_luecke(items: list, auch_mit_p31: bool) -> None:
+    """Zaehlt auf stderr, was der Standardumfang bewusst auslaesst.
+
+    Sonst sieht niemand, dass die Guideline auch an diesen Items eine
+    Metaklasse verlangt - sie faenden sich einfach nicht in der CSV wieder.
+    """
+    if auch_mit_p31:
+        return
+    offen = [
+        e for e in items
+        if metaklassen(e["qid"])["legierung"]
+        and MINERALART_QID not in metaklassen(e["qid"])["p31"]
+        and metaklassen(e["qid"])["p31"]
+        and not [k for k in metaklassen(e["qid"])["p31"]
+                 if k in CHEMIE_METAKLASSEN]
+    ]
+    if offen:
+        print(f"  {len(offen)} Legierungen tragen ein P31, aber keine "
+              f"Chemie-Metaklasse - hier wird nichts vorgeschlagen "
+              f"(--metaklasse-auch-mit-p31 nimmt sie dazu).", file=sys.stderr)
+
+
+def metaklasse_proposals_for_item(wd_match: dict,
+                                  skip_pids: Optional[set] = None,
+                                  auch_mit_p31: bool = False) -> list:
+    """P31-Vorschlag: die Gemisch-Metaklasse fuer eine Legierung.
+
+    Vorgeschlagen wird NUR die Metaklasse, nie eine inhaltliche Einordnung
+    ("Kupferlegierung", "Werkzeugstahl") - die ist eine fachliche
+    Entscheidung, siehe pruefe_legierungsklasse.
+
+    Standardmaessig nur an Items, die GAR KEIN P31 tragen. Wo schon eines
+    steht, ist es in aller Regel eine richtige Klassenzugehoerigkeit
+    ("P31 = Legierung"), und die Metaklasse waere eine ZWEITE P31-Aussage
+    daneben - fuer die spricht die Guideline, aber es ist eine Massenaenderung
+    an 565 Items, und genau dort sitzt auch der Schrott (Stahlrohr,
+    Markenzeichen). Mit auch_mit_p31=True kommen sie dazu; die Zahlen stehen
+    im README.
+
+    Traegt das Item bereits eine ANDERE Chemie-Metaklasse, wird nichts
+    vorgeschlagen, sondern zur Klaerung ausgewiesen: die Guideline laesst nur
+    eine zu, und die falsche zu entfernen ist nichts, was dieses Werkzeug
+    nebenbei tut.
+    """
+    skip_pids = skip_pids or set()
+    prop_info = PROPERTY_MAP["metaklasse"]
+    if prop_info["pid"] in skip_pids:
+        return []
+
+    info = metaklassen(wd_match["qid"])
+    if not info["legierung"] or MINERALART_QID in info["p31"]:
+        return []
+
+    def zeile(status, wert, wert_label, notiz):
+        return make_row(
+            status, "Metaklasse", wd_match, prop_info, wert, wert_label,
+            Reference(url=GUIDELINE_URL, note=notiz),
+            entry_id="metaklasse", qualifiers=[], ohne_beleg=True,
+        )
+
+    vorhanden = [k for k in info["p31"] if k in CHEMIE_METAKLASSEN]
+    if GEMISCH_METAKLASSE in vorhanden:
+        return [zeile("BEREITS_VORHANDEN", GEMISCH_METAKLASSE,
+                      CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE],
+                      "Metaklasse steht bereits am Item")]
+    if vorhanden:
+        namen = ", ".join(f"{k} ({CHEMIE_METAKLASSEN[k]})" for k in vorhanden)
+        return [zeile(
+            f"MANUELLE_KLAERUNG_NOETIG (Item traegt bereits die Metaklasse "
+            f"{namen}; fuer ein Gemisch ist {GEMISCH_METAKLASSE} vorgesehen, "
+            f"und die Guideline laesst nur EINE zu - die bestehende muesste "
+            f"also weichen)",
+            "", namen, f"abweichende Chemie-Metaklasse am Item: {namen}")]
+
+    if info["p31"] and not auch_mit_p31:
+        return []   # traegt schon eine Einordnung - siehe Docstring
+
+    return [zeile(
+        "VORSCHLAG", GEMISCH_METAKLASSE,
+        CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE],
+        "Legierung, also ein Gemisch (Q37756) - Metaklasse nach "
+        "WikiProject Chemistry, Basic metaclasses and relations")]
+
+
+# ---------------------------------------------------------------------------
+# Punktgruppe (P589) aus der Raumgruppe (P690) am Item
+# ---------------------------------------------------------------------------
+#
+# Dieselbe Bauart wie die beiden Ableitungen davor: der Wert steht schon am
+# Item, nur in einer anderen Property. Jede der 230 Raumgruppen gehoert zu
+# genau einer der 32 kristallographischen Punktgruppen, und Wikidata fuehrt
+# diese Zuordnung bereits an den Raumgruppen-Items selbst (230 von 236 tragen
+# P589). Es ist also nichts abzuleiten, sondern nur nachzuschlagen.
+#
+# Warum das lohnt (gemessen 2026-08-19): 2876 Items tragen eine Raumgruppe,
+# aber nur 18 davon auch eine Punktgruppe. Fuer 2851 laesst sie sich
+# nachschlagen, darunter 2602 Mineralarten. Zahlen und Grenzen: README,
+# "Punktgruppe (P589) aus der Raumgruppe".
+
+def punktgruppe_proposals_for_item(wd_match: dict,
+                                   skip_pids: Optional[set] = None) -> list:
+    """P589-Vorschlag aus der Raumgruppe (P690), die am Item schon steht.
+
+    Holt nichts von aussen ausser dem Nachschlagewerk selbst und geht deshalb
+    - wie die uebrigen abgeleiteten Aussagen - OHNE S-Beleg raus.
+
+    Traegt das Item MEHRERE Raumgruppen (56 Items am Bestand, meist mehrere
+    Modifikationen an einem Item), wird nichts vorgeschlagen: welche gemeint
+    ist, entscheidet die Fachfrage, nicht das Skript.
+    """
+    skip_pids = skip_pids or set()
+    prop_info = PROPERTY_MAP["point_group"]
+    if prop_info["pid"] in skip_pids:
+        return []
+
+    raumgruppen = wikidata.item_raumgruppen(wd_match["qid"])
+    if not raumgruppen:
+        return []
+    tabelle = wikidata.raumgruppen_nach_qid()
+
+    if len(raumgruppen) > 1:
+        namen = ", ".join(
+            tabelle[q]["label"] if q in tabelle else q for q in raumgruppen)
+        return [make_row(
+            f"MANUELLE_KLAERUNG_NOETIG (mehrere Raumgruppen am Item: {namen} "
+            f"- welche Modifikation gemeint ist, entscheidet die Fachfrage)",
+            "Raumgruppe", wd_match, prop_info, "", namen,
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P690",
+                note=f"mehrere Raumgruppen am Item ({namen}) - Punktgruppe "
+                     f"nicht eindeutig",
+            ),
+            entry_id="punktgruppe", qualifiers=[], ohne_beleg=True,
+        )]
+
+    sg = tabelle.get(raumgruppen[0])
+    if sg is None or not sg["pg_qid"]:
+        return []  # Raumgruppe ohne Punktgruppe am Item - nicht raten
+
+    vorhanden = wikidata.item_has_statement(wd_match["qid"], prop_info["pid"])
+    return [make_row(
+        "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
+        "Raumgruppe", wd_match, prop_info, sg["pg_qid"], sg["pg_label"],
+        Reference(
+            url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P690",
+            note=f"aus der Raumgruppe {sg['label']} (P690 am Item); die "
+                 f"Punktgruppe steht am Raumgruppen-Item selbst (P589)",
+        ),
+        entry_id="punktgruppe", qualifiers=[], ohne_beleg=True,
+    )]

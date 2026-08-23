@@ -50,15 +50,17 @@ werkstoffe_quickstatements_entwurf.txt
 abdeckung*.csv
 benchmark_*.log
 
-# P279-structure/P279benchmark.py (--csv; der Entwurf faellt schon unter
-# das Muster quickstatements*.txt weiter oben)
+# Material class structure/Vorschläge generieren.py: die gestaffelte Empfehlung (--out) und
+# die optionale Befund-CSV (--csv). Achtung, p279_empfehlung*.txt faellt
+# NICHT unter quickstatements*.txt weiter oben - eigenes Muster noetig.
+p279_empfehlung*.txt
 p279_befunde*.csv
 
 # Anwendung/Anwendung.py (--csv; der Entwurf faellt schon unter
 # das Muster quickstatements*.txt weiter oben)
 anwendungen_befunde*.csv
 
-# Kategorie Hirachie/material_hierarchy_check.py (CSV + Graphen)
+# Material class structure/visualisierung.py (CSV + Graphen)
 werkstoff_check.csv
 werkstoff_graph.png
 subclass_tree_material.png

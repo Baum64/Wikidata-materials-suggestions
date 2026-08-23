@@ -2,7 +2,7 @@
 Anwendungen von Werkstoffen als QuickStatements entwerfen
 =========================================================
 
-materialswiki holt MESSWERTE (Dichte, Raumgruppe, Moduln), P279-structure
+materialswiki holt MESSWERTE (Dichte, Raumgruppe, Moduln), Material class structure
 prueft die EINORDNUNG. Dieses Skript nimmt sich das Dritte vor: wozu ein
 Werkstoff GEBRAUCHT wird - P366 (Verwendung) am Werkstoff, P186 (Material)
 am Anwendungsitem, P2079 (Herstellungsverfahren) am Werkstoff.
@@ -139,7 +139,7 @@ from typing import Optional
 
 import requests
 
-# Repo-Wurzel in den Pfad - dasselbe Vorgehen wie in P279-structure: die
+# Repo-Wurzel in den Pfad - dasselbe Vorgehen wie in Material class structure: die
 # Grundgesamtheiten werden aus materialswiki importiert, nicht kopiert,
 # sonst meinen die Werkzeuge irgendwann verschiedene Mengen.
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -355,7 +355,7 @@ _KEIN_ARTIKEL = re.compile(
     r"^\s*(datei|file|image|bild|kategorie|category|vorlage|template|"
     r"wikipedia|hilfe|help|:)", re.I)
 
-# VALUES-Bloecke. 150 QIDs sind der Kompromiss aus P279-structure: gross
+# VALUES-Bloecke. 150 QIDs sind der Kompromiss aus Material class structure: gross
 # genug, dass die Zahl der Anfragen ertraeglich bleibt, klein genug, dass
 # der Query-Service nicht ins 60s-Timeout laeuft.
 BLOCK = 150
@@ -365,7 +365,7 @@ BLOCK = 150
 # HTTP mit Drosselung und Backoff
 # ---------------------------------------------------------------------------
 #
-# Woertlich wie in P279-structure/P279benchmark.py. Bewusst kopiert statt
+# Woertlich wie in "Material class structure/Vorschläge generieren.py". Bewusst kopiert statt
 # importiert: dieses Skript soll nicht networkx mitziehen, nur weil das
 # andere es braucht.
 
@@ -713,7 +713,7 @@ def loese_links(sprache: str, titel: list) -> dict:
 
     Ueber die Seiten-API und nicht ueber SPARQL, weil Artikel einander
     massenhaft ueber Weiterleitungen verlinken. Dieselbe Erfahrung wie in
-    P279-structure: ohne redirects=1 gelten laengst vorhandene Items als
+    Material class structure: ohne redirects=1 gelten laengst vorhandene Items als
     nicht vorhanden.
     """
     aufloesung = {}
@@ -794,7 +794,7 @@ def pruefe_p366_aus_p186(nach_klasse: dict, p366: dict, rollen: dict,
     P279-Kette auf ihr bestbelegtes Glied zusammenziehen - wuerde ueber
     kaputte Kanten hinweg zusammenziehen, und davon gibt es hier reichlich:
     Wikidata fuehrt "Muenze" als Unterklasse von "Skulptur" (siehe
-    P279-structure). Ueber diese Kante wuerde die Skulptur-Zeile geloescht,
+    Material class structure). Ueber diese Kante wuerde die Skulptur-Zeile geloescht,
     weil die Muenz-Zeile mehr Belege hat. So herum kann das nicht passieren:
     die bestbelegte Klasse einer Kette faellt nie.
 
@@ -1136,7 +1136,7 @@ def schreibe_quickstatements(befunde: list, pfad: str, population: str,
                              vorsichtig: bool) -> None:
     """QuickStatements-V1-Entwurf. Abschnitt 1 ist einspielbar, alles danach
     ist durchgehend auskommentiert - dieselbe Bauart wie in materialswiki
-    und P279-structure, damit sich die Datei komplett kopieren laesst, ohne
+    und Material class structure, damit sich die Datei komplett kopieren laesst, ohne
     dass aus einer Meldezeile versehentlich eine Aussage wird."""
     einspielbar = [] if vorsichtig else [
         b for b in befunde

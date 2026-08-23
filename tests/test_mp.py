@@ -1,6 +1,9 @@
 """Materials-Project-Anbindung: Feldabbildung und Einheiten - netzwerkfrei."""
 import pytest
 
+from materialswiki import cli, netz, wikidata
+from materialswiki.quellen import mp
+
 from materialswiki.cli import (
     MP_DOI,
     MP_FIELD_MAP,
@@ -32,7 +35,7 @@ WD = {"qid": "Q320603", "label": "Rutil", "ambiguous": False}
 @pytest.fixture(autouse=True)
 def leeres_item(monkeypatch):
     """Wikidata-Abfrage abklemmen: das Item traegt noch keine Aussage."""
-    monkeypatch.setattr("materialswiki.cli.item_has_statement",
+    monkeypatch.setattr("materialswiki.wikidata.item_has_statement",
                         lambda qid, pid: False)
 
 
@@ -249,10 +252,10 @@ def test_mehr_als_eine_seite_wird_nachgeholt(monkeypatch):
     """Regression: frueher stand hier min(max_entries, 100). Die API liefert
     dann klaglos 100 Dokumente statt der angeforderten 250 - man merkt es
     nicht, die Ausbeute ist einfach still gedeckelt."""
-    from materialswiki import cli
+    from materialswiki import cli, netz, wikidata
 
-    monkeypatch.setattr(cli, "MP_API_KEY", "test")
-    monkeypatch.setattr(cli, "MP_MAX_LIMIT", 100)  # kleine Seiten erzwingen
+    monkeypatch.setattr(mp, "MP_API_KEY", "test")
+    monkeypatch.setattr(mp, "MP_MAX_LIMIT", 100)  # kleine Seiten erzwingen
     gesehen = []
 
     def fake(method, url, **kw):
@@ -264,8 +267,8 @@ def test_mehr_als_eine_seite_wird_nachgeholt(monkeypatch):
             for i in range(start, start + p["_limit"])
         ])
 
-    monkeypatch.setattr(cli, "request_with_retry", fake)
-    mats = cli.fetch_mp_materials(["Ti"], 250)
+    monkeypatch.setattr(netz, "request_with_retry", fake)
+    mats = mp.fetch_mp_materials(["Ti"], 250)
 
     assert len(mats) == 250
     assert len({m["material_id"] for m in mats}) == 250  # keine Dubletten
@@ -276,7 +279,7 @@ def test_kurze_seite_beendet_die_schleife(monkeypatch):
     """Weniger Treffer als angefordert: nicht endlos weiterfragen."""
     from materialswiki import cli
 
-    monkeypatch.setattr(cli, "MP_API_KEY", "test")
+    monkeypatch.setattr(mp, "MP_API_KEY", "test")
     aufrufe = []
 
     def fake(method, url, **kw):
@@ -286,8 +289,8 @@ def test_kurze_seite_beendet_die_schleife(monkeypatch):
             {"material_id": "mp-2", "formula_pretty": "TiO2"},
         ])
 
-    monkeypatch.setattr(cli, "request_with_retry", fake)
-    assert len(cli.fetch_mp_materials(["Ti"], 500)) == 2
+    monkeypatch.setattr(netz, "request_with_retry", fake)
+    assert len(mp.fetch_mp_materials(["Ti"], 500)) == 2
     assert aufrufe == [0]  # genau eine Anfrage
 
 
@@ -318,8 +321,8 @@ def test_systematische_platzhalter_werden_aussortiert(monkeypatch):
         def json(self):
             return {"results": {"bindings": BINDINGS}}
 
-    monkeypatch.setattr(cli, "get_with_retry", lambda *a, **k: R())
-    symbole = cli.fetch_element_qids()
+    monkeypatch.setattr(netz, "get_with_retry", lambda *a, **k: R())
+    symbole = wikidata.fetch_element_qids()
 
     assert set(symbole) == {"Ti", "U"}
     assert "Ubb" not in symbole
@@ -330,7 +333,7 @@ def test_ein_gescheitertes_element_beendet_den_lauf_nicht(monkeypatch):
     die uebrigen trotzdem durchlaufen."""
     from materialswiki import cli
 
-    monkeypatch.setattr(cli, "fetch_element_qids", lambda: {
+    monkeypatch.setattr(wikidata, "fetch_element_qids", lambda: {
         s: {"qid": f"Q{i}", "label": s, "name_en": s, "title_de": s}
         for i, s in enumerate(["Ti", "U", "V"])
     })
@@ -342,13 +345,13 @@ def test_ein_gescheitertes_element_beendet_den_lauf_nicht(monkeypatch):
                  "formula_pretty": pure_element, "formula": pure_element,
                  "density": 4.0}]
 
-    monkeypatch.setattr(cli, "fetch_mp_materials", fake_fetch)
-    monkeypatch.setattr(cli, "item_has_statement", lambda q, p: False)
+    monkeypatch.setattr(mp, "fetch_mp_materials", fake_fetch)
+    monkeypatch.setattr(wikidata, "item_has_statement", lambda q, p: False)
 
-    # cod=False: hier wird die MP-Stufe geprueft, und die COD-Stufe wuerde
-    # sonst wirklich ins Netz gehen - die Tests laufen offline.
+    # cod=False und nist=False: hier wird die MP-Stufe geprueft, die beiden
+    # anderen wuerden sonst wirklich ins Netz gehen - die Tests laufen offline.
     zeilen = list(cli.build_periodic_table_proposals(1, None, wikipedia=False,
-                                                     cod=False))
+                                                     cod=False, nist=False))
     geliefert = {z["label"] for z in zeilen}
 
     assert geliefert == {"Ti", "V"}      # U faellt aus, V kommt trotzdem
@@ -359,14 +362,14 @@ def test_fehlender_schluessel_bricht_sehr_wohl_ab(monkeypatch):
     """Der trifft jedes Element - 118-mal weitermachen waere sinnlos."""
     from materialswiki import cli
 
-    monkeypatch.setattr(cli, "fetch_element_qids", lambda: {
+    monkeypatch.setattr(wikidata, "fetch_element_qids", lambda: {
         "Ti": {"qid": "Q716", "label": "Ti", "name_en": "ti", "title_de": "Ti"}
     })
 
     def fake_fetch(*a, **kw):
         raise cli.MissingApiKey("MP_API_KEY fehlt")
 
-    monkeypatch.setattr(cli, "fetch_mp_materials", fake_fetch)
+    monkeypatch.setattr(mp, "fetch_mp_materials", fake_fetch)
     with pytest.raises(cli.MissingApiKey):
         list(cli.build_periodic_table_proposals(1, None, wikipedia=False))
 
@@ -388,14 +391,14 @@ def test_mp_user_agent_enthaelt_kein_bot():
 def test_mp_header_setzt_schluessel_oder_meldet_sich_verstaendlich(monkeypatch):
     from materialswiki import cli
 
-    monkeypatch.setattr(cli, "MP_API_KEY", "testschluessel")
-    kopf = cli.mp_headers()
+    monkeypatch.setattr(mp, "MP_API_KEY", "testschluessel")
+    kopf = mp.mp_headers()
     assert kopf["X-API-KEY"] == "testschluessel"
     assert "bot" not in kopf["User-Agent"].lower()
 
-    monkeypatch.setattr(cli, "MP_API_KEY", "")
+    monkeypatch.setattr(mp, "MP_API_KEY", "")
     with pytest.raises(cli.MissingApiKey, match="MP_API_KEY"):
-        cli.mp_headers()
+        mp.mp_headers()
 
 
 # --- Physikalische Plausibilitaet -----------------------------------------
