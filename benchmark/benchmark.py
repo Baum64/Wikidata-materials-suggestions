@@ -16,10 +16,12 @@ Vorlagendoku werden verworfen, Unterabschnitte gehoeren zum Elternabschnitt).
 
 Die Liste wird live geholt und als Momentaufnahme in properties_snapshot.json
 abgelegt - damit bleibt ein Lauf reproduzierbar und --offline moeglich. Stand
-des Snapshots: 2026-08-23, 65 Eintraege (64 verschiedene, P5672 steht sowohl
-unter Physics als auch unter Thermal); zuletzt kamen die thermodynamischen
-Groessen P3078 (Standardbildungsenthalpie) und P3071 (molare Standardentropie)
-unter "Chemical" dazu - beide bedient materialswiki bereits.
+des Snapshots: 2026-08-23 (abends), 65 Eintraege, alle verschieden - der
+Doppeleintrag P5672 unter Physics und Thermal ist von der Projektseite
+verschwunden. Zuletzt kam P1088 (Mohshaerte) unter "Mechanical" dazu;
+materialswiki bedient sie seither aus den Infoboxen. Davor waren es die
+thermodynamischen Groessen P3078 (Standardbildungsenthalpie) und P3071
+(molare Standardentropie) unter "Chemical".
 
 Die Projektseite listet nur Messgroessen. Die CAS-Nummer (P231) wird deshalb
 fest ergaenzt (Abschnitt "Identifikatoren", abschaltbar mit --no-extra) - sie

@@ -377,3 +377,235 @@ def _komma_zerlegen(rest: str) -> list:
             letzter = i + 1
     teile.append(rest[letzter:])
     return [t for t in teile if t]
+
+
+# ---------------------------------------------------------------------------
+# Funktionale Gruppen: die groesstmoegliche Einheit statt einzelner Elemente
+# ---------------------------------------------------------------------------
+#
+# Ein Mineral ist kein Haufen Atome. In Gips (CaSO₄·2H₂O) sitzt kein loser
+# Schwefel und kein loser Sauerstoff, sondern ein Sulfation und zwei Molekuele
+# Kristallwasser. Die Aussage "besteht aus Sulfat, Wasser" ist deshalb
+# richtiger und aussagekraeftiger als "enthaelt Elemente von S, O, H, Ca".
+#
+# Diese Stufe erkennt die GROESSTMOEGLICHE Gruppe und gibt zurueck, was nach
+# ihrem Abzug von der Formel uebrig bleibt; die Elementableitung laeuft dann
+# nur noch ueber diesen Rest. Was in einer Gruppe gebunden ist, wird also
+# nicht doppelt behauptet.
+#
+# Bewusst konservativ: erkannt wird nur, was die Formel als Einheit HERGIBT -
+# eine geklammerte Gruppe oder eine zusammenhaengende Tokenfolge, deren
+# Symbole und Anzahlen EXAKT auf eine bekannte Gruppe passen. Al₂SiO₅ (Kyanit)
+# liefert daher nichts: SiO₅ ist keine Gruppe, und SiO₄ herauszulesen hiesse
+# raten. Lieber die Elementableitung als eine falsche Baugruppe.
+#
+# Nicht in der Tabelle, und zwar mit Absicht:
+#   SiO₃    Wikidatas silicate(2−) (Q32854872) traegt als Formel SO₃²⁻ - ein
+#           Fehler im Bestand. Ohne verlaessliches Item keine Aussage.
+#   BO₃     kein Item fuer das Orthoborat-Ion gefunden; B₄O₇ (Borax) steht da.
+#   HCO₃    dito.
+# Reihenfolge in der Tabelle ist egal, gesucht wird immer der laengste
+# Treffer (HPO₄ vor PO₄).
+GRUPPEN_SIGNATUREN = (
+    ("H2O",   (("H", 2), ("O", 1))),
+    ("OH",    (("O", 1), ("H", 1))),
+    ("NH4",   (("N", 1), ("H", 4))),
+    ("CN",    (("C", 1), ("N", 1))),
+    ("CO3",   (("C", 1), ("O", 3))),
+    ("C2O4",  (("C", 2), ("O", 4))),
+    ("NO3",   (("N", 1), ("O", 3))),
+    ("SO4",   (("S", 1), ("O", 4))),
+    ("SO3",   (("S", 1), ("O", 3))),
+    ("PO4",   (("P", 1), ("O", 4))),
+    ("HPO4",  (("H", 1), ("P", 1), ("O", 4))),
+    ("SiO4",  (("Si", 1), ("O", 4))),
+    ("Si2O7", (("Si", 2), ("O", 7))),
+    ("AsO4",  (("As", 1), ("O", 4))),
+    ("VO4",   (("V", 1), ("O", 4))),
+    ("CrO4",  (("Cr", 1), ("O", 4))),
+    ("MoO4",  (("Mo", 1), ("O", 4))),
+    ("WO4",   (("W", 1), ("O", 4))),
+    ("SeO4",  (("Se", 1), ("O", 4))),
+    ("IO3",   (("I", 1), ("O", 3))),
+    ("ClO3",  (("Cl", 1), ("O", 3))),
+    ("B4O7",  (("B", 4), ("O", 7))),
+    ("UO2",   (("U", 1), ("O", 2))),
+)
+
+# Uranyl nur, wenn die Formel es SELBST einklammert - "(UO₂)" in Carnotit ist
+# eine Ansage, das nackte UO₂ von Uraninit dagegen ein Oxid des vierwertigen
+# Urans und gerade kein Uranylion.
+NUR_GEKLAMMERT = frozenset({"UO2"})
+
+_GRUPPEN_NACH_LAENGE = tuple(sorted(
+    GRUPPEN_SIGNATUREN, key=lambda eintrag: -len(eintrag[1])))
+
+
+def gruppen_aus_formel(formel: str) -> tuple:
+    """Summenformel -> ({Gruppenformel: Anzahl oder None}, Restformel).
+
+    Die Restformel enthaelt alles, was NICHT in einer erkannten Gruppe
+    steckt - sie ist als Eingabe fuer elemente_aus_formel gedacht. Wird
+    nichts erkannt, kommt die Formel unveraendert zurueck.
+
+    Anzahl None heisst: die Gruppe ist sicher enthalten, ihre Menge steht
+    nicht fest ("·nH₂O").
+    """
+    if not formel:
+        return {}, ""
+    text = formel.strip().translate(_TIEFZIFFERN).translate(
+        _LADUNG_UND_LEERSTELLE)
+    text = re.sub(r"\d+[+-]", "", text)
+    if not text:
+        return {}, formel
+
+    gefunden = collections.Counter()
+    unbestimmt = set()
+    rest_teile = []
+
+    for i, teil in enumerate(_HYDRAT_TRENNER.split(text)):
+        if not teil:
+            continue
+        faktor = 1
+        if i > 0:
+            # Wie in elemente_aus_formel: die Zahl hinter dem Punkt
+            # multipliziert den Hydratanteil, ein Buchstabe laesst ihn offen.
+            treffer = re.match(r"\d+", teil)
+            if treffer:
+                faktor, teil = int(treffer.group()), teil[treffer.end():]
+            else:
+                ohne_variable = re.sub(r"^[a-z]+", "", teil)
+                if ohne_variable != teil:
+                    teil, faktor = ohne_variable, None
+        if not teil:
+            continue
+
+        stuecke = (_flach_zerlegen(teil)
+                   if re.fullmatch(r"[A-Za-z0-9.()\[\]{},]+", teil) else None)
+        if stuecke is None:
+            rest_teile.append(_mit_trenner(i, faktor, teil))
+            continue
+        teil_gefunden, teil_unbestimmt, teil_rest = _gruppen_erkennen(stuecke)
+        for name, anzahl in teil_gefunden.items():
+            gefunden[name] += 0 if faktor is None else anzahl * faktor
+        unbestimmt |= teil_unbestimmt
+        if faktor is None:
+            unbestimmt |= set(teil_gefunden)
+        if teil_rest:
+            rest_teile.append(_mit_trenner(i, faktor, teil_rest))
+
+    if not gefunden:
+        return {}, formel
+    gruppen = {name: (None if name in unbestimmt else anzahl)
+               for name, anzahl in gefunden.items()}
+    rest = "".join(rest_teile)
+    einzeln = len(gruppen) == 1 and next(iter(gruppen.values())) in (1, None)
+    if not rest and einzeln:
+        # Die Formel IST die Gruppe: "Wasser besteht aus einem Wasser" sagt
+        # nichts. Dann lieber gar keine Gruppe und die Elemente wie bisher.
+        return {}, formel
+    return gruppen, rest
+
+
+def _mit_trenner(nummer: int, faktor, rest: str) -> str:
+    """Setzt einen Hydratabschnitt wieder mit Punkt und Faktor zusammen."""
+    if nummer == 0:
+        return rest
+    zahl = "n" if faktor is None else ("" if faktor == 1 else str(faktor))
+    return f"·{zahl}{rest}"
+
+
+def _flach_zerlegen(text: str):
+    """Formelabschnitt -> Liste von Stuecken, oder None wenn nicht deutbar.
+
+    Ein Stueck ist entweder ("atom", Symbol, Anzahl, Quelltext) oder
+    ("klammer", Inhalt, Faktor, Quelltext). Geschachtelte Klammern bleiben
+    als Inhalt stehen - erkannt wird eine Gruppe nur, wenn ihr Inhalt selbst
+    aus lauter Atomen besteht.
+    """
+    stuecke = []
+    pos = 0
+    while pos < len(text):
+        zeichen = text[pos]
+        if zeichen in _KLAMMER_AUF:
+            ende = _klammer_ende(text, pos)
+            if ende is None:
+                return None
+            try:
+                faktor, nach = _index_lesen(text, ende + 1)
+            except _MengeUnbestimmt:
+                return None
+            stuecke.append(("klammer", text[pos + 1:ende], faktor,
+                            text[pos:nach]))
+            pos = nach
+        elif zeichen in _KLAMMER_ZU or zeichen == ",":
+            return None  # Kommagruppe: keine Gruppe, sondern eine Mischreihe
+        else:
+            treffer = re.match(r"([A-Z][a-z]?)(\d+\.\d+|\d*)", text[pos:])
+            if not treffer or not treffer.group(1):
+                return None
+            symbol = treffer.group(1)
+            if symbol not in PAULING and symbol not in _EDELGAS_OHNE_EN:
+                return None
+            ende = pos + treffer.end()
+            if re.match(r"[a-z]", text[ende:]):
+                return None  # variabler Index ("Cu₂₋ₓ")
+            index = treffer.group(2)
+            anzahl = None if "." in index else (int(index) if index else 1)
+            stuecke.append(("atom", symbol, anzahl, text[pos:ende]))
+            pos = ende
+    return stuecke
+
+
+def _gruppen_erkennen(stuecke: list) -> tuple:
+    """Stuecke -> (Zaehler je Gruppe, Gruppen offener Menge, Restformel)."""
+    gefunden = collections.Counter()
+    unbestimmt = set()
+    rest = []
+    pos = 0
+    while pos < len(stuecke):
+        art, erstes, zweites, quelltext = stuecke[pos]
+        if art == "klammer":
+            name = _ganze_gruppe(erstes)
+            if name is None:
+                rest.append(quelltext)
+            elif zweites is None:
+                gefunden[name] += 0
+                unbestimmt.add(name)
+            else:
+                gefunden[name] += zweites
+            pos += 1
+            continue
+        name, laenge = _laengste_gruppe(stuecke, pos)
+        if name is None:
+            rest.append(quelltext)
+            pos += 1
+        else:
+            gefunden[name] += 1
+            pos += laenge
+    return gefunden, unbestimmt, "".join(rest)
+
+
+def _laengste_gruppe(stuecke: list, pos: int) -> tuple:
+    """Laengster Gruppentreffer ab dieser Stelle, sonst (None, 0)."""
+    for name, signatur in _GRUPPEN_NACH_LAENGE:
+        if name in NUR_GEKLAMMERT:
+            continue
+        fenster = stuecke[pos:pos + len(signatur)]
+        if len(fenster) == len(signatur) and all(
+                s[0] == "atom" and (s[1], s[2]) == sig
+                for s, sig in zip(fenster, signatur)):
+            return name, len(signatur)
+    return None, 0
+
+
+def _ganze_gruppe(inhalt: str):
+    """Name der Gruppe, wenn der Klammerinhalt GENAU eine ist, sonst None."""
+    stuecke = _flach_zerlegen(inhalt)
+    if not stuecke or any(s[0] != "atom" for s in stuecke):
+        return None
+    atome = tuple((s[1], s[2]) for s in stuecke)
+    for name, signatur in GRUPPEN_SIGNATUREN:
+        if atome == signatur:
+            return name
+    return None

@@ -261,9 +261,13 @@ def test_ohne_anzahl_kein_qualifikator(monkeypatch, elementtabelle, item):
     zeilen = formel_proposals_for_item(item, "SiO₂·nH₂O")
     nach_wert = {z["value"]: z for z in zeilen}
 
+    # Das Kristallwasser ist sicher da, nur wie oft steht nicht fest.
+    assert nach_wert["Q283"]["_qualifiers"] == []
+    assert "Anzahl nicht bestimmbar" in nach_wert["Q283"]["ref_note"]
+    # Was nach Abzug des Wassers bleibt, ist SiO₂ - dort sind beide Anzahlen
+    # sicher; das offene n haengt ja am Wasser und nicht am Rest.
     assert nach_wert["Q670"]["_qualifiers"] == [("P1114", "1", "Anzahl 1")]
-    assert nach_wert["Q629"]["_qualifiers"] == []
-    assert "Anzahl nicht bestimmbar" in nach_wert["Q629"]["ref_note"]
+    assert nach_wert["Q629"]["_qualifiers"] == [("P1114", "2", "Anzahl 2")]
 
 
 def test_mischreihe_wird_zur_klaerung_ausgewiesen(monkeypatch, elementtabelle,
@@ -272,7 +276,9 @@ def test_mischreihe_wird_zur_klaerung_ausgewiesen(monkeypatch, elementtabelle,
     zeilen = formel_proposals_for_item(item, "(Fe,Mg)₂SiO₄")
 
     vorgeschlagen = {z["value"] for z in zeilen if z["status"] == "VORSCHLAG"}
-    assert vorgeschlagen == {"Q670", "Q629"}  # Si und O, nicht Fe/Mg
+    # SiO₄ geht als Gruppe raus, Fe/Mg gar nicht: welches der beiden drin
+    # ist, haengt vom Glied der Reihe ab.
+    assert vorgeschlagen == {"Q21206420"}
     klaerung = [z for z in zeilen if "KLAERUNG" in z["status"]]
     assert len(klaerung) == 1
     assert "Eisen" in klaerung[0]["status"]

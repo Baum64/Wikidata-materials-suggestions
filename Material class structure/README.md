@@ -95,12 +95,12 @@ Block auf statt verstreut.
 | `kennzahlen` | wie P279 überhaupt benutzt wird: P279, P31, beides, keines; Mehrfacheltern | Kopf |
 | `redundant` | Kante, die über einen anderen Elter ohnehin gilt | **1** |
 | `instanz-als-klasse` | Item mit P31 auf eine Werkstoffklasse, das selbst Unterklassen hat | 2 |
-| `metaklasse` | Legierung ohne chemische Metaklasse (`P31 = Q119892838`) | 2 |
+| `metaklasse` | Legierung ohne chemische Metaklasse (`P31 = Q119892838`) — Entwurf nur, wenn das Item **keine** Klasse ist | 2 / 4 |
 | `verkehrt` | Kante `n → p`, obwohl unter `n` mehr hängt als unter `p` ohne `n` | 2 |
 | `zyklus` | eine Klasse ist über P279 ihre eigene Oberklasse | 2 |
 | `zusammensetzung` | der Name nennt die Zusammensetzung — das Element mit dem größten Anteil ist das Basismetall | 3 |
 | `zu-allgemein` | Item hängt direkt unter einer sehr allgemeinen Klasse, obwohl seine Bezeichnung eine speziellere nennt | 3 |
-| `ohne-einordnung` | benannte Legierung ohne jeden Pfad zu `Legierung` (Q37756) | 3 |
+| `ohne-einordnung` | benannte Legierung ohne jeden Pfad zu `Legierung` (Q37756) — Entwurf nur, wenn das Item **keine** reine Instanz ist | 3 / 4 |
 | `p31-neben-p279` | Item direkt unter einer allgemeinen Klasse, zusätzlich mit P31 | 4 |
 | `parallelzweig` | Item ohne P279\*-Pfad zu `material` (Q214609) — **kein Fehler** | 4 |
 
@@ -112,7 +112,7 @@ dort finden dieselben Prüfungen dieselben Fehler bei „Begriff", „Typ" oder
 eine dort eingespielte Änderung trifft hunderttausende Items ohne jeden
 Werkstoffbezug.
 
-## Drei Sperren gegen den eigenen Unsinn
+## Vier Sperren gegen den eigenen Unsinn
 
 Die Prüfungen widersprechen sich, wenn man sie einzeln laufen lässt. Beim
 Bauen fällt das nicht auf, beim Einspielen schon:
@@ -131,6 +131,14 @@ Bauen fällt das nicht auf, beim Einspielen schon:
    keine Unterklasse des *Elements* Kupfer. Sie stehen nur wegen der
    falschen Metall/Legierung-Kante im Kandidatenpool — ohne diesen Filter
    zielten 32 % der Heuristik-Vorschläge auf copper, aluminium oder nickel.
+4. **Klasse und Instanz werden vor jedem Entwurf getrennt.**
+   [[Help:Basic membership properties]] sagt, woran eine Klasse zu erkennen
+   ist: sie hat `P279` oder eigene Unterklassen. Daraus folgt beides —
+   **an eine Werkstoffklasse schreibt dieses Werkzeug kein `P31`**, und
+   **an eine Instanz kein `P279`**. Wo der Graph die Klassenzugehörigkeit
+   nicht hergibt, entsteht eine Meldung statt eines Entwurfs. Das kostet
+   `metaklasse` und `ohne-einordnung` ihre Massenentwürfe — siehe
+   [Chemische Metaklasse](#chemische-metaklasse-p31-für-legierungen).
 
 ## Die schiefe Kante Metall → Legierung
 
@@ -215,12 +223,29 @@ Am Bestand gemessen (2026-08-21, 1082 Items der Gruppe `legierungen`):
 
 | Fall | Items | Ergebnis |
 |---|---|---|
-| Legierung ohne jedes `P31` | 313 | Entwurf `metaklasse` |
+| Legierung ohne jedes `P31` (also über `P279` drin → **Klasse**) | 313 | Meldung `metaklasse-klasse`, **kein Entwurf** |
 | trägt schon `P31`, aber keine Metaklasse | 565 | nichts — siehe unten |
 | trägt eine **andere** Chemie-Metaklasse | 10 | Meldung `metaklasse-konflikt` |
 | trägt `Q119892838` bereits | 3 | nichts |
 | gar keine Legierung, nur über `Q11426` eingehängt | 181 | nichts |
 | Mineralart | 9 | nichts |
+
+**Kein `P31` an eine Werkstoffklasse.** Das ist die schärfste Regel dieser
+Prüfung, und sie kostet sie ihre Entwürfe. [[Help:Basic membership
+properties]] sagt, woran eine Klasse zu erkennen ist: sie hat `P279` oder
+eigene Unterklassen. Genau so sind die 313 oben in die Gruppe gekommen — über
+`P279`. Ein `P31` würde ihnen anhängen, dass das *Ding selbst* ein definiertes
+Gemisch chemischer Substanzen **ist**; belegt ist aus dem Graphen aber nur,
+dass es irgendwo unter `Q37756` hängt. Und dort ist die Kante schief (siehe
+[Die schiefe Kante](#die-schiefe-kante-metall--legierung)): ein falsches
+`P279` fällt später als schiefe Kante auf, ein falsches `P31` auf eine
+Metaklasse liest niemand mehr nach. Also: Meldung, kein Entwurf.
+
+Entworfen wird nur noch, wo das Item **keine** Klasse ist — weder `P279` noch
+Unterklassen. Wer das erfüllt, ist über `P31` in die Gruppe gekommen und trägt
+also bereits eines; die Entwürfe liegen damit vollständig hinter
+`--metaklasse-auch-mit-p31`. Ohne den Schalter ist `metaklasse` seit
+2026-08-24 **eine reine Meldung** und steht in Stufe 4.
 
 **Warum die 565 standardmäßig ausbleiben.** Dort steht meist eine richtige
 Klassenzugehörigkeit (`P31 = Legierung`, `P31 = Aluminiumlegierung`); die
@@ -254,10 +279,11 @@ Kolymit, Bleiamalgam …) sind über die IMA modelliert (`P31 = Q12089225`). Ob
 dort zusätzlich eine Chemie-Metaklasse hingehört, entscheidet das
 Mineralprojekt, nicht dieses Werkzeug.
 
-**Warum Stufe 2 und nicht Stufe 1.** Die Metaklasse folgt zwar zwingend aus
-der Klassenzugehörigkeit — aber ob das Item *wirklich* eine Legierung ist,
-sagt der Graph nicht. Genau daran hängt der ganze Befund, und genau dort steckt
-der Schrott (siehe die 565 oben). Also: Entwurf mit `#!`, Freigabe von Hand.
+**Warum die Entwürfe nie Stufe 1 erreichen.** Die Metaklasse folgt zwar
+zwingend aus der Klassenzugehörigkeit — aber ob das Item *wirklich* eine
+Legierung ist, sagt der Graph nicht. Genau daran hängt der ganze Befund, und
+genau dort steckt der Schrott (siehe die 565 oben). Also: Entwurf mit `#!`,
+Freigabe von Hand — und für Klassen gar keiner.
 
 **Die reinen Stoffe bleiben offen.** Für sie widerspricht sich die Guideline
 mit der Projektseite; siehe [Bewusst offen: die Metaklasse der reinen

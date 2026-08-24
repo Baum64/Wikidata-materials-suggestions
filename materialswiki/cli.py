@@ -902,11 +902,14 @@ def main():
         "--formel",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="'besteht aus' (P527) aus der Summenformel des Items ableiten, "
-        "je Element eine Aussage mit der Anzahl als Qualifikator (P1114). "
-        "Braucht keine externe Quelle und geht deshalb ohne S-Beleg raus. "
-        "Elemente aus Mischreihen wie (Fe,Mg) werden NICHT vorgeschlagen, "
-        "sondern zur Klaerung ausgewiesen. Default: an",
+        help="Zusammensetzung aus der Summenformel des Items ableiten: je "
+        "funktionaler Gruppe eine Aussage 'besteht aus' (P527) - so gross, "
+        "wie die Formel sie hergibt, bei Gips also Sulfat und Wasser statt "
+        "S, O, H -, und je Element, das dann noch uebrig ist, eine Aussage "
+        "'enthaelt Elemente von' (P2670). Anzahl jeweils als Qualifikator "
+        "(P1114). Braucht keine externe Quelle und geht deshalb ohne "
+        "S-Beleg raus. Elemente aus Mischreihen wie (Fe,Mg) werden NICHT "
+        "vorgeschlagen, sondern zur Klaerung ausgewiesen. Default: an",
     )
     parser.add_argument(
         "--punktgruppe",

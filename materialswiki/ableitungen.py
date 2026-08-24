@@ -3,7 +3,8 @@
 Drei Stufen, die nichts holen, sondern nur umformen, was am Item schon
 steht:
 
-    formel_proposals_for_item      Summenformel  -> P2670 je Element
+    formel_proposals_for_item      Summenformel  -> P527 je funktionaler
+                                   Gruppe, P2670 je uebrigem Element
     umstellung_proposals_for_item  P527 -> P2670 (samt Loeschzeile)
     punktgruppe_proposals_for_item Raumgruppe    -> P589
 
@@ -27,14 +28,55 @@ import requests
 
 from . import netz, wikidata
 from .ausgabe import Reference, make_row
-from .formeln import elemente_aus_formel
+from .formeln import elemente_aus_formel, gruppen_aus_formel
 from .gruppen import LEGIERUNG_QID
 from .konfiguration import WIKIDATA_SPARQL
 from .properties import PROPERTY_MAP
 
+# ---------------------------------------------------------------------------
+# Funktionale Gruppen -> Wikidata-Items
+# ---------------------------------------------------------------------------
+#
+# Welche Gruppen die Formel hergibt, entscheidet formeln.gruppen_aus_formel -
+# reine Chemie ohne Wikidata-Wissen. Erst hier bekommt jede Gruppe ihr Item.
+# Gewaehlt ist jeweils das ION bzw. MOLEKUEL, nicht die Verbindungsklasse:
+# in Brucit sitzt ein Hydroxidion (Q199877), "hydroxy compound" (Q71421787)
+# waere die Klasse der Verbindungen, die eines enthalten - also das Mineral
+# selbst und nicht sein Bestandteil.
+#
+# Alle QIDs sind gegen die Formel am Item (P274) geprueft. Genau daran ist
+# silicate(2−) (Q32854872) aufgefallen und deshalb draussen geblieben - es
+# traegt SO₃²⁻ statt SiO₃²⁻; siehe formeln.GRUPPEN_SIGNATUREN.
+GRUPPEN_QIDS = {
+    "H2O":   ("Q283", "Wasser"),
+    "OH":    ("Q199877", "Hydroxidion"),
+    "NH4":   ("Q190901", "Ammoniumion"),
+    "CN":    ("Q185076", "Cyanidion"),
+    "CO3":   ("Q27104479", "Carbonation"),
+    "C2O4":  ("Q27088221", "Oxalation"),
+    "NO3":   ("Q182168", "Nitration"),
+    "SO4":   ("Q172290", "Sulfation"),
+    "SO3":   ("Q413363", "Sulfition"),
+    "PO4":   ("Q177811", "Phosphation"),
+    "HPO4":  ("Q27104508", "Hydrogenphosphation"),
+    "SiO4":  ("Q21206420", "Silicat(4-)-Ion"),
+    "Si2O7": ("Q27110035", "Disilicat(6-)-Ion"),
+    "AsO4":  ("Q409221", "Arsenation"),
+    "VO4":   ("Q27104568", "Vanadat(3-)-Ion"),
+    "CrO4":  ("Q355615", "Chromation"),
+    "MoO4":  ("Q27104351", "Molybdation"),
+    "WO4":   ("Q27104569", "Wolframation"),
+    "SeO4":  ("Q27109020", "Selenation"),
+    "IO3":   ("Q27109976", "Iodation"),
+    "ClO3":  ("Q217813", "Chloration"),
+    "B4O7":  ("Q27077623", "Tetraborat(2-)-Ion"),
+    "UO2":   ("Q421141", "Uranylion"),
+}
+
+
 def formel_proposals_for_item(wd_match: dict, formel: str,
                               skip_pids: Optional[set] = None) -> list:
-    """P2670-Vorschlaege aus der Summenformel des Items.
+    """Vorschlaege aus der Summenformel des Items - Gruppen und Elemente.
 
     Anders als alle uebrigen Stufen holt diese NICHTS von aussen: der Wert
     wird aus einer Angabe abgeleitet, die am Item schon steht. Deshalb geht
@@ -43,16 +85,73 @@ def formel_proposals_for_item(wd_match: dict, formel: str,
     waere zirkulaer, und die Ableitung ist am Item selbst nachpruefbar: die
     Formel steht in der Notiz.
 
+    Zwei Stufen, in dieser Reihenfolge:
+
+      P527  je funktionaler Gruppe, so gross wie die Formel sie hergibt -
+            Gips (CaSO₄·2H₂O) besteht aus einem Sulfation und zwei Molekuelen
+            Wasser, nicht aus losem Schwefel.
+      P2670 je Element, das nach Abzug der Gruppen uebrig bleibt - bei Gips
+            also nur noch Calcium.
+
+    Was in einer Gruppe gebunden ist, wird also nicht noch einmal als Element
+    behauptet. Erkennt die Formel keine Gruppe, bleibt es bei der reinen
+    Elementableitung wie bisher.
+
     Elemente, die nur EINE Moeglichkeit einer Mischreihe sind, werden nicht
     vorgeschlagen, sondern zur Klaerung ausgewiesen - bei "(Fe,Mg)₂SiO₄"
     haengt es vom Glied der Reihe ab, ob Eisen oder Magnesium drinsteckt.
     """
     skip_pids = skip_pids or set()
-    prop_info = PROPERTY_MAP["has_part_of_class"]
-    if prop_info["pid"] in skip_pids:
+    gruppen, rest = gruppen_aus_formel(formel)
+    return (_gruppen_zeilen(wd_match, formel, gruppen, skip_pids)
+            + _element_zeilen(wd_match, formel, rest, skip_pids))
+
+
+def _gruppen_zeilen(wd_match: dict, formel: str, gruppen: dict,
+                    skip_pids: set) -> list:
+    """P527-Zeilen fuer die erkannten funktionalen Gruppen."""
+    prop_info = PROPERTY_MAP["has_part"]
+    if not gruppen or prop_info["pid"] in skip_pids:
         return []
 
-    zerlegt = elemente_aus_formel(formel)
+    # Wertgenau pruefen, nicht nur "traegt das Item irgendein P527": die
+    # Elementaussagen, die die Umstellung gerade abraeumt, sind ja auch P527.
+    vorhandene_werte = p527_werte(wd_match["qid"])
+    proposals = []
+    for name in sorted(gruppen):
+        qid, label = GRUPPEN_QIDS[name]
+        anzahl = gruppen[name]
+        qualifiers = ([("P1114", str(anzahl), f"Anzahl {anzahl}")]
+                      if anzahl is not None else [])
+        hinweis = "" if anzahl is not None else ", Anzahl nicht bestimmbar"
+        proposals.append(make_row(
+            "BEREITS_VORHANDEN" if qid in vorhandene_werte else "VORSCHLAG",
+            "Formel", wd_match, prop_info, qid, label,
+            Reference(
+                url=f"https://www.wikidata.org/wiki/{wd_match['qid']}#P274",
+                note=f"funktionale Gruppe {name} aus der Summenformel "
+                     f"{formel} (P274 am Item){hinweis}",
+            ),
+            formula=formel, entry_id=f"gruppe-{name}",
+            qualifiers=qualifiers, ohne_beleg=True,
+        ))
+    return proposals
+
+
+def _element_zeilen(wd_match: dict, formel: str, rest: str,
+                    skip_pids: set) -> list:
+    """P2670-Zeilen fuer die Elemente, die keine Gruppe gebunden hat.
+
+    `rest` ist die Formel ohne die erkannten Gruppen; ist sie leer, steckt
+    jedes Atom schon in einer Gruppe und es bleibt nichts zu sagen. Die
+    NOTIZ nennt weiterhin die vollstaendige Formel - nur so ist die Zeile
+    am Item nachpruefbar.
+    """
+    prop_info = PROPERTY_MAP["has_part_of_class"]
+    if not rest or prop_info["pid"] in skip_pids:
+        return []
+
+    zerlegt = elemente_aus_formel(rest)
     if zerlegt is None:
         return []
     sicher, unsicher = zerlegt
@@ -129,6 +228,11 @@ def formel_proposals_for_item(wd_match: dict, formel: str,
 # Umstellung. Zahlen: README, "Umstellung P527 -> P2670".
 
 _P527_CACHE = {}
+# Alle P527-WERTE je Item, nicht nur die Elemente: die Gruppenstufe muss
+# wissen, ob genau ihr Ion schon am Item steht. "Traegt das Item irgendein
+# P527?" (item_has_statement) reicht dafuer nicht - die Altaussagen auf
+# Elemente, die die Umstellung gerade abraeumt, sind ja auch P527.
+_P527_WERTE: dict = {}
 P527_CHARGE = 200
 
 
@@ -166,9 +270,13 @@ def fetch_p527_elemente(qids: list) -> dict:
     }}
     """})
     out = {q: {} for q in qids}
+    for q in qids:
+        _P527_WERTE.setdefault(q, set())
     for b in resp.json()["results"]["bindings"]:
         qid = b["i"]["value"].rsplit("/", 1)[-1]
         element = b["e"]["value"].rsplit("/", 1)[-1]
+        if "p2670" not in b:
+            _P527_WERTE[qid].add(element)
         if element not in nach_qid:
             continue  # keine Elementaussage - geht diese Stufe nichts an
         eintrag = out[qid].setdefault(
@@ -198,6 +306,13 @@ def p527_elemente(qid: str) -> dict:
     if qid not in _P527_CACHE:
         _P527_CACHE.update(fetch_p527_elemente([qid]))
     return _P527_CACHE.get(qid, {})
+
+
+def p527_werte(qid: str) -> set:
+    """Alle QIDs, die am Item schon als P527 stehen."""
+    if qid not in _P527_WERTE:
+        p527_elemente(qid)
+    return _P527_WERTE.get(qid, set())
 
 
 def umstellung_proposals_for_item(wd_match: dict, formel: str = "",

@@ -111,6 +111,14 @@ PLAUSIBEL = {
     # waere die Angabe aber physikalisch kaum noch ein Elementwert, und
     # oberhalb von 200 steht dort etwas anderes.
     "linear_thermal_expansion": (0.0, 200.0),   # um/(m*K)
+    # Mohshaerte: die Skala selbst reicht von Talk (1) bis Diamant (10), und
+    # P1088 traegt genau diesen Bereichs-Constraint (am 2026-08-23
+    # ausgelesen; der obere Rand 10 ist per Ausnahme nur dem Diamanten
+    # Q5283 erlaubt). Weichere Stoffe bekommen in den Infoboxen trotzdem
+    # Werte darunter - Caesium steht mit 0,2 in der Elementinfobox. Die
+    # landen damit in der manuellen Klaerung statt im Entwurf, und das ist
+    # richtig so: in Wikidata waeren sie eine Constraint-Verletzung.
+    "mohs_hardness": (1.0, 10.0),               # dimensionslos
 }
 
 
@@ -272,6 +280,18 @@ PROPERTY_MAP = {
         "unit_qid": "",  # dimensionslos
         "label": "Poissonzahl",
     },
+    # Mohshaerte: eine Ordnungszahl auf der Ritzskala, also dimensionslos -
+    # P1088 laesst laut Constraint (2026-08-23) nur die Einheit "1" zu.
+    # Quelle sind ausschliesslich die Infoboxen: das Materials Project
+    # rechnet keine Haerte, und die deutsche Wikipedia fuehrt das Feld
+    # "Mohshaerte" sowohl in {{Infobox Chemisches Element}} als auch in
+    # {{Infobox Mineral}} - dieselbe Feldkarte bedient beide.
+    "mohs_hardness": {
+        "pid": "P1088",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos
+        "label": "Mohshaerte",
+    },
     # CAS-Nummer: Datentyp external-id, also eine Zeichenkette ohne Einheit.
     # Q102507 ("CAS-Nummer") traegt P1687 -> P231; das ist die Property.
     "cas_number": {
@@ -335,8 +355,11 @@ PROPERTY_MAP = {
         "unit_qid": "",
         "label": "enthaelt Elemente von",
     },
-    # Nur fuer die UMSTELLUNG gebraucht: die alte, mereologisch falsche
-    # Aussage wird damit zum Entfernen ausgewiesen. Erzeugt wird P527 nie.
+    # Zwei Verwendungen, beide in ableitungen.py:
+    #   die UMSTELLUNG weist damit die alte, mereologisch falsche Aussage
+    #   "Stoff P527 Element" zum Entfernen aus,
+    #   die GRUPPENSTUFE erzeugt damit neue Aussagen - hier ist P527 richtig:
+    #   ein Sulfation in Gips IST ein Stueck Materie, keine Klasse.
     "has_part": {
         "pid": "P527",
         "datatype": "item",
@@ -365,7 +388,7 @@ PROPERTY_MAP = {
 
 NUR_FESTKOERPER = ("bulk_modulus", "shear_modulus", "poisson_ratio",
                    "density", "crystal_system", "space_group", "point_group",
-                   "linear_thermal_expansion")
+                   "linear_thermal_expansion", "mohs_hardness")
 RAUMTEMPERATUR_K = 293.15
 
 # P2102 wird in Wikidata in drei Einheiten gefuehrt (am Bestand: 32x Celsius,
@@ -398,6 +421,11 @@ WIKIPEDIA_DE_FIELDS = {
     "SpezifischeWärmekapazität": ("specific_heat_capacity", 1.0),  # J/(kg*K)
     "Schallgeschwindigkeit": ("speed_of_sound", 1.0),    # m/s
     "Poissonzahl": ("poisson_ratio", 1.0),               # dimensionslos
+    # Steht in der Elementinfobox ("| Mohshärte = 3,0") und - unter genau
+    # demselben Feldnamen - in {{Infobox Mineral}} ("| Mohshärte = 7").
+    # Ein Artikel traegt immer nur eine der beiden Vorlagen, deshalb genuegt
+    # dieser eine Eintrag fuer Elemente wie Minerale.
+    "Mohshärte": ("mohs_hardness", 1.0),                 # dimensionslos
 }
 
 
@@ -421,6 +449,7 @@ WIKIPEDIA_NUMERIC_FIELDS = {
     "melting point K": ("melting_point", 1.0),        # schon Kelvin
     "boiling point K": ("boiling_point", 1.0),        # schon Kelvin
     "thermal conductivity": ("thermal_conductivity", 1.0),  # W/(m*K)
+    "Mohs hardness": ("mohs_hardness", 1.0),          # dimensionslos
 }
 
 

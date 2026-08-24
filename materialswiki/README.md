@@ -16,7 +16,7 @@ zerlegen will, braucht weder Netz noch Wikidata:
 | [konfiguration.py](konfiguration.py) | Kennungen, Endpunkte, Schlüssel aus `.env` | — |
 | [netz.py](netz.py) | HTTP: Drosselung je Gegenstelle, Retry, **einziger** Einstiegspunkt | konfiguration |
 | [properties.py](properties.py) | Property-Tabellen, Einheiten, Plausibilitätsschranken, Feldkarten der Infoboxen | — |
-| [formeln.py](formeln.py) | Summenformeln zerlegen und schreiben (beide Parser) | — |
+| [formeln.py](formeln.py) | Summenformeln zerlegen und schreiben (beide Parser, funktionale Gruppen) | — |
 | [ausgabe.py](ausgabe.py) | Referenzmodell, Vorschlagszeile, CSV, QuickStatements-Entwurf | properties |
 | [wikidata.py](wikidata.py) | Vokabular (Elemente, Raumgruppen) und Itemzustand (Aussagen, CAS, Siedepunkt) | netz, properties, formeln |
 | [gruppen.py](gruppen.py) | Werkstoffgruppen, Prüfliste, Legierungsprüfung | netz, wikidata |
@@ -24,7 +24,7 @@ zerlegen will, braucht weder Netz noch Wikidata:
 | [quellen/mp.py](quellen/mp.py) | Materials Project | netz, wikidata, ausgabe |
 | [quellen/cod.py](quellen/cod.py) | Crystallography Open Database | netz, wikidata, ausgabe |
 | [quellen/nist.py](quellen/nist.py) | NIST Chemistry WebBook | netz, wikidata, ausgabe |
-| [ableitungen.py](ableitungen.py) | was ohne externe Quelle aus dem Item folgt (P2670, P589, Umstellung) | wikidata, ausgabe, gruppen |
+| [ableitungen.py](ableitungen.py) | was ohne externe Quelle aus dem Item folgt (P527, P2670, P589, Umstellung) | wikidata, ausgabe, gruppen |
 | [cli.py](cli.py) | die Kaskade, der Chargenbetrieb, die Kommandozeile | alle |
 
 **Eine Regel macht die Tests verlässlich:** Module rufen einander über das
@@ -132,6 +132,7 @@ Geprüft wird deshalb gegen physikalische Schranken, in Wikidata-Einheiten:
 | Kompressions-/Schubmodul | 0,001 … 1000 GPa | müssen positiv sein; Diamant liegt bei 443 bzw. 535 GPa |
 | Poissonzahl | −1 … 0,5 | thermodynamische Grenze für isotrope lineare Elastizität |
 | Dichte | 0,01 … 30 g/cm³ | Lithium 0,534, Osmium 22,59 |
+| Mohshärte | 1 … 10 | die Skala selbst; `P1088` trägt genau diesen Bereichs-Constraint |
 
 Unplausible Werte werden **nicht still verworfen**, sondern als
 `MANUELLE_KLAERUNG_NOETIG` ausgewiesen — sonst fiele nie auf, dass die
@@ -613,10 +614,79 @@ Zwei weitere Eigenheiten der COD-Abfrage, beide im Code behandelt:
 
 ### „enthält Elemente von" (P2670) aus der Summenformel
 
-Welche Elemente ein Stoff enthält, steht bereits in seiner Summenformel — es
-braucht dafür keine externe Quelle. Deshalb lohnt die Stufe: die Angabe ist
-bei Mineralarten nahezu leer (249 von 6301, gemessen 2026-08-17), während 5694
+Woraus ein Stoff besteht, steht bereits in seiner Summenformel — es braucht
+dafür keine externe Quelle. Deshalb lohnt die Stufe: die Angabe ist bei
+Mineralarten nahezu leer (249 von 6301, gemessen 2026-08-17), während 5694
 eine Formel tragen.
+
+Die Stufe liefert **zwei** Arten von Aussagen: `P527` je funktionaler Gruppe
+(Sulfat, Kristallwasser, Hydroxid …) und `P2670` je Element, das danach noch
+übrig ist. Zuerst die Gruppen, siehe gleich unten; die Elemente rechnen dann
+nur noch mit dem Rest der Formel.
+
+#### Zuerst die größtmögliche funktionale Gruppe (P527)
+
+Ein Mineral ist kein Haufen Atome. In Gips (`CaSO₄·2H₂O`) sitzt kein loser
+Schwefel und kein loser Sauerstoff, sondern **ein Sulfation und zwei Moleküle
+Kristallwasser**. Deshalb läuft vor der Elementzerlegung eine Stufe, die die
+Formel in die größtmöglichen Baugruppen zerlegt:
+
+| Formel | Aussagen |
+|---|---|
+| `CaSO₄·2H₂O` | `P527 → Sulfation` (×1), `P527 → Wasser` (×2), `P2670 → Calcium` (×1) |
+| `Mg(OH)₂` | `P527 → Hydroxidion` (×2), `P2670 → Magnesium` (×1) |
+| `Ca₅(PO₄)₃(OH)` | `P527 → Phosphation` (×3), `P527 → Hydroxidion` (×1), `P2670 → Calcium` (×5) |
+
+Die Elementstufe rechnet nur noch mit dem **Rest**: was in einer Gruppe
+gebunden ist, wird nicht noch einmal einzeln behauptet. Anzahl jeweils als
+`P1114`, wie bei den Elementen.
+
+**Warum hier P527 richtig ist.** Das Argument gegen `P527` (unten) trifft die
+*Elemente*: ein Elementitem ist eine Klasse. Ein Sulfation ist keine Klasse,
+sondern ein Stück Materie im Kristall — „Gips besteht aus einem Sulfation"
+ist genau die Aussage, die `P527` meint. Deshalb erzeugt diese Stufe `P527`
+und die Elementstufe `P2670`.
+
+**Warum das Ion und nicht die Verbindungsklasse.** Für Brucit wird
+`Hydroxidion` (`Q199877`) vorgeschlagen, nicht `hydroxy compound`
+(`Q71421787`). Letzteres ist die Klasse der Verbindungen, die eine
+Hydroxygruppe *enthalten* — also das Mineral selbst und nicht sein
+Bestandteil. Alle 23 Gruppen-QIDs sind gegen die Formel am Item (`P274`)
+geprüft; genau daran ist `silicate(2−)` (`Q32854872`) aufgefallen und
+draußen geblieben — es trägt `SO₃²⁻` statt `SiO₃²⁻`. Ohne verlässliches Item
+keine Aussage, `SiO₃` wird deshalb nicht erkannt.
+
+**Bewusst konservativ.** Erkannt wird nur, was die Formel als Einheit
+*hergibt*: eine geklammerte Gruppe oder eine zusammenhängende Tokenfolge,
+deren Symbole und Anzahlen **exakt** auf eine bekannte Gruppe passen.
+`Al₂SiO₅` (Kyanit) liefert daher nichts — `SiO₅` ist keine Gruppe, und `SiO₄`
+herauszulesen hieße raten. Ebenso bleibt eine Kommagruppe eine Mischreihe und
+keine Baugruppe: aus `(OH,F)₁₈` wird nichts. Und wo die Formel *nur* aus einer
+Gruppe besteht, entsteht keine Zeile — „Wasser besteht aus einem Wasser" sagt
+nichts.
+
+Uranyl zählt **nur geklammert**: `(UO₂)` in Carnotit ist eine Ansage, das
+nackte `UO₂` von Uraninit dagegen ein Oxid des vierwertigen Urans und gerade
+kein Uranylion.
+
+Abdeckung an den 5705 Mineralformeln im Bestand (gemessen 2026-08-24):
+
+| | Anteil |
+|---|---|
+| Formeln mit mindestens einer Gruppe | 3502 = **61,4 %** |
+
+Macht rund **6170 P527-Aussagen, davon 6091 mit Anzahl** (ohne Anzahl bleibt,
+was hinter einem `·nH₂O` steht). Häufigste Gruppen: `H₂O` 1835, `OH` 1614,
+`PO₄` 583, `SO₄` 517, `AsO₄` 351, `CO₃` 326, `SiO₄` 246, `UO₂` 210,
+`Si₂O₇` 196.
+
+**Bekannte Grenze: Silicate.** Das Formelbild trennt Neso- von
+Gerüstsilicaten nicht. `Mg₂SiO₄` (Forsterit) enthält tatsächlich isolierte
+Orthosilicat-Tetraeder, `KAlSiO₄` (Kalsilit) dagegen ein Gerüst
+eckenverknüpfter Tetraeder — beide sehen in der Summenformel gleich aus.
+Betroffen sind die 35 Fälle, in denen `SiO₄` **ungeklammert** steht; die
+geklammerten schreibt die Quelle selbst als Baugruppe. Beim Durchsehen der
+Vorschläge darauf achten.
 
 **Warum P2670 und nicht P527.** Das Item eines chemischen Elements ist die
 **Klasse seiner Atome**, kein einzelnes Stück Materie. „Wasser *besteht aus*
@@ -679,19 +749,26 @@ Vanadium in verschiedenen Oxidationsstufen, Vanadium steht also fest.
 Umgekehrt ist in `Al₁₃Si₅O₂₀(OH,F)₁₈Cl` der Sauerstoff durch `O₂₀` gesichert,
 nur seine Gesamtmenge nicht.
 
-Abdeckung an 5700 echten Formeln (2026-08-17):
+Abdeckung an 5705 echten Formeln, gemessen **am Rest nach Abzug der
+Gruppen** (2026-08-24; in Klammern derselbe Lauf ohne die Gruppenstufe,
+2026-08-17):
 
 | | Anteil |
 |---|---|
-| voll bestimmt | 76,7 % |
-| voll bestimmt neben einer Mischreihe | 9,3 % |
-| Element sicher, Menge teils offen | 8,5 % |
-| nicht deutbar | 5,2 % |
-| kein sicheres Element | 0,3 % |
+| voll bestimmt | 76,8 % (76,7 %) |
+| voll bestimmt neben einer Mischreihe | 10,1 % (9,3 %) |
+| Element sicher, Menge teils offen | 6,4 % (8,5 %) |
+| nicht deutbar | 5,2 % (5,2 %) |
+| kein sicheres Element | 1,2 % (0,3 %) |
+| ganz in Gruppen aufgegangen | 0,3 % (—) |
 
-Macht rund **22 970 P2670-Aussagen, davon 22 195 mit Anzahl**. Nicht deutbar
-bleiben Variablen im Index (`Cu₂₋ₓAlₓ…`) und Bereichsangaben
-(`·(10-12)H₂O`) — dort wird bewusst nichts behauptet.
+Macht rund **16 470 P2670-Aussagen, davon 15 910 mit Anzahl** — vor der
+Gruppenstufe waren es 22 990. Die Differenz ist nicht verloren, sie steckt in
+den 6170 `P527`-Aussagen und ist dort besser aufgehoben. Dass „Menge teils
+offen" zurückgeht, hat denselben Grund: das offene `n` hängt fast immer am
+Kristallwasser, und das ist jetzt eine Gruppe. Nicht deutbar bleiben
+Variablen im Index (`Cu₂₋ₓAlₓ…`) und Bereichsangaben (`·(10-12)H₂O`) — dort
+wird bewusst nichts behauptet.
 
 **Beleg.** Die Stufe holt nichts von außen, sie leitet aus P274 am Item selbst
 ab. Ein „importiert aus Wikidata" wäre zirkulär, und ein passendes
@@ -968,9 +1045,45 @@ Werte mit `<br` oder `:` bezeichnen mehrere Modifikationen und werden
 **verworfen** — sonst landete willkürlich Graphit oder Diamant als „der" Wert
 des Elements in Wikidata.
 
+**Dasselbe Feld trägt `{{Infobox Mineral}}`.** „Mohshärte" heißt in der
+Mineralvorlage genau wie in der Elementinfobox, und ein Artikel trägt immer
+nur eine der beiden — ein Eintrag in der Feldkarte bedient deshalb beide.
+Für die Mineralgruppe ist das die erste Größe überhaupt, die aus dem Artikel
+selbst kommt: Wikidata hat sie an 285 der Mineralarten (2026-08-23), die
+deutsche Wikipedia an praktisch allen.
+
+Der Haken ist die Härteangabe selbst. In einer Stichprobe von 60 Mineral-
+artikeln (2026-08-23) führen **alle 60** das Feld, aber nur **20** mit einem
+einzelnen Wert:
+
+| Beispiel | Was daraus wird |
+|---|---|
+| `7<ref name="Bačík et al. 2013" />` | 7 — Beleg aus dem `<ref>` |
+| `4,5` | 4,5 |
+| `≈&nbsp;5<ref …/>` | 5 — Unschärfewort fällt weg |
+| `2 bis 3` | **verworfen** — Bereich |
+| `6 bis 6,5 (2 wenn massiv)` | **verworfen** — Bereich |
+| `''nicht definiert''` | **verworfen** — keine Zahl |
+| `geschätzt: 5` | **verworfen** — beschrifteter Wert |
+
+Die Ritzhärte ist von Natur aus ein Intervall, deshalb ist der Bereich hier
+der Normalfall und nicht die Ausnahme. Ein Mittelwert daraus wäre erfunden;
+Wikidatas Mengentyp könnte das Intervall zwar als Ober- und Untergrenze
+tragen, dafür müsste aber die ganze Zeilenerzeugung Schranken kennen. Bis
+dahin gilt die Hausregel: lieber nichts vorschlagen als raten. Gemessen am
+Lauf über 25 Mineralarten (2026-08-23) bleiben so 9 Werte, 7 davon als
+`VORSCHLAG`.
+
+Werte **unterhalb** der Skala werden nicht verworfen, sondern als
+`MANUELLE_KLAERUNG_NOETIG` ausgewiesen: Caesium steht mit 0,2 in der
+Elementinfobox — ein richtiger Wert, den `P1088` wegen seines
+Bereichs-Constraints trotzdem nicht annimmt. Das ist eine Entscheidung für
+den Menschen, kein Fall für den Papierkorb.
+
 **2. `Template:Infobox <element>` (en).** Je Element eine eigene Vorlagenseite.
 Angenehm: `melting point K` / `boiling point K` stehen bereits in Kelvin, also
-in der Wikidata-Einheit. Trotzdem nötig ist Vorsicht — reale Fälle:
+in der Wikidata-Einheit; `Mohs hardness` steht dort ebenfalls (`|Mohs
+hardness=3.0` bei Kupfer). Trotzdem nötig ist Vorsicht — reale Fälle:
 `density=8.935&nbsp;g/cm<sup>3</sup>&thinsp;<ref …/>`,
 `thermal conductivity=graphite: 119-165` (Prosa plus Bereich),
 `electrical resistivity at 20=2.3{{e|3}}` (Vorlage im Wert). Deshalb wird
@@ -1309,7 +1422,9 @@ Properties:
 | Spezifische Wärmekapazität | `P2056` | J/(kg·K) |
 | Schallgeschwindigkeit | `P2075` | m/s |
 | Poissonzahl | `P5593` | dimensionslos |
+| Mohshärte | `P1088` | dimensionslos (Skala 1 … 10) |
 | CAS-Nummer | `P231` | external-id |
+| besteht aus | `P527` | Item (funktionale Gruppe, Anzahl als `P1114`) |
 | enthält Elemente von | `P2670` | Item (Element, Anzahl als `P1114`) |
 | Raumgruppe | `P690` | Item (230 Raumgruppen über `P9733`) |
 | Punktgruppe | `P589` | Item (32 Punktgruppen, am Raumgruppen-Item abgelesen) |
@@ -1337,10 +1452,10 @@ einzeln getestet ([../tests/test_mp.py](../tests/test_mp.py)). Die Moduln
 kommen als Voigt-Reuss-Hill-Mittel (`vrh`), das übliche Mittel für
 polykristalline Werkstoffe — nicht als `voigt` oder `reuss`.
 
-`P2670` entsteht ohne externe Quelle aus dem Item selbst, `P690`
+`P527` und `P2670` entstehen ohne externe Quelle aus dem Item selbst, `P690`
 und `P9824` liefert die COD, `P589` beide Wege. Alles Übrige stammt aus den
 Wikipedia-Infoboxen:
-bei Elementen alle 13 Kennwerte der Tabelle oben, bei Verbindungen Dichte,
+bei Elementen alle 14 Kennwerte der Tabelle oben, bei Verbindungen Dichte,
 Schmelz- und Siedepunkt sowie die CAS-Nummer.
 
 Feldnamen und Einheiten stammen aus dem öffentlichen OpenAPI-Schema

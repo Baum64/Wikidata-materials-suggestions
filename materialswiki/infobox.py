@@ -21,7 +21,7 @@ from . import netz, wikidata
 from .ausgabe import Reference, WIKIPEDIA_EN_QID, make_row, round_significant
 from .properties import (
     AGGREGAT_FEST, AGGREGAT_FLUESSIG, AGGREGAT_GAS, AGGREGAT_PID,
-    CELSIUS_QID, CHEMBOX_FIELDS, NUR_FESTKOERPER, PROPERTY_MAP,
+    CELSIUS_QID, CHEMBOX_FIELDS, NUR_FESTKOERPER, PLAUSIBEL, PROPERTY_MAP,
     STANDARD_TEMPERATUR_C, TEMPERATUR_PID, WIKIPEDIA_DE_CHEM_FIELDS,
     WIKIPEDIA_DE_FIELDS, WIKIPEDIA_NUMERIC_FIELDS, ist_plausibel,
 )
@@ -493,6 +493,20 @@ def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
             value, value_label = mapped
         elif prop_info.get("datatype") == "quantity":
             value = round_significant(value)
+            # Was ausserhalb der Schranken liegt, wird nicht still verworfen,
+            # sondern ausgewiesen - siehe PLAUSIBEL. Bei der Mohshaerte ist
+            # das der Regelfall fuer die weichen Alkalimetalle (Caesium 0,2):
+            # ein echter Wert, den P1088 wegen seines Bereichs-Constraints
+            # trotzdem nicht annimmt. Das gehoert vor Augen, nicht in den
+            # Papierkorb.
+            if not ist_plausibel(key, value):
+                untere, obere = PLAUSIBEL[key]
+                proposals.append(make_row(
+                    f"MANUELLE_KLAERUNG_NOETIG (unplausibler Wert {value:g}, "
+                    f"erwartet {untere:g}..{obere:g} fuer {prop_info['pid']})",
+                    quelle, wd_match, prop_info, value, "", reference,
+                ))
+                continue
 
         already_present = wikidata.item_has_statement(wd_match["qid"], prop_info["pid"])
         proposals.append(make_row(

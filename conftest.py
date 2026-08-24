@@ -50,6 +50,7 @@ def kein_netz(monkeypatch):
     wikidata._UEBERSPRUNGEN.clear()
     ableitungen._METAKLASSE_CACHE.clear()
     ableitungen._P527_CACHE.clear()
+    ableitungen._P527_WERTE.clear()
     wikidata._ITEM_RAUMGRUPPE_CACHE.clear()
     # Die Elementtabelle haengt am Netz und wird modulweit zwischengespeichert
     # - ohne Zuruecksetzen erbte ein Test die Tabelle des vorigen.
