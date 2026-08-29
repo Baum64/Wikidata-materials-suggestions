@@ -80,3 +80,8 @@ wikidata_dichte_raumgruppe.json
 #                   erzeugten HTML-Seiten und JSON-Zwischenspeicher)
 Archiv/
 Visualisierung/
+
+# Claude-Code-Arbeitsdateien: Projektregeln und Projektgedaechtnis. Beides ist
+# lokale Werkzeugkonfiguration, keine Projektquelle.
+.claude/rules/
+CLAUDE.md

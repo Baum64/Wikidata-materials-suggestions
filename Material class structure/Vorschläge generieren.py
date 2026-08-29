@@ -262,7 +262,9 @@ ELEMENT_QID = "Q11344"          # chemisches Element
 LETZTE_ORDNUNGSZAHL = 118       # Oganesson; darueber gibt es nur Entwuerfe
 
 # Die Elementkategorien. Die Bezeichnungen sind die deutschen aus Wikidata,
-# damit der Vorschlag im Editor wiederzuerkennen ist.
+# damit der Vorschlag im Editor wiederzuerkennen ist. Zugeordnet wird per
+# P31, nicht P279 - siehe .claude/rules/periodic-table-conventions.md:
+# ein Element ist eine Instanz, keine Klasse.
 ELEMENTKATEGORIEN = {
     "Q19557": "Alkalimetalle",
     "Q19563": "Erdalkalimetalle (2. Gruppe)",
@@ -1892,20 +1894,28 @@ def gruppe_von(z: int) -> Optional[int]:
 
 
 def hole_elementdaten(qids: list, block: int = 100) -> dict:
-    """{qid: {'z', 'dichten', 'p279', 'p361'}} fuer die Elemente.
+    """{qid: {'z', 'dichten', 'p31', 'p279', 'p361'}} fuer die Elemente.
 
     Eine Abfrage fuer alles, was das Szenario braucht - Ordnungszahl,
     bestehende Einordnung und die Dichte MIT EINHEIT. Die Einheit ist keine
     Formalie: P2054 steht an den Elementen in zwei Einheiten nebeneinander
     (56 Werte in kg/m3, 45 in g/cm3, gemessen 2026-08-29). Wer den rohen
     Zahlenwert nimmt, haelt Natrium (1033 kg/m3) fuer ein Schwermetall.
+
+    P31 wird zusaetzlich zu P279 geholt: nach
+    .claude/rules/periodic-table-conventions.md gehoert JEDE Einordnung
+    eines Elements (Kategorie, Leicht-/Schwermetall) an P31, nie an P279 -
+    Elemente sind Instanzen, keine Klassen. Ohne den P31-Wert liesse sich
+    ein bestehendes, falsch als P279 gesetztes Statement nicht von einem
+    fehlenden unterscheiden.
     """
     daten = {}
     for i in range(0, len(qids), block):
         werte = " ".join(f"wd:{q}" for q in qids[i:i + block])
-        for b in sparql(f"""SELECT ?i ?z ?c ?t ?d ?u WHERE {{
+        for b in sparql(f"""SELECT ?i ?z ?k ?c ?t ?d ?u WHERE {{
           VALUES ?i {{ {werte} }}
           ?i wdt:P1086 ?z .
+          OPTIONAL {{ ?i wdt:P31 ?k }}
           OPTIONAL {{ ?i wdt:P279 ?c }}
           OPTIONAL {{ ?i wdt:P361 ?t }}
           OPTIONAL {{ ?i p:P2054/psv:P2054 [ wikibase:quantityAmount ?d ;
@@ -1913,8 +1923,10 @@ def hole_elementdaten(qids: list, block: int = 100) -> dict:
         }}"""):
             qid = qid_aus(b, "i")
             eintrag = daten.setdefault(qid, {"z": int(float(b["z"]["value"])),
-                                             "dichten": set(),
+                                             "dichten": set(), "p31": set(),
                                              "p279": set(), "p361": set()})
+            if "k" in b:
+                eintrag["p31"].add(qid_aus(b, "k"))
             if "c" in b:
                 eintrag["p279"].add(qid_aus(b, "c"))
             if "t" in b:
@@ -1961,24 +1973,35 @@ NICHTMETALL_KATEGORIEN = {"Q19596", "Q19600", "Q19605", "Q19609"}
 KEIN_METALL_Z = {34, 84, 85} | set(range(113, 119))
 
 
-def pruefe_elementklasse(items: dict, elementdaten: dict, graph,
+def pruefe_elementklasse(items: dict, elementdaten: dict,
                          labels: dict, mit_dichte: bool = True) -> list:
     """Die Einordnung der Elemente gegen das Periodensystem.
 
-    Drei Fragen, drei Befundarten - bewusst getrennt, weil sie
-    unterschiedlich stark belegt sind:
+    Nach .claude/rules/periodic-table-conventions.md (Fassung nach der
+    Korrektur einer Ueberinterpretation) sind das DREI verschiedene Faelle,
+    mit unterschiedlicher Zielproperty und unterschiedlicher Freigabe fuer
+    einen automatischen Entwurf:
 
-      element-kategorie  Die Kategorie folgt aus der Ordnungszahl. Der
-                         staerkste Befund des Szenarios: nachrechenbar.
-      element-gruppe     Die Gruppe folgt ebenso aus der Ordnungszahl,
-                         gehoert aber an P361 (so ist sie in Wikidata
-                         durchgaengig gepflegt), nicht an P279.
-      element-dichte     Leicht- oder Schwermetall, gerechnet aus P2054
-                         gegen eine Konvention - schwaecher belegt.
+      Fall 1  Element -> chemisches Element: P31 -> Q11344. Prueft dieses
+              Werkzeug nicht selbst - das ist die Grundgesamtheit des
+              Szenarios 'periodensystem' (siehe POPULATIONEN), nicht ein
+              Befund von pruefe_elementklasse.
+      Fall 2  Element -> Periodensystem-Gruppe UND Element -> Elementkategorie
+              (Alkalimetalle, Uebergangsmetalle, ...): BEIDE gehoeren an
+              P361 (Mengenmitgliedschaft, keine Taxonomie) - NIE an P31 oder
+              P279. Steht das richtige Ziel schon als P31 oder P279 da, ist
+              das ein einfacher Property-Tausch und darf automatisch
+              entworfen werden (element-kategorie-falsche-property /
+              element-gruppe-falsche-property). Fehlt die Verknuepfung
+              ganz, wird P361 vorgeschlagen (*-fehlt).
+      Fall 3  Element -> Leicht-/Schwermetall: noch KEINE verbindliche
+              Konvention (P31, P279 und P1552 sind alle noch offen). Kein
+              automatischer Entwurf - der Fund geht als offene Frage nach
+              proposals/review-needed.md (siehe schreibe_review_needed).
 
-    Erfuellt ist eine Erwartung auch dann, wenn sie nur ueber einen
-    P279-Pfad gilt: wer schon Halogen ist, braucht kein zweites P279 auf
-    Nichtmetall danebengeschrieben.
+    Die drei Gruppen-Items, die zugleich Kategorie-Items sind (2., 17., 18.
+    Gruppe = Erdalkalimetalle/Halogene/Edelgase), werden nur EINMAL
+    gemeldet - im Kategorie-Block, siehe dort.
     """
     treffer = []
     for qid in sorted(items, key=lambda q: elementdaten.get(q, {}).get("z", 999)):
@@ -1991,16 +2014,12 @@ def pruefe_elementklasse(items: dict, elementdaten: dict, graph,
         if z > LETZTE_ORDNUNGSZAHL:
             continue
 
-        def erfuellt(ziel: str) -> bool:
-            """Steht `ziel` schon da - direkt oder ueber einen P279-Pfad?"""
-            if ziel in eintrag["p279"]:
-                return True
-            return bool(ziel in graph and qid in graph
-                        and nx.has_path(graph, qid, ziel))
-
-        # --- 1. Elementkategorie -------------------------------------
+        # --- 1. Elementkategorie (Fall 2: Ziel ist P361) ---------------
         soll = KATEGORIE_NACH_Z.get(z)
-        vorhanden = eintrag["p279"] & set(ELEMENTKATEGORIEN)
+        p31_kat = eintrag["p31"] & set(ELEMENTKATEGORIEN)
+        p279_kat = eintrag["p279"] & set(ELEMENTKATEGORIEN)
+        p361_kat = eintrag["p361"] & set(ELEMENTKATEGORIEN)
+        vorhanden = p31_kat | p279_kat | p361_kat
         if z in UMSTRITTENE_Z:
             treffer.append(befund(
                 "element-kategorie-umstritten", qid, anzeige, "",
@@ -2012,93 +2031,111 @@ def pruefe_elementklasse(items: dict, elementdaten: dict, graph,
                 "Kein Entwurf. Wenn dieses Projekt sich auf ein Schema "
                 "festlegt, gehoert die Entscheidung dokumentiert - nicht "
                 "in einen Schwellwert.",
-                eigenschaft="P279",
+                eigenschaft="P361",
                 ziel_qid=soll or "", ziel_label=ELEMENTKATEGORIEN.get(soll, "")))
-        elif soll and not erfuellt(soll):
-            fremd = sorted(vorhanden - {soll})
-            if fremd:
+        elif soll and soll not in p361_kat:
+            falsch = [p for p, menge in (("P31", p31_kat), ("P279", p279_kat))
+                     if soll in menge]
+            if falsch:
                 treffer.append(befund(
-                    "element-kategorie-konflikt", qid, anzeige, "",
-                    f"traegt P279 auf {', '.join(f'{k} ({ELEMENTKATEGORIEN[k]})' for k in fremd)}; "
-                    f"nach der Ordnungszahl {z} steht das Element aber in "
-                    f"{soll} ({ELEMENTKATEGORIEN[soll]}).",
-                    "Von Hand entscheiden. Entfernt wird hier nichts - die "
-                    "bestehende Kategorie kann einem anderen, ebenfalls "
-                    "gebraeuchlichen Schema folgen.",
-                    eigenschaft="P279",
-                    ziel_qid=soll, ziel_label=ELEMENTKATEGORIEN[soll]))
-            else:
-                treffer.append(befund(
-                    "element-kategorie", qid, anzeige,
-                    f"{qid}\tP279\t{soll}",
-                    f"Z={z} legt die Kategorie fest; am Item fehlt sie, "
-                    f"auch ueber jeden P279-Pfad.",
-                    "Nachrechenbar aus der Ordnungszahl. Zu pruefen bleibt, "
-                    "ob am Item nicht schon eine ENGERE Klasse steht "
-                    "(Platinmetalle, Edelmetalle), unter der die Kategorie "
-                    "ohnehin haengen sollte - dann gehoert die Kante dorthin.",
-                    eigenschaft="P279",
-                    ziel_qid=soll, ziel_label=ELEMENTKATEGORIEN[soll],
+                    "element-kategorie-falsche-property", qid, anzeige,
+                    "\n".join([f"-{qid}\t{p}\t{soll}" for p in falsch]
+                              + [f"{qid}\tP361\t{soll}"]),
+                    f"{soll} ({ELEMENTKATEGORIEN[soll]}) steht hier als "
+                    f"{'/'.join(falsch)} statt als P361 - eine Kategorie ist "
+                    f"Mengenmitgliedschaft, keine Taxonomie "
+                    f"(periodic-table-conventions.md, Fall 2).",
+                    "Automatischer Entwurf: Austausch einer fehlerhaften "
+                    "Property gegen die korrekte, keine inhaltliche "
+                    "Neubewertung.",
                     kennzahl=z))
+            else:
+                fremd = sorted(vorhanden - {soll})
+                if fremd:
+                    treffer.append(befund(
+                        "element-kategorie-konflikt", qid, anzeige, "",
+                        f"traegt P361 auf {', '.join(f'{k} ({ELEMENTKATEGORIEN[k]})' for k in fremd)}; "
+                        f"nach der Ordnungszahl {z} steht das Element aber in "
+                        f"{soll} ({ELEMENTKATEGORIEN[soll]}).",
+                        "Von Hand entscheiden. Entfernt wird hier nichts - die "
+                        "bestehende Kategorie kann einem anderen, ebenfalls "
+                        "gebraeuchlichen Schema folgen.",
+                        eigenschaft="P361",
+                        ziel_qid=soll, ziel_label=ELEMENTKATEGORIEN[soll]))
+                else:
+                    treffer.append(befund(
+                        "element-kategorie-fehlt", qid, anzeige,
+                        f"{qid}\tP361\t{soll}",
+                        f"Z={z} legt die Kategorie fest; am Item fehlt sie "
+                        f"als P361.",
+                        "Nachrechenbar aus der Ordnungszahl. Zu pruefen bleibt, "
+                        "ob am Item nicht schon eine ENGERE Klasse steht "
+                        "(Platinmetalle, Edelmetalle), unter der die Kategorie "
+                        "ohnehin haengen sollte - dann gehoert die Kante dorthin.",
+                        ziel_qid=soll, ziel_label=ELEMENTKATEGORIEN[soll],
+                        kennzahl=z))
 
-        # --- 2. Gruppe des Periodensystems ---------------------------
+        # --- 2. Gruppe des Periodensystems (Fall 2: Ziel ist P361) -----
         nummer = gruppe_von(z)
         ziel_gruppe = GRUPPEN_QID.get(nummer) if nummer else None
-        if ziel_gruppe:
+        # Drei Gruppen-Items sind zugleich Kategorie-Items: die 2. Gruppe
+        # IST "Erdalkalimetalle", die 17. IST "Halogene", die 18. IST
+        # "Edelgase". Fuer die wird oben im Kategorie-Block bereits exakt
+        # dieselbe Korrektur (-> P361) vorgeschlagen; hier nicht noch einmal
+        # unter anderem Namen.
+        if ziel_gruppe and ziel_gruppe not in ELEMENTKATEGORIEN:
             art = ("Hauptgruppe" if nummer in HAUPTGRUPPEN else "Nebengruppe")
             gruppe_label = labels.get(ziel_gruppe, ziel_gruppe)
-            # Drei Gruppen-Items sind zugleich Kategorie-Items: die 2.
-            # Gruppe IST "Erdalkalimetalle", die 17. IST "Halogene", die
-            # 18. IST "Edelgase". Ein P279 darauf ist dort die
-            # Kategoriezuordnung und kein verrutschtes P361 - dazu muss
-            # das Element nicht einmal eine unstrittige Kategorie haben
-            # (Astat, Tenness).
-            if (ziel_gruppe in eintrag["p279"]
-                    and ziel_gruppe not in ELEMENTKATEGORIEN):
-                treffer.append(befund(
-                    "element-gruppe-als-p279", qid, anzeige, "",
-                    f"die {nummer}. {art} steht hier als P279 statt als "
-                    f"P361; in Wikidata sind alle 18 Gruppen ueber P361 "
-                    f"besetzt.",
-                    "Nur Meldung. Beides ist vertretbar (die Gruppe ist in "
-                    "Wikidata sowohl Klasse als auch Ganzes); hier wird "
-                    "nichts umgehaengt, solange das Projekt sich nicht auf "
-                    "eine Form festgelegt hat.",
-                    eigenschaft="P279",
-                    ziel_qid=ziel_gruppe, ziel_label=gruppe_label,
-                    kennzahl=nummer))
-            elif ziel_gruppe not in eintrag["p361"]:
-                treffer.append(befund(
-                    "element-gruppe", qid, anzeige,
-                    f"{qid}\tP361\t{ziel_gruppe}",
-                    f"Z={z} - {nummer}. {art}; am Item fehlt das P361.",
-                    "Folgt aus der Ordnungszahl. Zu pruefen ist nur, ob "
-                    "die Gruppe nicht schon unter einem anderen Item "
-                    "danebensteht.",
-                    eigenschaft="P361",
-                    ziel_qid=ziel_gruppe, ziel_label=gruppe_label,
-                    kennzahl=nummer))
+            if ziel_gruppe not in eintrag["p361"]:
+                falsch = [p for p, menge in
+                         (("P31", eintrag["p31"]), ("P279", eintrag["p279"]))
+                         if ziel_gruppe in menge]
+                if falsch:
+                    treffer.append(befund(
+                        "element-gruppe-falsche-property", qid, anzeige,
+                        "\n".join([f"-{qid}\t{p}\t{ziel_gruppe}" for p in falsch]
+                                  + [f"{qid}\tP361\t{ziel_gruppe}"]),
+                        f"die {nummer}. {art} ({gruppe_label}) steht hier als "
+                        f"{'/'.join(falsch)} statt als P361; in Wikidata sind "
+                        f"alle 18 Gruppen ueber P361 besetzt.",
+                        "Automatischer Entwurf: Austausch einer fehlerhaften "
+                        "Property gegen die korrekte, keine inhaltliche "
+                        "Neubewertung.",
+                        kennzahl=nummer))
+                else:
+                    treffer.append(befund(
+                        "element-gruppe-fehlt", qid, anzeige,
+                        f"{qid}\tP361\t{ziel_gruppe}",
+                        f"Z={z} - {nummer}. {art}; am Item fehlt das P361.",
+                        "Folgt aus der Ordnungszahl. Zu pruefen ist nur, ob "
+                        "die Gruppe nicht schon unter einem anderen Item "
+                        "danebensteht.",
+                        ziel_qid=ziel_gruppe, ziel_label=gruppe_label,
+                        kennzahl=nummer))
 
-        # --- 3. Leicht- oder Schwermetall ----------------------------
+        # --- 3. Leicht- oder Schwermetall (Fall 3: noch offen) ---------
+        # Keine verbindliche Konvention - P31, P279 und has quality (P1552)
+        # stehen alle noch zur Debatte. Kein automatischer Entwurf; der Fund
+        # geht als offene Frage nach proposals/review-needed.md, siehe
+        # schreibe_review_needed().
         if (not mit_dichte or soll in NICHTMETALL_KATEGORIEN
                 or z in KEIN_METALL_Z):
             continue
         ziel_dichte, dichte_label, grund = _dichteklasse(eintrag["dichten"])
-        if not ziel_dichte or erfuellt(ziel_dichte):
+        if not ziel_dichte:
             continue
-        gegen = (SCHWERMETALL_QID if ziel_dichte == LEICHTMETALL_QID
-                 else LEICHTMETALL_QID)
+        aktuell = [p for p, menge in
+                  (("P31", eintrag["p31"]), ("P279", eintrag["p279"]),
+                   ("P361", eintrag["p361"]))
+                  if ziel_dichte in menge]
         treffer.append(befund(
-            "element-dichteklasse", qid, anzeige,
-            f"{qid}\tP279\t{ziel_dichte}",
-            f"{grund} -> {dichte_label[:-1]}"
-            + (f"; das Item traegt bisher die Gegenklasse {gegen}."
-               if gegen in eintrag["p279"] else "."),
-            f"Die {DICHTE_GRENZE:g}-g/cm3-Grenze ist Konvention, nicht "
-            f"Physik - andere Quellen nennen 4,5 g/cm3. Fuer Elemente "
-            f"nahe der Grenze entsteht hier gar kein Entwurf. Zu pruefen: "
-            f"Ist das Element ueberhaupt als Metall gemeint?",
-            eigenschaft="P279",
+            "element-dichteklasse-review", qid, anzeige, "",
+            f"{grund} -> {dichte_label[:-1]}; aktuell am Item verwendete "
+            f"Property fuer dieses Ziel: {'/'.join(aktuell) or 'keine'}.",
+            "Noch keine verbindliche Konvention (periodic-table-"
+            "conventions.md, Fall 3). Kein automatischer Entwurf - als "
+            "offene Frage in proposals/review-needed.md eingetragen.",
+            eigenschaft="(offen: P31/P279/P1552)",
             ziel_qid=ziel_dichte, ziel_label=dichte_label,
             kennzahl=z))
     return treffer
@@ -2127,15 +2164,20 @@ STUFEN = [
      "folgt allein aus dem Graphen, behauptet nichts, ist umkehrbar",
      ["Die entfernte Kante gilt danach weiter, nur abgeleitet statt doppelt",
       "notiert. PRUEFEN: Stimmt der angegebene Ersatzpfad?"]),
-    (2, "STRUKTURELL BEGRUENDET", ["element-kategorie", "element-gruppe",
+    (2, "STRUKTURELL BEGRUENDET", ["element-kategorie-fehlt",
+                                   "element-kategorie-falsche-property",
+                                   "element-gruppe-fehlt",
+                                   "element-gruppe-falsche-property",
                                    "instanz-als-klasse", "metaklasse",
                                    "metaklasse-konflikt", "verkehrt",
                                    "redundant-unsicher", "zyklus"], False,
      "aus dem Graphen, aber mit einer fachlichen Entscheidung davor",
      ["Der Graph sagt, DASS etwas nicht stimmt - nicht, wie herum es richtig",
-      "waere. PRUEFEN: Einzelfall, Item oeffnen, Aussage im Kontext ansehen."]),
+      "waere. PRUEFEN: Einzelfall, Item oeffnen, Aussage im Kontext ansehen.",
+      "Die *-falsche-property-Funde sind ein reiner Property-Tausch (die",
+      "falsche Aussage weg, P361 mit demselben Ziel hin) - trotzdem PRUEFEN,",
+      "ob das Ziel selbst noch stimmt."]),
     (3, "GERECHNET ODER GERATEN", ["zusammensetzung",
-                                   "element-dichteklasse",
                                    "zu-allgemein",
                                    "ohne-einordnung"], False,
      "aus einer Bezeichnung oder einem Messwert gegen eine Konvention",
@@ -2146,7 +2188,7 @@ STUFEN = [
       "ein Werkstoff - oder ein Schichtverbund, eine Verbindung, ein Handelsname?"]),
     (4, "NUR MELDUNG - KEIN ENTWURF", ["element-kategorie-umstritten",
                                        "element-kategorie-konflikt",
-                                       "element-gruppe-als-p279",
+                                       "element-dichteklasse-review",
                                        "metaklasse-klasse",
                                        "ohne-einordnung-instanz",
                                        "p31-neben-p279", "parallelzweig"],
@@ -2155,7 +2197,8 @@ STUFEN = [
      ["Hier gibt es nichts einzuspielen. Wo der Graph die Klassenzugehoerigkeit",
       "nicht hergibt, entsteht eine Meldung statt eines Entwurfs: an eine",
       "Werkstoffklasse schreibt dieses Werkzeug kein P31, an eine Instanz kein",
-      "P279."]),
+      "P279. Die element-dichteklasse-review-Funde stehen zusaetzlich in",
+      "proposals/review-needed.md, siehe schreibe_review_needed()."]),
 ]
 
 # Ueberschrift und Einzeiler je Befundart, fuer die Zwischenkoepfe.
@@ -2192,24 +2235,30 @@ ART_TITEL = {
     "p31-neben-p279": ("P31 neben P279", "nur zur Kenntnis"),
     "parallelzweig": ("Kein Pfad zu material (Q214609)",
                       "kein Fehler - P186 erlaubt parallele Werttypen"),
-    "element-kategorie": ("Elementkategorie fehlt",
-                          "NACHGERECHNET: die Ordnungszahl legt die "
-                          "Kategorie im Periodensystem eindeutig fest"),
-    "element-gruppe": ("Gruppe des Periodensystems fehlt",
-                       "NACHGERECHNET aus der Ordnungszahl; in Wikidata "
-                       "haengt die Gruppe an P361, nicht an P279"),
-    "element-dichteklasse": ("Leicht- oder Schwermetall",
-                             "GERECHNET aus P2054 gegen die 5-g/cm3-Grenze "
-                             "- eine Konvention, keine Physik"),
+    "element-kategorie-fehlt": ("Elementkategorie fehlt (P361)",
+                                "NACHGERECHNET: die Ordnungszahl legt die "
+                                "Kategorie im Periodensystem eindeutig fest"),
+    "element-kategorie-falsche-property": ("Kategorie steht als P31/P279 statt P361",
+                                           "Property-Tausch: Mengenmitgliedschaft, "
+                                           "keine Taxonomie - "
+                                           "periodic-table-conventions.md Fall 2"),
+    "element-gruppe-fehlt": ("Gruppe des Periodensystems fehlt (P361)",
+                             "NACHGERECHNET aus der Ordnungszahl"),
+    "element-gruppe-falsche-property": ("Gruppe steht als P31/P279 statt P361",
+                                        "Property-Tausch: Mengenmitgliedschaft, "
+                                        "keine Taxonomie - "
+                                        "periodic-table-conventions.md Fall 2"),
+    "element-dichteklasse-review": ("Leicht- oder Schwermetall - offene Frage",
+                                    "GERECHNET aus P2054 gegen die 5-g/cm3-"
+                                    "Grenze, aber KEIN Entwurf: welche Property "
+                                    "richtig waere, ist noch nicht entschieden "
+                                    "(Fall 3) - siehe proposals/review-needed.md"),
     "element-kategorie-konflikt": ("Andere Elementkategorie am Item",
                                    "nur Meldung: die vorhandene kann einem "
                                    "anderen gebraeuchlichen Schema folgen"),
     "element-kategorie-umstritten": ("Kategorie in der Literatur strittig",
                                      "nur Meldung: 12. Gruppe, Selen, "
                                      "Polonium, Astat und alles ab 113"),
-    "element-gruppe-als-p279": ("Gruppe steht als P279 statt P361",
-                                "nur Meldung: beide Formen sind "
-                                "vertretbar"),
 }
 
 WD = "https://www.wikidata.org/wiki/"
@@ -2221,13 +2270,16 @@ EIGENSCHAFT_TITEL = {
     "P31": "P31 - ist ein(e)",
     "P361": "P361 - Teil von",
     "P31 -> P279": "P31 -> P279 - Aussage umhaengen",
+    "P31 -> P361": "P31 -> P361 - Aussage umhaengen (Element ist Instanz, keine Klasse)",
+    "P279 -> P361": "P279 -> P361 - Aussage umhaengen (Element ist Instanz, keine Klasse)",
     "": "ohne Eigenschaft - der Befund benennt keine Aussage",
 }
 
 # Reihenfolge der Eigenschaftsbloecke. Was hier nicht steht, kommt danach
 # in alphabetischer Folge; die leere Eigenschaft (reine Lagebeschreibung)
 # immer zuletzt.
-EIGENSCHAFT_REIHENFOLGE = ["P279", "P31 -> P279", "P31", "P361"]
+EIGENSCHAFT_REIHENFOLGE = ["P279", "P31 -> P279", "P31", "P31 -> P361",
+                          "P279 -> P361", "P361"]
 
 
 def _eigenschaft_rang(eigenschaft: str) -> tuple:
@@ -2535,6 +2587,47 @@ def schreibe_csv(befunde: list, pfad: str) -> None:
     print(f"CSV geschrieben nach: {pfad}", file=sys.stderr)
 
 
+# Befundarten, fuer die es (noch) keine verbindliche Konvention gibt und die
+# deshalb nach CLAUDE.md ("Arbeitsweise", Punkt 3) als offene Frage in
+# proposals/review-needed.md gehoeren statt in einen automatischen Entwurf.
+# Aktuell nur Fall 3 aus periodic-table-conventions.md; weitere Arten kommen
+# hierher, sobald ein anderer Fall ohne Konvention entsteht.
+REVIEW_NEEDED_ARTEN = {"element-dichteklasse-review"}
+
+
+def schreibe_review_needed(befunde: list, pfad: str) -> None:
+    """Haengt offene Fragen ohne automatischen Entwurf an `pfad` an.
+
+    Angehaengt, nicht ueberschrieben: die Datei ist eine fortlaufende
+    Sammlung ueber mehrere Laeufe hinweg (CLAUDE.md, "Arbeitsweise" Punkt 3),
+    kein Abbild des jeweils letzten Laufs wie die Empfehlungsdatei. Jeder
+    Lauf schreibt einen eigenen, mit Zeitstempel ueberschriebenen Abschnitt -
+    Dopplungen bei wiederholten Laeufen nimmt dieses Werkzeug bewusst in
+    Kauf, das Aufraeumen bleibt beim Reviewer.
+    """
+    zeilen = [b for b in befunde if b["befund"] in REVIEW_NEEDED_ARTEN]
+    if not zeilen or not pfad:
+        return
+    os.makedirs(os.path.dirname(pfad) or ".", exist_ok=True)
+    neu = not os.path.exists(pfad)
+    with open(pfad, "a", encoding="utf-8") as f:
+        if neu:
+            f.write("# Offene Fragen ohne verbindliche Konvention\n\n"
+                    "Gesammelt nach .claude/rules/periodic-table-conventions.md "
+                    "und CLAUDE.md (\"Arbeitsweise\", Punkt 3): hier steht "
+                    "NICHTS, das dieses Projekt automatisch entscheidet.\n\n")
+        f.write(f"## Lauf {dt.datetime.now():%Y-%m-%d %H:%M} "
+                f"({len(zeilen)} Fund(e), Fall 3: Leicht-/Schwermetall)\n\n")
+        for b in sorted(zeilen, key=lambda b: b["label"]):
+            f.write(f"- **{b['label']}** ({WD}{b['qid']}): {b['begruendung']} "
+                    f"Ziel waere {b['ziel_qid']} ({b['ziel_label']}), aber "
+                    f"welche Property (P31/P279/P1552) dafuer richtig ist, "
+                    f"steht noch nicht fest.\n")
+        f.write("\n")
+    print(f"{len(zeilen)} offene Frage(n) angehaengt an: {pfad}",
+          file=sys.stderr)
+
+
 def bericht(befunde: list, luecken: dict, ohne_item: list,
             vorsichtig: bool = False) -> None:
     """Kurzfassung auf der Konsole - nach denselben Stufen wie die Datei,
@@ -2665,6 +2758,13 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--csv", default=None,
                         help="zusaetzlich eine Befund-CSV schreiben. Ohne "
                              "diese Angabe entsteht NUR die Empfehlung.")
+    parser.add_argument("--review-needed", default="proposals/review-needed.md",
+                        help="Ziel fuer offene Fragen ohne automatischen "
+                             "Entwurf (aktuell nur Fall 3 aus "
+                             ".claude/rules/periodic-table-conventions.md: "
+                             "Leicht-/Schwermetall). Wird angehaengt, nicht "
+                             "ueberschrieben (Default: proposals/review-needed.md). "
+                             "Leerer Wert schaltet das Schreiben ab.")
     args = parser.parse_args(argv)
 
     # Die Grundgesamtheit darf Voreinstellungen mitbringen - aber nur dort,
@@ -2880,7 +2980,7 @@ def main(argv: Optional[list] = None) -> int:
     if "parallelzweig" in args.pruefungen:
         befunde += pruefe_parallelzweig(items, unter_material, labels)
     if "elementklasse" in args.pruefungen:
-        befunde += pruefe_elementklasse(items, elementdaten, graph, labels,
+        befunde += pruefe_elementklasse(items, elementdaten, labels,
                                         mit_dichte=not args.ohne_dichte)
 
     mengengeruest = (
@@ -2895,6 +2995,7 @@ def main(argv: Optional[list] = None) -> int:
                         luecken, ohne_item, args.vorsichtig, mengengeruest)
     if args.csv:
         schreibe_csv(befunde, args.csv)
+    schreibe_review_needed(befunde, args.review_needed)
     return 0
 
 
