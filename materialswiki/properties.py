@@ -9,18 +9,20 @@ fehlen und warum, steht im README ("Abgedeckte Properties").
 """
 
 # MP-Feldpfad -> (interner Schluessel, Faktor auf die Wikidata-Einheit).
-# Der Faktor ist der Knackpunkt: die Moduln liefert MP in GPa, Wikidata will
-# Pascal. Die DICHTE dagegen kommt in g/cm^3 - genau der Einheit, in der sie
-# auch nach Wikidata geht (siehe PROPERTY_MAP) - und bleibt deshalb, wie sie
-# ist.
+# Seit dem 2026-08-28 ist hier NICHTS mehr umzurechnen: die Moduln gehen in
+# GIGAPASCAL nach Wikidata - genau der Einheit, in der MP sie liefert -, und
+# die Dichte in g/cm^3, ebenfalls unveraendert. Warum Gigapascal und nicht
+# Pascal: der Einheiten-Constraint von P5668 und P5673 laesst NUR Q53448922
+# (Gigapascal) zu, am 2026-08-28 ausgelesen. Vorher standen die Werte in
+# Pascal, was jede erzeugte Aussage zu einer Constraint-Verletzung machte.
 #
 # Welche MP-Felder bewusst NICHT uebernommen sind (band_gap und weitere) und
 # warum: README, "Abgedeckte Properties".
 MP_FIELD_MAP = {
     "density": ("density", 1.0),                       # g/cm^3, unveraendert
     "symmetry.crystal_system": ("crystal_system", None),  # itemwertig
-    "bulk_modulus.vrh": ("bulk_modulus", 1e9),         # GPa     -> Pa
-    "shear_modulus.vrh": ("shear_modulus", 1e9),       # GPa     -> Pa
+    "bulk_modulus.vrh": ("bulk_modulus", 1.0),         # GPa, unveraendert
+    "shear_modulus.vrh": ("shear_modulus", 1.0),       # GPa, unveraendert
     "homogeneous_poisson": ("poisson_ratio", 1.0),     # dimensionslos
 }
 
@@ -86,7 +88,9 @@ DFT_TEMPERATUR = (TEMPERATUR_PID, f"0U{KELVIN_QID[1:]}", "0 K (DFT-Grundzustand)
 #
 # Geprueft wird gegen physikalische Schranken, in Wikidata-Einheiten:
 #   Moduln       muessen positiv sein; die Obergrenze liegt weit ueber
-#                Diamant (Kompressionsmodul ~443 GPa, Schubmodul ~535 GPa)
+#                Diamant (Kompressionsmodul ~443 GPa, Schubmodul ~535 GPa).
+#                Die Schranken stehen in GIGAPASCAL, seit die Moduln so
+#                nach Wikidata gehen
 #   Poissonzahl  ist fuer isotrope lineare Elastizitaet thermodynamisch auf
 #                [-1; 0,5] beschraenkt - ausserhalb ist sie unmoeglich
 #   Dichte       zwischen Lithium (0,534 g/cm^3) und Osmium (22,59 g/cm^3),
@@ -97,8 +101,8 @@ DFT_TEMPERATUR = (TEMPERATUR_PID, f"0U{KELVIN_QID[1:]}", "0 K (DFT-Grundzustand)
 # Datenbank an dieser Stelle kaputt ist.
 PLAUSIBEL = {
     "density": (0.01, 30.0),               # g/cm^3
-    "bulk_modulus": (1e6, 1e12),           # Pa, also 0,001 bis 1000 GPa
-    "shear_modulus": (1e6, 1e12),          # Pa
+    "bulk_modulus": (0.001, 1000.0),       # GPa
+    "shear_modulus": (0.001, 1000.0),      # GPa
     "poisson_ratio": (-1.0, 0.5),          # dimensionslos, thermodynamisch
     # Bildungsenthalpie: von rund -2300 kJ/mol (Al2O3, ThO2) bis gut
     # +800 kJ/mol (einatomige Gase schwerer Metalle). Entropie ist nach dem
@@ -226,17 +230,22 @@ PROPERTY_MAP = {
     # Elastische Moduln. MP fuehrt sie als Objekt mit voigt/reuss/vrh;
     # genommen wird das Voigt-Reuss-Hill-Mittel (Pfad "...vrh" in
     # MP_FIELD_MAP), das uebliche Mittel fuer polykristalline Werkstoffe.
-    # MP rechnet in GPa, Wikidata will Pascal - Faktor steht in MP_FIELD_MAP.
+    #
+    # Einheit ist GIGAPASCAL, nicht Pascal: der Einheiten-Constraint beider
+    # Properties (P2302 -> Q21514353, am 2026-08-28 ausgelesen) laesst
+    # AUSSCHLIESSLICH Q53448922 zu. Bis dahin schrieb das Werkzeug Pascal und
+    # rechnete dafuer eigens mit 1e9 hoch - jede so erzeugte Aussage war eine
+    # Constraint-Verletzung. Jetzt geht der MP-Wert unveraendert raus.
     "bulk_modulus": {
         "pid": "P5668",
         "datatype": "quantity",
-        "unit_qid": "Q44395",  # Pascal
+        "unit_qid": "Q53448922",  # Gigapascal
         "label": "Kompressionsmodul",
     },
     "shear_modulus": {
         "pid": "P5673",
         "datatype": "quantity",
-        "unit_qid": "Q44395",  # Pascal
+        "unit_qid": "Q53448922",  # Gigapascal
         "label": "Schubmodul",
     },
     "thermal_conductivity": {
@@ -382,6 +391,302 @@ PROPERTY_MAP = {
         "datatype": "quantity",
         "unit_qid": "Q20966455",  # Joule pro Molkelvin, J/(mol*K)
         "label": "molare Standardentropie",
+    },
+    # =======================================================================
+    # Die uebrigen Properties des WikiProject Materials
+    # =======================================================================
+    #
+    # Die 44 Eintraege unten kommen aus benchmark/properties_snapshot.json,
+    # also aus den Abschnitten Physics, Mechanical, Thermal, Chemical und
+    # "Electric and Magnetic" von [[Wikidata:WikiProject Materials/Properties]].
+    # Damit deckt PROPERTY_MAP die Projektseite vollstaendig ab.
+    #
+    # ACHTUNG - eintragen heisst nicht liefern: KEINE Stufe erzeugt fuer diese
+    # Properties bisher eine Aussage. Es gibt weder ein MP-Feld noch eine
+    # Infobox-Feldkarte dafuer; sie sind hier nur bekannt, nicht bedient.
+    # Was ein Lauf wirklich abfragt, steht in der Spalte "quellen" des
+    # Benchmarks, nicht in dieser Tabelle.
+    #
+    # Datentyp und Einheit sind am 2026-08-28 von wikidata.org geholt
+    # (wbgetentities: datatype, und der Einheiten-Constraint P2302 ->
+    # Q21514353 mit seinen P2305-Werten), nicht geschaetzt. Wo der Constraint
+    # mehrere Einheiten zulaesst, gilt: Gigapascal, wo der Constraint es
+    # hergibt (wie bei P5668/P5673), Kelvin bei Temperaturen (wie
+    # P2101/P2102), sonst die SI-Einheit. Wo er FEHLT, steht unit_qid leer:
+    # eine Einheit zu
+    # erfinden waere schlimmer als keine - sie ist festzulegen, sobald eine
+    # Quelle den Wert wirklich liefert.
+    #
+    # Die Datentypen string und commonsMedia (P274, P994, P117) kann
+    # ausgabe.py bisher nicht schreiben; auch das faellt erst an, wenn eine
+    # Quelle sie liefert.
+    # -- Mechanical --------------------------------------------------------
+    "kinematic_viscosity": {
+        "pid": "P2118",
+        "datatype": "quantity",
+        "unit_qid": "Q3332099",  # Quadratmeter pro Sekunde (SI)
+        "label": "kinematische Viskosität",
+    },
+    "dynamic_viscosity": {
+        "pid": "P3070",
+        "datatype": "quantity",
+        "unit_qid": "Q21016931",  # Pascalsekunde (SI)
+        "label": "dynamische Viskosität",
+    },
+    "ultimate_tensile_strength": {
+        "pid": "P5479",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "Zugfestigkeit",
+    },
+    "tensile_modulus": {
+        "pid": "P5480",
+        "datatype": "quantity",
+        "unit_qid": "Q53448922",  # Gigapascal, wie P5668/P5673
+        "label": "Elastizitätsmodul",
+    },
+    "hardness": {
+        "pid": "P5483",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint; die Skala haengt am Verfahren
+        "label": "Härte",
+    },
+    "toughness": {
+        "pid": "P5520",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "Zähigkeit",
+    },
+    "yield_strength": {
+        "pid": "P5529",
+        "datatype": "quantity",
+        "unit_qid": "Q44395",  # Pascal - Gigapascal ist hier NICHT erlaubt
+        "label": "Fließgrenze",
+    },
+    "coefficient_of_friction": {
+        "pid": "P5575",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos laut Constraint
+        "label": "Reibungskoeffizient",
+    },
+    "fatigue_limit": {
+        "pid": "P5608",
+        "datatype": "quantity",
+        "unit_qid": "Q44395",  # Pascal - Gigapascal ist hier NICHT erlaubt
+        "label": "Dauerfestigkeit",
+    },
+    "compressive_strength": {
+        "pid": "P5669",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "Druckfestigkeit",
+    },
+    "flexural_strength": {
+        "pid": "P5677",
+        "datatype": "quantity",
+        "unit_qid": "Q53448922",  # Gigapascal - Pascal ist hier NICHT erlaubt
+        "label": "Biegefestigkeit",
+    },
+    "flexural_modulus": {
+        "pid": "P5681",
+        "datatype": "quantity",
+        "unit_qid": "Q53448922",  # Constraint laesst NUR Gigapascal zu
+        "label": "Biegemodul",
+    },
+    "tear_resistance": {
+        "pid": "P5685",
+        "datatype": "quantity",
+        "unit_qid": "Q53448922",  # Constraint laesst NUR Gigapascal zu
+        "label": "Reißfestigkeit",
+    },
+    "shear_strength": {
+        "pid": "P5706",
+        "datatype": "quantity",
+        "unit_qid": "Q44395",  # Pascal - Gigapascal ist hier NICHT erlaubt
+        "label": "Scherfestigkeit",
+    },
+    "force": {
+        "pid": "P5708",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "force",
+    },
+    "abrasion_resistance": {
+        "pid": "P5709",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "Abriebfestigkeit",
+    },
+    "elongation_at_break": {
+        "pid": "P5811",
+        "datatype": "quantity",
+        "unit_qid": "Q11229",  # Constraint laesst NUR Prozent zu
+        "label": "Bruchdehnung",
+    },
+    "compressive_modulus": {
+        "pid": "P5993",
+        "datatype": "quantity",
+        "unit_qid": "Q53448922",  # Gigapascal
+        "label": "compressive modulus of elasticity",
+    },
+    "flexural_strain_at_break": {
+        "pid": "P6014",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "flexural strain at break",
+    },
+    # -- Thermal -----------------------------------------------------------
+    "emissivity": {
+        "pid": "P1295",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos laut Constraint
+        "label": "Emissionsgrad",
+    },
+    "sublimation_temperature": {
+        "pid": "P2113",
+        "datatype": "quantity",
+        "unit_qid": "Q11579",  # Kelvin, wie P2101/P2102
+        "label": "Sublimationstemperatur",
+    },
+    "flash_point": {
+        "pid": "P2128",
+        "datatype": "quantity",
+        "unit_qid": "Q11579",  # Kelvin, wie P2101/P2102
+        "label": "Flammpunkt",
+    },
+    "autoignition_temperature": {
+        "pid": "P2199",
+        "datatype": "quantity",
+        "unit_qid": "Q11579",  # Kelvin, wie P2101/P2102
+        "label": "Zündtemperatur",
+    },
+    "operating_temperature": {
+        "pid": "P5066",
+        "datatype": "quantity",
+        "unit_qid": "Q11579",  # Kelvin, wie P2101/P2102
+        "label": "Betriebstemperatur",
+    },
+    "glass_transition_temperature": {
+        "pid": "P5670",
+        "datatype": "quantity",
+        "unit_qid": "Q11579",  # Kelvin, wie P2101/P2102
+        "label": "Glasübergangstemperatur",
+    },
+    "thermal_diffusivity": {
+        "pid": "P5674",
+        "datatype": "quantity",
+        "unit_qid": "Q3332099",  # Quadratmeter pro Sekunde (SI)
+        "label": "Temperaturleitfähigkeit",
+    },
+    "heat_deflection_temperature": {
+        "pid": "P5682",
+        "datatype": "quantity",
+        "unit_qid": "Q11579",  # Kelvin, wie P2101/P2102
+        "label": "Wärmeformbeständigkeitstemperatur",
+    },
+    "vicat_softening_point": {
+        "pid": "P5947",
+        "datatype": "quantity",
+        "unit_qid": "Q25267",  # Constraint laesst NUR Grad Celsius zu
+        "label": "Vicat softening point",
+    },
+    "nfpa_fire": {
+        "pid": "P994",
+        "datatype": "string",
+        "unit_qid": "",
+        "label": "NFPA-Code für Brandgefahr",
+    },
+    # -- Chemical ----------------------------------------------------------
+    "proportion": {
+        "pid": "P1107",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos laut Constraint
+        "label": "Anteil",
+    },
+    "chemical_structure": {
+        "pid": "P117",
+        "datatype": "commonsMedia",
+        "unit_qid": "",  # Bilddatei auf Commons
+        "label": "chemische Struktur",
+    },
+    "solvent": {
+        "pid": "P2178",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "Lösungsmittel",
+    },
+    "inchi": {
+        "pid": "P234",
+        "datatype": "external-id",
+        "unit_qid": "",
+        "label": "InChI",
+    },
+    "chemical_formula": {
+        "pid": "P274",
+        "datatype": "string",
+        "unit_qid": "",
+        "label": "chemische Formel",
+    },
+    "part_of": {
+        "pid": "P361",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "ist Teil von",
+    },
+    "monomer_of": {
+        "pid": "P4599",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "Monomer von",
+    },
+    "polymer_of": {
+        "pid": "P4600",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "Polymer aus",
+    },
+    "lower_limit": {
+        "pid": "P5447",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "unterer Grenzwert",
+    },
+    "upper_limit": {
+        "pid": "P5448",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "oberer Grenzwert",
+    },
+    "moisture_absorption": {
+        "pid": "P5594",
+        "datatype": "quantity",
+        "unit_qid": "Q11229",  # Prozent
+        "label": "Feuchtigkeitsaufnahme",
+    },
+    "pren": {
+        "pid": "P5624",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos laut Constraint
+        "label": "PREN",
+    },
+    "permeability": {
+        "pid": "P6073",
+        "datatype": "quantity",
+        "unit_qid": "Q808873",  # Constraint laesst NUR Barrer zu
+        "label": "Permeabilität",
+    },
+    # -- Electric and Magnetic ---------------------------------------------
+    "relative_permittivity": {
+        "pid": "P5675",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos laut Constraint
+        "label": "relative permittivity",
+    },
+    "relative_permeability": {
+        "pid": "P5676",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos laut Constraint
+        "label": "relative permeabilität",
     },
 }
 

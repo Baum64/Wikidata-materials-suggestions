@@ -9,21 +9,28 @@ ausfuehrbar sind.
 
 Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
 
-    Formel  ->  COD  ->  Materials Project  ->  NIST WebBook
-            ->  de.wikipedia  ->  en.wikipedia
+    (Formel)  ->  COD  ->  Materials Project  ->  NIST WebBook
+              ->  de.wikipedia  ->  en.wikipedia
+
+Die Formel-Stufe steht in Klammern: sie ist abgeschaltet, siehe unten.
 
 Eine weitere Aussage entsteht aus dem Item selbst: die Punktgruppe (P589)
-aus einer Raumgruppe (P690) am Item. Bestehende Aussagen "Stoff P527 Element"
-werden auf P2670 umgestellt - die einzige Stufe, die auch Loeschzeilen
-erzeugt.
+aus einer Raumgruppe (P690) am Item.
+
+Die Formel-Stufe ist seit 2026-08-27 AUS: sie ist die einzige, die P527
+"besteht aus" und P2670 "enthaelt Elemente von" vorschlaegt (samt der
+Umstellung "Stoff P527 Element" -> P2670, der einzigen Stufe mit
+Loeschzeilen), und diese beiden Properties sollen nicht mehr vorgeschlagen
+werden. Der Code bleibt stehen; --formel schaltet ihn fuer einen einzelnen
+Lauf wieder ein.
 
 Die chemische Metaklasse (P31) fuer Legierungen war bis 2026-08-23 eine
 Stufe dieses Werkzeugs. Sie folgt aus der Klassenzugehoerigkeit, nicht aus
 einer Quelle, und steht jetzt in "Material class structure/Vorschläge
 generieren.py" (Pruefung 'metaklasse').
 
-Abschaltbar mit --no-formel, --no-punktgruppe, --no-cod, --no-nist,
---no-wikipedia.
+Abschaltbar mit --no-punktgruppe, --no-cod, --no-nist, --no-wikipedia;
+--formel schaltet die abgeschaltete Formel-Stufe wieder zu.
 
     python -m materialswiki --elements Ti O --max 50
     python -m materialswiki --group minerale --batch-size 500 --weiter
@@ -193,7 +200,7 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           wikipedia: bool = True, cod: bool = True,
                           nur_experimentell: bool = True,
                           nur_stabil: bool = True, max_entries: int = 1,
-                          formel: bool = True,
+                          formel: bool = False,
                           punktgruppe_an: bool = True, nist: bool = True,
                           auch_vorhandene: bool = False,
                           ausschluss: bool = True):
@@ -219,7 +226,7 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                               nur_experimentell: bool = True,
                               nur_stabil: bool = True, max_entries: int = 1,
                               nummer_ab: int = 1, gesamt: Optional[int] = None,
-                              formel: bool = True,
+                              formel: bool = False,
                               punktgruppe_an: bool = True,
                               nist: bool = True,
                               auch_vorhandene: bool = False):
@@ -901,15 +908,19 @@ def main():
     parser.add_argument(
         "--formel",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Zusammensetzung aus der Summenformel des Items ableiten: je "
+        default=False,
+        help="Default: AUS. Zusammensetzung aus der Summenformel des Items "
+        "ableiten: je "
         "funktionaler Gruppe eine Aussage 'besteht aus' (P527) - so gross, "
         "wie die Formel sie hergibt, bei Gips also Sulfat und Wasser statt "
         "S, O, H -, und je Element, das dann noch uebrig ist, eine Aussage "
         "'enthaelt Elemente von' (P2670). Anzahl jeweils als Qualifikator "
-        "(P1114). Braucht keine externe Quelle und geht deshalb ohne "
+        "(P1114). Stellt ausserdem bestehende Aussagen 'Stoff P527 Element' "
+        "auf P2670 um. Braucht keine externe Quelle und geht deshalb ohne "
         "S-Beleg raus. Elemente aus Mischreihen wie (Fe,Mg) werden NICHT "
-        "vorgeschlagen, sondern zur Klaerung ausgewiesen. Default: an",
+        "vorgeschlagen, sondern zur Klaerung ausgewiesen. Abgeschaltet, weil "
+        "P527 und P2670 nicht mehr vorgeschlagen werden sollen - dies ist die "
+        "einzige Stufe, die beide erzeugt",
     )
     parser.add_argument(
         "--punktgruppe",

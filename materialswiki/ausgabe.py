@@ -109,8 +109,8 @@ def round_significant(value: float, digits: int = 6) -> float:
     """Auf signifikante Stellen runden, nicht auf Nachkommastellen.
 
     Die Groessen hier reichen von 1e-8 (spezifischer Widerstand in Ohm*m)
-    bis 1e11 (Kompressionsmodul in Pascal). round(x, 6) wuerde den
-    Widerstand zu 0.0 machen.
+    bis 1e4 (Schmelzpunkte in Kelvin, Moduln in Gigapascal). round(x, 6)
+    wuerde den Widerstand zu 0.0 machen.
     """
     return float(f"{value:.{digits}g}")
 

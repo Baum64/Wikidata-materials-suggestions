@@ -43,14 +43,16 @@ def nach_pid(rows):
     return {r["_pid"]: r for r in rows}
 
 
-# --- Einheitenumrechnung, der eigentliche Fallstrick ----------------------
+# --- Einheiten: was MP liefert, muss zum Constraint der Property passen ---
 
 @pytest.mark.parametrize("pid, erwartet, einheit", [
     # g/cm³ bleibt g/cm³ - die Zieleinheit ist dieselbe
     ("P2054", 4.24, "Q13147228"),
-    # GPa -> Pa, und zwar das vrh-Mittel (213), nicht voigt (216)/reuss (210)
-    ("P5668", 213.0e9, "Q44395"),
-    ("P5673", 102.0e9, "Q44395"),
+    # GPa bleibt GPa: P5668 und P5673 lassen laut Einheiten-Constraint nur
+    # Gigapascal zu. Genommen wird das vrh-Mittel (213), nicht voigt (216)
+    # oder reuss (210).
+    ("P5668", 213.0, "Q53448922"),
+    ("P5673", 102.0, "Q53448922"),
     # dimensionslos, bleibt wie geliefert
     ("P5593", 0.28, ""),
 ])
@@ -430,7 +432,7 @@ def test_unplausible_werte_werden_ausgewiesen_statt_verworfen():
         assert zeilen[pid]["status"].startswith("MANUELLE_KLAERUNG_NOETIG"), pid
     assert "unplausibler Wert" in zeilen["P5673"]["status"]
     assert "mp-aaaaaadb" in zeilen["P5673"]["status"]
-    assert zeilen["P5673"]["value"] == pytest.approx(-2.78121e12)
+    assert zeilen["P5673"]["value"] == pytest.approx(-2781.21)   # GPa
 
 
 def test_die_gesunden_groessen_desselben_materials_bleiben():
@@ -442,10 +444,10 @@ def test_die_gesunden_groessen_desselben_materials_bleiben():
 
 
 @pytest.mark.parametrize("key, wert, erwartet", [
-    ("shear_modulus", 4.3e10, True),      # Zink real, 43 GPa
+    ("shear_modulus", 43.0, True),        # Zink real, 43 GPa
     ("shear_modulus", -1.0, False),
     ("shear_modulus", 0.0, False),
-    ("bulk_modulus", 4.43e11, True),      # Diamant, 443 GPa
+    ("bulk_modulus", 443.0, True),        # Diamant, 443 GPa
     ("poisson_ratio", 0.34, True),
     ("poisson_ratio", -0.5, True),        # auxetisch, aber moeglich
     ("poisson_ratio", 0.51, False),

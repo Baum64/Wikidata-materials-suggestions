@@ -36,18 +36,34 @@ Der Leser kann jederzeit aufhoeren; das Gepruefte bleibt gueltig.
                                   nichts. Als einzige ausfuehrbar.
   Stufe 2  STRUKTURELL BEGRUENDET aus dem Graphen abgeleitet, aber mit einer
                                   fachlichen Entscheidung davor.
-  Stufe 3  HEURISTISCH            aus Bezeichnungen geraten. Fehltreffer
-                                  sind hier die Regel.
+  Stufe 3  GERECHNET/GERATEN      aus einer Bezeichnung oder einem Messwert
+                                  gegen eine Konvention.
   Stufe 4  NUR MELDUNG            beschreibt die Lage, fordert nichts.
 
-Ab Stufe 2 traegt jeder Entwurf die Marke '#!'. QuickStatements liest sie als
-Kommentar; wer eine Zeile freigibt, loescht die zwei Zeichen. Alle uebrigen
-Zeilen beginnen mit '#'. Die Datei laesst sich dadurch jederzeit als GANZES
-nach QuickStatements kopieren, ohne dass eine ungepruefte Zeile zur Aussage
-wird - und im Editor findet "#!" genau die Entwuerfe.
+Innerhalb einer Stufe wird nach EIGENSCHAFT gegliedert (P279, P31, P361),
+darunter nach Befundart, darunter nach ZIEL - nicht nach Item. Der
+Unterschied ist beim Durchsehen der ganze Punkt: nach Item sortiert steht
+in der Datei hundertmal dieselbe Ueberlegung neu da, nach Ziel sortiert
+steht einmal "diese 21 Items werden Uebergangsmetalle", und wer das Ziel
+einmal geprueft hat, arbeitet die Gruppe darunter am Stueck ab. Wo alle
+Vorschlaege einer Zielgruppe dieselbe Pruefanweisung tragen, steht sie
+einmal im Gruppenkopf statt in jedem Eintrag.
 
-Die elf Pruefungen
-------------------
+FREIGEBEN HEISST: EIN ZEICHEN LOESCHEN. Ab Stufe 2 steht jeder Entwurf als
+"#Q123<TAB>P279<TAB>Q456" da - ein einzelnes '#' davor, ohne Leerzeichen.
+QuickStatements liest es als Kommentar; wer die Zeile freigibt, loescht genau
+dieses eine Zeichen. Fliesstext traegt dagegen immer '# ' MIT Leerzeichen,
+im Editor findet die Suche nach "#Q" und "#-Q" also trotzdem genau die
+Entwuerfe. Die Datei laesst sich jederzeit als GANZES nach QuickStatements
+kopieren, ohne dass eine ungepruefte Zeile zur Aussage wird.
+
+Die Datei ist zum UEBERFLIEGEN gebaut, nicht zum Lesen: ein Vorschlag sind
+in der Regel zwei Zeilen. Was sich wiederholen wuerde - Zielklasse, Link,
+Pruefanweisung - steht einmal im Gruppenkopf. Fuer die 118 Elemente sind das
+rund 600 Zeilen statt rund 1130.
+
+Die zwoelf Pruefungen
+--------------------
   1. kennzahlen        Wie wird P279 in der Grundgesamtheit ueberhaupt
                        benutzt: P279, P31, beides, keines; Mehrfacheltern;
                        Tiefe.
@@ -92,6 +108,37 @@ Die elf Pruefungen
  11. parallelzweig     Item ohne P279*-Pfad zu "material" (Q214609). Kein
                        Fehler (P186 erlaubt mehrere gleichrangige Werttypen,
                        siehe visualisierung.py daneben).        [Stufe 4]
+ 12. elementklasse     NUR im Szenario 'periodensystem' (siehe unten). Drei
+                       Fragen an ein chemisches Element: fehlt die
+                       Elementkategorie (Alkalimetall, Uebergangsmetall,
+                       Halbmetall, ...), fehlt die Gruppe des
+                       Periodensystems, und ist es nach seiner Dichte ein
+                       Leicht- oder ein Schwermetall.  [Stufe 2, 3 und 4]
+
+Das Szenario 'periodensystem'
+-----------------------------
+--population periodensystem prueft NUR die 118 chemischen Elemente, und nur
+mit den Pruefungen, die dort etwas bedeuten (kennzahlen, elementklasse,
+redundant, zyklus - ueberschreibbar mit --pruefungen). Es ist der einzige
+Fall in diesem Skript, in dem die Grundgesamtheit abgeschlossen und der
+Massstab bekannt ist: aus der Ordnungszahl (P1086) folgt die Stellung im
+Periodensystem, also auch die Kategorie und die Gruppe. Hier wird nichts
+aus Bezeichnungen geraten - hier wird nachgerechnet.
+
+Der Schwerpunkt liegt auf den Unterklassen: Uebergangsmetalle (Q19588),
+Leicht- (Q428766) und Schwermetalle (Q105789) und die einzelnen
+Hauptgruppen. Der Ist-Zustand ist loechrig - gemessen am 2026-08-29 tragen
+17 der 38 Uebergangsmetalle ihre Kategorie, Leichtmetall steht an genau
+einem Element, die 15 Lanthanoide tragen zusammen kein einziges P279. Die
+Gruppen dagegen sind ueber P361 vollstaendig gepflegt; an einzelnen
+Elementen stehen sie aber als P279 daneben.
+
+Wo die Lehrbuecher uneinig sind - die 12. Gruppe (Zink, Cadmium,
+Quecksilber), Selen, Polonium, Astat und alles ab Ordnungszahl 113, wo die
+Eigenschaften nur berechnet sind - entsteht bewusst KEIN Entwurf, sondern
+eine Meldung mit den Lesarten. Dasselbe bei der Dichte: die 5-g/cm3-Grenze
+zwischen Leicht- und Schwermetall ist Konvention, deshalb bleibt ein
+Graubereich von 0,5 g/cm3 darum herum vorschlagsfrei.
 
 Alle Pruefungen bleiben in der Werkstoff-Ecke - unterhalb von material
 (Q214609) oder Legierung (Q37756), plus die Grundgesamtheit selbst. Das ist
@@ -136,6 +183,8 @@ Aufruf
   python "Material class structure/Vorschläge generieren.py" --pruefungen metaklasse
   python "Material class structure/Vorschläge generieren.py" --tiefe 3 --beleg beides
   python "Material class structure/Vorschläge generieren.py" --vorsichtig   # nichts einspielbar
+  python "Material class structure/Vorschläge generieren.py" --population periodensystem
+  python "Material class structure/Vorschläge generieren.py" --population periodensystem --ohne-dichte
 """
 
 import argparse
@@ -181,6 +230,89 @@ SUBTREE_PATTERN = (
     "{{ ?i wdt:P31/wdt:P279* wd:{root} }} UNION {{ ?i wdt:P279* wd:{root} }}"
 )
 
+# ---------------------------------------------------------------------------
+# Szenario Periodensystem: die Einordnung der chemischen Elemente
+# ---------------------------------------------------------------------------
+#
+# Ein eigenes Szenario, weil hier eine Sonderlage herrscht, die es sonst
+# nirgends gibt: die Grundgesamtheit ist ABGESCHLOSSEN und VOLLSTAENDIG
+# BEKANNT. 118 Elemente, jedes mit einer Ordnungszahl (P1086), und aus der
+# Ordnungszahl allein folgt die Stellung im Periodensystem. Es muss also
+# nichts aus Bezeichnungen geraten werden - die Zuordnung steht im Lehrbuch
+# und laesst sich Zeile fuer Zeile nachrechnen.
+#
+# Warum ueberhaupt? Der Ist-Zustand ist loechrig (gemessen 2026-08-29 an
+# allen 118 Elementen):
+#
+#   * 17 der 38 Uebergangsmetalle tragen Q19588; Chrom, Mangan, Eisen,
+#     Cobalt, Nickel und Kupfer nicht.
+#   * Leichtmetalle (Q428766) steht an genau EINEM Element (Titan),
+#     Schwermetalle (Q105789) an genau einem (Wolfram).
+#   * Die 15 Lanthanoide tragen zusammen KEIN einziges P279.
+#   * Die Gruppen dagegen sind ueber P361 nahezu vollstaendig gepflegt -
+#     alle 18 Gruppen sind besetzt. An einzelnen Elementen steht die Gruppe
+#     aber als P279 statt als P361 (Sauerstoff, Fluor, Chlor, Schwefel).
+#
+# Die Zuordnungen unten sind nach Ordnungszahl aufgeschrieben und NICHT aus
+# Wikidata geholt - das ist hier ausdruecklich richtig herum: sie sind der
+# Massstab, gegen den Wikidata geprueft wird. Eine aus Wikidata geholte
+# Erwartung wuerde nur bestaetigen, was ohnehin dort steht.
+
+ELEMENT_QID = "Q11344"          # chemisches Element
+LETZTE_ORDNUNGSZAHL = 118       # Oganesson; darueber gibt es nur Entwuerfe
+
+# Die Elementkategorien. Die Bezeichnungen sind die deutschen aus Wikidata,
+# damit der Vorschlag im Editor wiederzuerkennen ist.
+ELEMENTKATEGORIEN = {
+    "Q19557": "Alkalimetalle",
+    "Q19563": "Erdalkalimetalle (2. Gruppe)",
+    "Q19569": "Lanthanoide",
+    "Q19577": "Actinoide",
+    "Q19588": "Uebergangsmetalle",
+    "Q19591": "Metalle des p-Blocks",
+    "Q19596": "Halbmetalle",
+    "Q19600": "Nichtmetalle",
+    "Q19605": "Halogene (17. Gruppe)",
+    "Q19609": "Edelgase (18. Gruppe)",
+}
+
+# Leicht- und Schwermetall sind KEINE Kategorien des Periodensystems,
+# sondern eine Einteilung nach Dichte - deshalb stehen sie getrennt und
+# werden auch getrennt geprueft (aus P2054 gerechnet, nicht aus der
+# Ordnungszahl abgeleitet).
+LEICHTMETALL_QID = "Q428766"
+SCHWERMETALL_QID = "Q105789"
+# Die uebliche Grenze der deutschsprachigen Literatur. Sie ist Konvention,
+# nicht Physik - andere Quellen nennen 4,5 g/cm3. Deshalb ein Graubereich
+# darum herum, in dem NICHTS vorgeschlagen wird: Beryllium (1,85), Titan
+# (4,51) und Vanadium (6,0) sind eindeutig, Scandium (2,99) auch - aber wer
+# knapp an der Grenze liegt, wird nicht per Schwellwert entschieden.
+DICHTE_GRENZE = 5.0             # g/cm3
+DICHTE_GRAUBEREICH = 0.5        # g/cm3 beidseits der Grenze
+
+# Einheiten, in denen P2054 an den Elementen tatsaechlich steht, mit dem
+# Faktor auf g/cm3. Alles andere wird uebersprungen statt geraten.
+DICHTE_EINHEITEN = {
+    "Q13147228": 1.0,        # Gramm pro Kubikzentimeter
+    "Q844211": 0.001,        # Kilogramm pro Kubikmeter
+}
+
+# Die Gruppen des Periodensystems (P31 = Q83306). Die QIDs sind an den
+# Elementen geprueft, die schon ein P361 tragen - die deutschen Labels sind
+# teilweise irrefuehrend ("4. Hauptgruppe" heisst dort die 4. GRUPPE), die
+# Mitgliederlisten dagegen sind eindeutig.
+GRUPPEN_QID = {
+    1: "Q10801007", 2: "Q19563", 3: "Q108307", 4: "Q189302",
+    5: "Q193276", 6: "Q193280", 7: "Q202602", 8: "Q202224",
+    9: "Q208107", 10: "Q205253", 11: "Q185870", 12: "Q191875",
+    13: "Q189294", 14: "Q106693", 15: "Q106675", 16: "Q104567",
+    17: "Q19605", 18: "Q19609",
+}
+
+# Die acht HAUPTGRUPPEN - der Schwerpunkt dieses Szenarios. Die uebrigen
+# zehn sind Nebengruppen und stehen nur der Vollstaendigkeit halber mit da.
+HAUPTGRUPPEN = {1, 2, 13, 14, 15, 16, 17, 18}
+
 # Grundgesamtheiten. 'legierungen' kommt woertlich aus materialswiki, damit
 # dieses Skript und der Vorschlagslauf garantiert dieselbe Menge meinen.
 POPULATIONEN = {
@@ -200,12 +332,29 @@ POPULATIONEN = {
         "pattern": SUBTREE_PATTERN.format(root=MATERIAL_QID),
         "beschreibung": "unterhalb von material (Q214609)",
     },
+    # Das Szenario Periodensystem. Es teilt sich mit den uebrigen nur den
+    # Rahmen (Graph, Staffelung, Ausgabe) - die Pruefungen sind andere,
+    # deshalb bringt es seine eigene Voreinstellung mit. Wer '--pruefungen'
+    # angibt, ueberschreibt sie.
+    "periodensystem": {
+        "pattern": ("?i wdt:P31 wd:Q11344 ; wdt:P1086 ?z . "
+                    f"FILTER(?z <= {LETZTE_ORDNUNGSZAHL})"),
+        "beschreibung": ("die chemischen Elemente (P31 Q11344, "
+                         f"Ordnungszahl bis {LETZTE_ORDNUNGSZAHL})"),
+        "pruefungen": ["kennzahlen", "elementklasse", "redundant", "zyklus"],
+        "bereichswurzel": ELEMENT_QID,
+    },
 }
 
 PRUEFUNGEN = ["kennzahlen", "zyklus", "redundant", "verkehrt",
               "instanz-als-klasse", "metaklasse", "zusammensetzung",
               "zu-allgemein", "ohne-einordnung", "p31-neben-p279",
-              "parallelzweig"]
+              "parallelzweig", "elementklasse"]
+
+# Pruefungen, die nur in der Grundgesamtheit 'periodensystem' etwas
+# bedeuten. Sie brauchen die Ordnungszahl - ausserhalb des Periodensystems
+# hat kein Item eine.
+NUR_PERIODENSYSTEM = {"elementklasse"}
 
 # ---------------------------------------------------------------------------
 # Chemische Metaklasse (P31) fuer Legierungen
@@ -937,7 +1086,7 @@ def pruefe_zusammensetzung(kandidaten: dict, elementnamen: dict,
                 f"die Prozente gelten der AUFLAGE, nicht dem Item.",
                 "Kein Vorschlag: das Basismetall der Auflage sagt nichts "
                 "ueber die Klasse des Werkstoffs. Von Hand entscheiden.",
-                kennzahl="Auflage"))
+                eigenschaft="P279", kennzahl="Auflage"))
             continue
 
         anteile, unbekannt = lies_zusammensetzung(text, elementnamen)
@@ -957,6 +1106,7 @@ def pruefe_zusammensetzung(kandidaten: dict, elementnamen: dict,
                 f"{basis} fuehrt nur mit {spitze - zweiter:g} Prozentpunkten.",
                 f"Kein Vorschlag - unter {MIN_ABSTAND_PROZENT:g} "
                 f"Prozentpunkten Abstand entscheidet eine Nachkommastelle.",
+                eigenschaft="P279",
                 kennzahl=f"{spitze:g}:{zweiter:g}"))
             continue
 
@@ -970,7 +1120,7 @@ def pruefe_zusammensetzung(kandidaten: dict, elementnamen: dict,
                 f"Legierungsklasse.",
                 "Kein Vorschlag moeglich - die Klasse muesste erst angelegt "
                 "werden, und das tut dieses Werkzeug nicht.",
-                kennzahl=f"{spitze:g}%"))
+                eigenschaft="P279", kennzahl=f"{spitze:g}%"))
             continue
 
         ziel_qid, ziel_label = eintrag_klasse
@@ -1035,7 +1185,7 @@ def pruefe_p31_neben_p279(p31_kanten: list, kinder: dict, direkt_allgemein: set,
         "material, Stoffgruppe), ist alles in Ordnung. Meint er ein "
         "Einzelobjekt, gehoert das Material ueber P186 daran - das laesst "
         "sich hier nicht entscheiden.",
-        kennzahl=len(werte))
+        eigenschaft="P31", kennzahl=len(werte))
         for qid, werte in sorted(nach_item.items())]
 
 
@@ -1084,13 +1234,41 @@ def finde_basisklassen(basen: list) -> tuple:
 # Die Pruefungen
 # ---------------------------------------------------------------------------
 
+# Aus einer QuickStatements-Zeile die Eigenschaft herauslesen. Das Format
+# ist durchgaengig '[-]QID<TAB>Pnnn<TAB>Wert'.
+_QS_EIGENSCHAFT = re.compile(r"\t(P\d+)\t")
+
+
+def eigenschaft_aus(quickstatements: str) -> str:
+    """Die Eigenschaften eines Entwurfs, in der Reihenfolge der Zeilen.
+
+    Zweizeilige Entwuerfe beruehren zwei Eigenschaften ('P31 -> P279'
+    ersetzt die eine durch die andere); die werden zu EINEM Schluessel
+    zusammengezogen, damit sie in der Ausgabe zusammenbleiben. Ein Entwurf,
+    der P31 loescht und P279 setzt, gehoert weder unter das eine noch unter
+    das andere allein.
+    """
+    gesehen = []
+    for pid in _QS_EIGENSCHAFT.findall(quickstatements or ""):
+        if pid not in gesehen:
+            gesehen.append(pid)
+    return " -> ".join(gesehen)
+
+
 def befund(art: str, qid: str, label: str, quickstatements: str,
            begruendung: str, entscheidung: str, **extra) -> dict:
     """Ein Befund. `quickstatements` leer heisst: hier gibt es nichts zu
-    entwerfen, der Befund ist reine Meldung."""
+    entwerfen, der Befund ist reine Meldung.
+
+    `eigenschaft` ist der Sortierschluessel der Ausgabe. Wo ein Entwurf
+    dasteht, wird sie aus ihm gelesen - eine zweite, von Hand gepflegte
+    Angabe koennte davon abweichen. Nur die reinen Meldungen muessen sie
+    mitgeben; dort gibt es keinen Entwurf, aus dem sie folgen wuerde."""
     return {"befund": art, "qid": qid, "label": label,
             "quickstatements": quickstatements, "begruendung": begruendung,
             "entscheidung": entscheidung,
+            "eigenschaft": (eigenschaft_aus(quickstatements)
+                            or extra.get("eigenschaft", "")),
             "ziel_qid": extra.get("ziel_qid", ""),
             "ziel_label": extra.get("ziel_label", ""),
             "kennzahl": extra.get("kennzahl", "")}
@@ -1124,7 +1302,7 @@ def pruefe_zyklen(graph, im_bereich: set, labels: dict,
             f"P279-Zyklus ueber {len(zyklus)} Klassen: {kette}",
             "Welche Kante der Kette falsch ist, entscheidet die Fachlichkeit "
             "- hier wird nichts vorgeschlagen.",
-            kennzahl=len(zyklus)))
+            eigenschaft="P279", kennzahl=len(zyklus)))
     return treffer
 
 
@@ -1414,7 +1592,8 @@ def pruefe_metaklasse(items: dict, legierungen: set, p31_kanten: list,
                 f"also weichen.",
                 "Von Hand entscheiden. Entfernt wird hier nichts: die "
                 "bestehende Metaklasse kann auch heissen, dass das Item gar "
-                "keine Legierung ist."))
+                "keine Legierung ist.",
+                eigenschaft="P31"))
             continue
         if werte and not auch_mit_p31:
             ausgelassen += 1
@@ -1442,7 +1621,7 @@ def pruefe_metaklasse(items: dict, legierungen: set, p31_kanten: list,
                 "Rohre, Markenzeichen und Sammelbegriffe liegen, und ein "
                 "falsches P31 auf eine Metaklasse faellt spaeter niemandem "
                 "mehr auf.",
-                ziel_qid=GEMISCH_METAKLASSE,
+                eigenschaft="P31", ziel_qid=GEMISCH_METAKLASSE,
                 ziel_label=CHEMIE_METAKLASSEN[GEMISCH_METAKLASSE]))
             continue
 
@@ -1533,6 +1712,7 @@ def pruefe_ohne_einordnung(items: dict, eingeordnet: set, labels: dict,
                     f"waere die Aussage P31 auf {ziel_qid} ({ziel_label}); "
                     "P31 auf eine Werkstoffklasse entwirft dieses Werkzeug "
                     "nicht.",
+                    eigenschaft="P279",
                     ziel_qid=ziel_qid, ziel_label=ziel_label))
                 continue
 
@@ -1555,7 +1735,8 @@ def pruefe_ohne_einordnung(items: dict, eingeordnet: set, labels: dict,
                 f"'{basis or '?'}', hat aber keinen P279/P31-Pfad zu "
                 f"Legierung (Q37756). Kein Vorschlag moeglich: {grund}.",
                 "Ohne passende Oberklasse in Wikidata bleibt nur, sie "
-                "anzulegen - das tut dieses Werkzeug nicht."))
+                "anzulegen - das tut dieses Werkzeug nicht.",
+                eigenschaft="P279"))
     return treffer, luecken
 
 
@@ -1577,7 +1758,7 @@ def pruefe_parallelzweig(items: dict, unter_material: set,
         "kein P279*-Pfad zu material (Q214609) - laeuft ueber einen "
         "parallelen Zweig (alloy, chemical compound, ...).",
         "Kein Fehler. Nur relevant, wenn die Hierarchie unter Q214609 "
-        "vereinheitlicht werden soll.")
+        "vereinheitlicht werden soll.", eigenschaft="P279")
         for qid, eintrag in items.items() if qid not in unter_material]
 
 
@@ -1615,9 +1796,322 @@ def kennzahlen(items: dict, graph, p31_kanten: list, kinder: dict,
             for name, wert in werte]
 
 
+def _kategorie_tabelle() -> dict:
+    """{Ordnungszahl: Kategorie-QID} - die Sollzuordnung.
+
+    Aus Bereichen aufgebaut statt als 118-Zeilen-Tabelle: so ist auf einen
+    Blick zu sehen, dass es die Bloecke des Periodensystems sind und keine
+    Aufzaehlung von Einzelfaellen.
+    """
+    tabelle = {}
+    def setze(qid, *zahlen):
+        for z in zahlen:
+            tabelle[z] = qid
+    setze("Q19600", 1, 6, 7, 8, 15, 16)                  # Nichtmetalle
+    setze("Q19557", 3, 11, 19, 37, 55, 87)               # Alkalimetalle
+    setze("Q19563", 4, 12, 20, 38, 56, 88)               # Erdalkalimetalle
+    setze("Q19596", 5, 14, 32, 33, 51, 52)               # Halbmetalle
+    setze("Q19605", 9, 17, 35, 53)                       # Halogene
+    setze("Q19609", 2, 10, 18, 36, 54, 86)               # Edelgase
+    setze("Q19569", *range(57, 72))                      # Lanthanoide
+    setze("Q19577", *range(89, 104))                     # Actinoide
+    setze("Q19588", *range(21, 30), *range(39, 48),      # Uebergangsmetalle
+          *range(72, 80), *range(104, 112))
+    setze("Q19591", 13, 31, 49, 50, 81, 82, 83)          # Metalle p-Block
+    return tabelle
+
+
+KATEGORIE_NACH_Z = _kategorie_tabelle()
+
+# Die Faelle, in denen die Lehrbuecher NICHT einig sind. Hier entsteht
+# bewusst kein Entwurf, sondern eine Meldung mit den Lesarten - ein
+# Schwellwert oder eine Tabellenzeile wuerde hier eine Einigkeit behaupten,
+# die es nicht gibt.
+KATEGORIE_UMSTRITTEN = {
+    30: "Zink, Cadmium, Quecksilber und Copernicium (12. Gruppe) sind bei "
+        "der IUPAC keine Uebergangsmetalle (volle d-Schale in allen "
+        "Oxidationsstufen), in vielen Lehrbuechern aber schon; sonst "
+        "gelten sie als Metalle des p-Blocks.",
+    34: "Selen wird ueberwiegend als Nichtmetall gefuehrt, in manchen "
+        "Darstellungen als Halbmetall - Wikidata sagt derzeit Halbmetall.",
+    84: "Polonium gilt teils als Metall des p-Blocks, teils als Halbmetall.",
+    85: "Astat steht in der 17. Gruppe, wird aber wegen seiner "
+        "Eigenschaften auch als Halbmetall oder Metall gefuehrt.",
+    113: "Ab Nihonium (113) sind die Eigenschaften nur berechnet, nicht "
+         "gemessen - die Stellung im p-Block ist eine Vorhersage.",
+}
+# Alle Ordnungszahlen, zu denen der obige Text gehoert.
+UMSTRITTENE_Z = ({30, 48, 80, 112}          # 12. Gruppe -> siehe 30
+                 | {34}                     # Selen
+                 | {84}                     # Polonium
+                 | {85, 117}                # Astat, Tenness
+                 | set(range(113, 119)))    # Vorhersagen ab 113
+
+
+def _umstritten_grund(z: int) -> str:
+    """Der Erlaeuterungstext zu einer umstrittenen Ordnungszahl."""
+    if z in KATEGORIE_UMSTRITTEN:
+        return KATEGORIE_UMSTRITTEN[z]
+    if z in {48, 80, 112}:
+        return KATEGORIE_UMSTRITTEN[30]
+    if z == 117:
+        return KATEGORIE_UMSTRITTEN[85]
+    if z >= 113:
+        return KATEGORIE_UMSTRITTEN[113]
+    return "die Zuordnung ist in der Literatur nicht einheitlich."
+
+
+def gruppe_von(z: int) -> Optional[int]:
+    """Die Gruppe des Periodensystems zur Ordnungszahl - oder None.
+
+    None fuer die f-Block-Elemente: Lanthanoide und Actinoide stehen in
+    KEINER Gruppe, sie bilden den herausgezogenen Block. Sie hier auf
+    Gruppe 3 zu setzen waere genau die Behauptung, um die seit Jahrzehnten
+    gestritten wird (La/Ac gegen Lu/Lr).
+    """
+    if z < 1 or z > LETZTE_ORDNUNGSZAHL:
+        return None
+    if z == 1:
+        return 1
+    if z == 2:
+        return 18
+    if 58 <= z <= 71 or 90 <= z <= 103:
+        return None
+    # Ordnungszahl der ersten Spalte der Periode -> Spaltenabstand.
+    for beginn, laenge in ((3, 8), (11, 8), (19, 18), (37, 18),
+                           (55, 32), (87, 32)):
+        if beginn <= z < beginn + laenge:
+            spalte = z - beginn
+            if laenge == 8:
+                return spalte + 1 if spalte < 2 else spalte + 11
+            if laenge == 18:
+                return spalte + 1
+            # Periode 6 und 7: nach der 3. Gruppe folgt der f-Block.
+            return spalte + 1 if spalte <= 2 else spalte - 13
+    return None
+
+
+def hole_elementdaten(qids: list, block: int = 100) -> dict:
+    """{qid: {'z', 'dichten', 'p279', 'p361'}} fuer die Elemente.
+
+    Eine Abfrage fuer alles, was das Szenario braucht - Ordnungszahl,
+    bestehende Einordnung und die Dichte MIT EINHEIT. Die Einheit ist keine
+    Formalie: P2054 steht an den Elementen in zwei Einheiten nebeneinander
+    (56 Werte in kg/m3, 45 in g/cm3, gemessen 2026-08-29). Wer den rohen
+    Zahlenwert nimmt, haelt Natrium (1033 kg/m3) fuer ein Schwermetall.
+    """
+    daten = {}
+    for i in range(0, len(qids), block):
+        werte = " ".join(f"wd:{q}" for q in qids[i:i + block])
+        for b in sparql(f"""SELECT ?i ?z ?c ?t ?d ?u WHERE {{
+          VALUES ?i {{ {werte} }}
+          ?i wdt:P1086 ?z .
+          OPTIONAL {{ ?i wdt:P279 ?c }}
+          OPTIONAL {{ ?i wdt:P361 ?t }}
+          OPTIONAL {{ ?i p:P2054/psv:P2054 [ wikibase:quantityAmount ?d ;
+                                             wikibase:quantityUnit ?u ] }}
+        }}"""):
+            qid = qid_aus(b, "i")
+            eintrag = daten.setdefault(qid, {"z": int(float(b["z"]["value"])),
+                                             "dichten": set(),
+                                             "p279": set(), "p361": set()})
+            if "c" in b:
+                eintrag["p279"].add(qid_aus(b, "c"))
+            if "t" in b:
+                eintrag["p361"].add(qid_aus(b, "t"))
+            faktor = DICHTE_EINHEITEN.get(qid_aus(b, "u")) if "u" in b else None
+            if faktor and "d" in b:
+                eintrag["dichten"].add(round(float(b["d"]["value"]) * faktor, 4))
+    return daten
+
+
+def _dichteklasse(dichten: set) -> tuple:
+    """(QID, Bezeichnung, Begruendungstext) oder (None, None, Grund).
+
+    Alle bekannten Dichtewerte muessen auf DERSELBEN Seite der Grenze
+    liegen und den Graubereich meiden. Elemente tragen mehrere P2054-Werte
+    (Allotrope, Temperaturen); ein einzelner herausgegriffener Wert waere
+    Zufall.
+    """
+    if not dichten:
+        return None, None, "keine Dichte (P2054) in bekannter Einheit"
+    unten, oben = DICHTE_GRENZE - DICHTE_GRAUBEREICH, DICHTE_GRENZE + DICHTE_GRAUBEREICH
+    liste = ", ".join(f"{d:g}" for d in sorted(dichten))
+    if all(d < unten for d in dichten):
+        return (LEICHTMETALL_QID, "Leichtmetalle",
+                f"Dichte {liste} g/cm3, durchweg unter "
+                f"{DICHTE_GRENZE:g} g/cm3")
+    if all(d > oben for d in dichten):
+        return (SCHWERMETALL_QID, "Schwermetalle",
+                f"Dichte {liste} g/cm3, durchweg ueber "
+                f"{DICHTE_GRENZE:g} g/cm3")
+    return None, None, (f"Dichte {liste} g/cm3 - im Graubereich um die "
+                        f"{DICHTE_GRENZE:g}-g/cm3-Grenze oder uneinheitlich")
+
+
+# Kategorien, deren Elemente keine Metalle sind - fuer die ist die Frage
+# nach Leicht- oder Schwermetall gegenstandslos.
+NICHTMETALL_KATEGORIEN = {"Q19596", "Q19600", "Q19605", "Q19609"}
+
+# Dieselbe Frage ist auch dort gegenstandslos, wo gar nicht feststeht, ob
+# das Element ein Metall ist: Selen, Polonium, Astat und alles ab 113, wo
+# die Eigenschaften nur berechnet sind. Zink, Cadmium und Quecksilber
+# fehlen hier bewusst - ob sie Uebergangsmetalle sind, ist strittig, DASS
+# sie Metalle sind, nicht.
+KEIN_METALL_Z = {34, 84, 85} | set(range(113, 119))
+
+
+def pruefe_elementklasse(items: dict, elementdaten: dict, graph,
+                         labels: dict, mit_dichte: bool = True) -> list:
+    """Die Einordnung der Elemente gegen das Periodensystem.
+
+    Drei Fragen, drei Befundarten - bewusst getrennt, weil sie
+    unterschiedlich stark belegt sind:
+
+      element-kategorie  Die Kategorie folgt aus der Ordnungszahl. Der
+                         staerkste Befund des Szenarios: nachrechenbar.
+      element-gruppe     Die Gruppe folgt ebenso aus der Ordnungszahl,
+                         gehoert aber an P361 (so ist sie in Wikidata
+                         durchgaengig gepflegt), nicht an P279.
+      element-dichte     Leicht- oder Schwermetall, gerechnet aus P2054
+                         gegen eine Konvention - schwaecher belegt.
+
+    Erfuellt ist eine Erwartung auch dann, wenn sie nur ueber einen
+    P279-Pfad gilt: wer schon Halogen ist, braucht kein zweites P279 auf
+    Nichtmetall danebengeschrieben.
+    """
+    treffer = []
+    for qid in sorted(items, key=lambda q: elementdaten.get(q, {}).get("z", 999)):
+        eintrag = elementdaten.get(qid)
+        if not eintrag:
+            continue
+        z = eintrag["z"]
+        name = labels.get(qid, items[qid].get("label", qid))
+        anzeige = f"{name} (Z={z})"
+        if z > LETZTE_ORDNUNGSZAHL:
+            continue
+
+        def erfuellt(ziel: str) -> bool:
+            """Steht `ziel` schon da - direkt oder ueber einen P279-Pfad?"""
+            if ziel in eintrag["p279"]:
+                return True
+            return bool(ziel in graph and qid in graph
+                        and nx.has_path(graph, qid, ziel))
+
+        # --- 1. Elementkategorie -------------------------------------
+        soll = KATEGORIE_NACH_Z.get(z)
+        vorhanden = eintrag["p279"] & set(ELEMENTKATEGORIEN)
+        if z in UMSTRITTENE_Z:
+            treffer.append(befund(
+                "element-kategorie-umstritten", qid, anzeige, "",
+                f"{_umstritten_grund(z)} Derzeit steht "
+                + (", ".join(f"{k} ({ELEMENTKATEGORIEN[k]})"
+                             for k in sorted(vorhanden))
+                   if vorhanden else "keine Kategorie")
+                + " am Item.",
+                "Kein Entwurf. Wenn dieses Projekt sich auf ein Schema "
+                "festlegt, gehoert die Entscheidung dokumentiert - nicht "
+                "in einen Schwellwert.",
+                eigenschaft="P279",
+                ziel_qid=soll or "", ziel_label=ELEMENTKATEGORIEN.get(soll, "")))
+        elif soll and not erfuellt(soll):
+            fremd = sorted(vorhanden - {soll})
+            if fremd:
+                treffer.append(befund(
+                    "element-kategorie-konflikt", qid, anzeige, "",
+                    f"traegt P279 auf {', '.join(f'{k} ({ELEMENTKATEGORIEN[k]})' for k in fremd)}; "
+                    f"nach der Ordnungszahl {z} steht das Element aber in "
+                    f"{soll} ({ELEMENTKATEGORIEN[soll]}).",
+                    "Von Hand entscheiden. Entfernt wird hier nichts - die "
+                    "bestehende Kategorie kann einem anderen, ebenfalls "
+                    "gebraeuchlichen Schema folgen.",
+                    eigenschaft="P279",
+                    ziel_qid=soll, ziel_label=ELEMENTKATEGORIEN[soll]))
+            else:
+                treffer.append(befund(
+                    "element-kategorie", qid, anzeige,
+                    f"{qid}\tP279\t{soll}",
+                    f"Z={z} legt die Kategorie fest; am Item fehlt sie, "
+                    f"auch ueber jeden P279-Pfad.",
+                    "Nachrechenbar aus der Ordnungszahl. Zu pruefen bleibt, "
+                    "ob am Item nicht schon eine ENGERE Klasse steht "
+                    "(Platinmetalle, Edelmetalle), unter der die Kategorie "
+                    "ohnehin haengen sollte - dann gehoert die Kante dorthin.",
+                    eigenschaft="P279",
+                    ziel_qid=soll, ziel_label=ELEMENTKATEGORIEN[soll],
+                    kennzahl=z))
+
+        # --- 2. Gruppe des Periodensystems ---------------------------
+        nummer = gruppe_von(z)
+        ziel_gruppe = GRUPPEN_QID.get(nummer) if nummer else None
+        if ziel_gruppe:
+            art = ("Hauptgruppe" if nummer in HAUPTGRUPPEN else "Nebengruppe")
+            gruppe_label = labels.get(ziel_gruppe, ziel_gruppe)
+            # Drei Gruppen-Items sind zugleich Kategorie-Items: die 2.
+            # Gruppe IST "Erdalkalimetalle", die 17. IST "Halogene", die
+            # 18. IST "Edelgase". Ein P279 darauf ist dort die
+            # Kategoriezuordnung und kein verrutschtes P361 - dazu muss
+            # das Element nicht einmal eine unstrittige Kategorie haben
+            # (Astat, Tenness).
+            if (ziel_gruppe in eintrag["p279"]
+                    and ziel_gruppe not in ELEMENTKATEGORIEN):
+                treffer.append(befund(
+                    "element-gruppe-als-p279", qid, anzeige, "",
+                    f"die {nummer}. {art} steht hier als P279 statt als "
+                    f"P361; in Wikidata sind alle 18 Gruppen ueber P361 "
+                    f"besetzt.",
+                    "Nur Meldung. Beides ist vertretbar (die Gruppe ist in "
+                    "Wikidata sowohl Klasse als auch Ganzes); hier wird "
+                    "nichts umgehaengt, solange das Projekt sich nicht auf "
+                    "eine Form festgelegt hat.",
+                    eigenschaft="P279",
+                    ziel_qid=ziel_gruppe, ziel_label=gruppe_label,
+                    kennzahl=nummer))
+            elif ziel_gruppe not in eintrag["p361"]:
+                treffer.append(befund(
+                    "element-gruppe", qid, anzeige,
+                    f"{qid}\tP361\t{ziel_gruppe}",
+                    f"Z={z} - {nummer}. {art}; am Item fehlt das P361.",
+                    "Folgt aus der Ordnungszahl. Zu pruefen ist nur, ob "
+                    "die Gruppe nicht schon unter einem anderen Item "
+                    "danebensteht.",
+                    eigenschaft="P361",
+                    ziel_qid=ziel_gruppe, ziel_label=gruppe_label,
+                    kennzahl=nummer))
+
+        # --- 3. Leicht- oder Schwermetall ----------------------------
+        if (not mit_dichte or soll in NICHTMETALL_KATEGORIEN
+                or z in KEIN_METALL_Z):
+            continue
+        ziel_dichte, dichte_label, grund = _dichteklasse(eintrag["dichten"])
+        if not ziel_dichte or erfuellt(ziel_dichte):
+            continue
+        gegen = (SCHWERMETALL_QID if ziel_dichte == LEICHTMETALL_QID
+                 else LEICHTMETALL_QID)
+        treffer.append(befund(
+            "element-dichteklasse", qid, anzeige,
+            f"{qid}\tP279\t{ziel_dichte}",
+            f"{grund} -> {dichte_label[:-1]}"
+            + (f"; das Item traegt bisher die Gegenklasse {gegen}."
+               if gegen in eintrag["p279"] else "."),
+            f"Die {DICHTE_GRENZE:g}-g/cm3-Grenze ist Konvention, nicht "
+            f"Physik - andere Quellen nennen 4,5 g/cm3. Fuer Elemente "
+            f"nahe der Grenze entsteht hier gar kein Entwurf. Zu pruefen: "
+            f"Ist das Element ueberhaupt als Metall gemeint?",
+            eigenschaft="P279",
+            ziel_qid=ziel_dichte, ziel_label=dichte_label,
+            kennzahl=z))
+    return treffer
+
+
 # ---------------------------------------------------------------------------
 # Ausgabe
 # ---------------------------------------------------------------------------
+
+# Umbruchmass der Fliesstexte. Breiter als frueher (68), weil die Datei
+# zum Ueberfliegen gebaut ist und nicht zum Lesen: je weniger Zeilen
+# zwischen zwei Entwuerfen stehen, desto schneller ist sie durch.
+BREITE = 96
 
 _TRENNER = "# " + "=" * 70
 
@@ -1630,44 +2124,38 @@ _TRENNER = "# " + "=" * 70
 # und die Trefferquote schlechter, also kann jederzeit aufgehoert werden.
 STUFEN = [
     (1, "MECHANISCH SICHER", ["redundant"], True,
-     ["Folgt allein aus dem Graphen und behauptet nichts: die entfernte",
-      "Kante gilt danach weiter, nur abgeleitet statt doppelt notiert.",
-      "Nichts geht verloren, alles ist umkehrbar.",
-      "",
-      "ZU PRUEFEN: Stimmt der angegebene Ersatzpfad? Ein Blick aufs Item."]),
-    (2, "STRUKTURELL BEGRUENDET", ["instanz-als-klasse", "metaklasse",
+     "folgt allein aus dem Graphen, behauptet nichts, ist umkehrbar",
+     ["Die entfernte Kante gilt danach weiter, nur abgeleitet statt doppelt",
+      "notiert. PRUEFEN: Stimmt der angegebene Ersatzpfad?"]),
+    (2, "STRUKTURELL BEGRUENDET", ["element-kategorie", "element-gruppe",
+                                   "instanz-als-klasse", "metaklasse",
                                    "metaklasse-konflikt", "verkehrt",
                                    "redundant-unsicher", "zyklus"], False,
-     ["Aus dem Graphen abgeleitet, aber mit einer fachlichen Entscheidung",
-      "davor. Der Graph sagt, DASS etwas nicht stimmt - nicht, wie herum",
-      "es richtig waere.",
-      "",
-      "ZU PRUEFEN: Einzelfall. Item oeffnen, Aussage im Kontext ansehen."]),
-    (3, "AUS DER BEZEICHNUNG ABGELEITET", ["zusammensetzung", "zu-allgemein",
-                                          "ohne-einordnung"], False,
-     ["Nicht aus der Struktur, sondern aus dem Namen. Die Beweiskraft ist",
-      "je Gruppe SEHR verschieden - der Gruppenkopf sagt jeweils, woran",
-      "man ist. Die erste Gruppe rechnet, die zweite raet.",
-      "",
-      "ACHTUNG: Die meisten Entwuerfe hier haben ZWEI Zeilen, und die erste",
-      "ENTFERNT die bestehende Einordnung. Ein Fehltreffer haengt das Item",
-      "ersatzlos aus dem Baum. Im Zweifel: liegenlassen.",
-      "",
-      "ZU PRUEFEN: Passt die vorgeschlagene Oberklasse sachlich? Ist das",
-      "Item ueberhaupt eine Legierung - oder ein Schichtverbund, eine",
-      "Verbindung, ein Handelsname?"]),
-    (4, "NUR MELDUNG - KEIN ENTWURF", ["metaklasse-klasse",
+     "aus dem Graphen, aber mit einer fachlichen Entscheidung davor",
+     ["Der Graph sagt, DASS etwas nicht stimmt - nicht, wie herum es richtig",
+      "waere. PRUEFEN: Einzelfall, Item oeffnen, Aussage im Kontext ansehen."]),
+    (3, "GERECHNET ODER GERATEN", ["zusammensetzung",
+                                   "element-dichteklasse",
+                                   "zu-allgemein",
+                                   "ohne-einordnung"], False,
+     "aus einer Bezeichnung oder einem Messwert gegen eine Konvention",
+     ["Die Beweiskraft ist je Gruppe SEHR verschieden - der Gruppenkopf sagt,",
+      "woran man ist. ACHTUNG: Was aus der Bezeichnung kommt, hat ZWEI Zeilen,",
+      "und die erste ENTFERNT die bestehende Einordnung. Im Zweifel: liegen-",
+      "lassen. PRUEFEN: Passt die Oberklasse sachlich? Ist das Item ueberhaupt",
+      "ein Werkstoff - oder ein Schichtverbund, eine Verbindung, ein Handelsname?"]),
+    (4, "NUR MELDUNG - KEIN ENTWURF", ["element-kategorie-umstritten",
+                                       "element-kategorie-konflikt",
+                                       "element-gruppe-als-p279",
+                                       "metaklasse-klasse",
                                        "ohne-einordnung-instanz",
                                        "p31-neben-p279", "parallelzweig"],
      False,
-     ["Hier gibt es nichts einzuspielen. Diese Befunde stehen als Zahl auf",
-      "dem Tisch, weil sie die Lage beschreiben - nicht, weil etwas zu tun",
-      "waere. Ein Teil davon ist ausdruecklich KEIN Fehler.",
-      "",
-      "Die ersten beiden Gruppen sind bewusst hier und nicht in Stufe 2:",
-      "an eine Werkstoffklasse schreibt dieses Werkzeug kein P31, an eine",
-      "Instanz kein P279. Wo der Graph die Klassenzugehoerigkeit nicht",
-      "hergibt, entsteht eine Meldung statt eines Entwurfs."]),
+     "beschreibt die Lage, fordert nichts - ein Teil ist KEIN Fehler",
+     ["Hier gibt es nichts einzuspielen. Wo der Graph die Klassenzugehoerigkeit",
+      "nicht hergibt, entsteht eine Meldung statt eines Entwurfs: an eine",
+      "Werkstoffklasse schreibt dieses Werkzeug kein P31, an eine Instanz kein",
+      "P279."]),
 ]
 
 # Ueberschrift und Einzeiler je Befundart, fuer die Zwischenkoepfe.
@@ -1704,64 +2192,196 @@ ART_TITEL = {
     "p31-neben-p279": ("P31 neben P279", "nur zur Kenntnis"),
     "parallelzweig": ("Kein Pfad zu material (Q214609)",
                       "kein Fehler - P186 erlaubt parallele Werttypen"),
+    "element-kategorie": ("Elementkategorie fehlt",
+                          "NACHGERECHNET: die Ordnungszahl legt die "
+                          "Kategorie im Periodensystem eindeutig fest"),
+    "element-gruppe": ("Gruppe des Periodensystems fehlt",
+                       "NACHGERECHNET aus der Ordnungszahl; in Wikidata "
+                       "haengt die Gruppe an P361, nicht an P279"),
+    "element-dichteklasse": ("Leicht- oder Schwermetall",
+                             "GERECHNET aus P2054 gegen die 5-g/cm3-Grenze "
+                             "- eine Konvention, keine Physik"),
+    "element-kategorie-konflikt": ("Andere Elementkategorie am Item",
+                                   "nur Meldung: die vorhandene kann einem "
+                                   "anderen gebraeuchlichen Schema folgen"),
+    "element-kategorie-umstritten": ("Kategorie in der Literatur strittig",
+                                     "nur Meldung: 12. Gruppe, Selen, "
+                                     "Polonium, Astat und alles ab 113"),
+    "element-gruppe-als-p279": ("Gruppe steht als P279 statt P361",
+                                "nur Meldung: beide Formen sind "
+                                "vertretbar"),
 }
 
 WD = "https://www.wikidata.org/wiki/"
 
+# Ueberschrift je Eigenschaft. Innerhalb einer Stufe wird nach ihr
+# gruppiert - siehe _stufen_block.
+EIGENSCHAFT_TITEL = {
+    "P279": "P279 - Unterklasse von",
+    "P31": "P31 - ist ein(e)",
+    "P361": "P361 - Teil von",
+    "P31 -> P279": "P31 -> P279 - Aussage umhaengen",
+    "": "ohne Eigenschaft - der Befund benennt keine Aussage",
+}
+
+# Reihenfolge der Eigenschaftsbloecke. Was hier nicht steht, kommt danach
+# in alphabetischer Folge; die leere Eigenschaft (reine Lagebeschreibung)
+# immer zuletzt.
+EIGENSCHAFT_REIHENFOLGE = ["P279", "P31 -> P279", "P31", "P361"]
+
+
+def _eigenschaft_rang(eigenschaft: str) -> tuple:
+    if eigenschaft in EIGENSCHAFT_REIHENFOLGE:
+        return (0, EIGENSCHAFT_REIHENFOLGE.index(eigenschaft), "")
+    return (2, 0, "") if not eigenschaft else (1, 0, eigenschaft)
+
+
+def _sortierschluessel(b: dict) -> tuple:
+    """Innerhalb einer Eigenschaft: gleiches ZIEL zusammen.
+
+    Der Punkt der ganzen Umstellung. Nach Item sortiert steht in der Datei
+    118-mal dieselbe Ueberlegung neu da; nach Eigenschaft und Ziel sortiert
+    steht einmal "diese 21 Items werden Uebergangsmetalle" - und wer das
+    Ziel einmal geprueft hat, arbeitet die Gruppe am Stueck ab.
+    """
+    return (b.get("ziel_label", "").lower(), b.get("ziel_qid", ""),
+            (b["label"] or b["qid"]).lower())
+
+
+def _pruefkopf(anzahl: int, text: str) -> list:
+    """Die gemeinsame Pruefanweisung eines Kopfes, eingerueckt."""
+    vor = f"Pruefen (alle {anzahl}): " if anzahl > 1 else "Pruefen: "
+    return [f"#      {satz}" for satz in _umbrechen(vor + text, BREITE - 7)]
+
+
+def _stueck(anzahl: int) -> str:
+    return "1 Item" if anzahl == 1 else f"{anzahl} Items"
+
+
+def _befund_block(b: dict, einspielbar: bool, zaehler: list,
+                  ohne_entscheidung: bool = False) -> list:
+    """Ein einzelner Vorschlag - im Regelfall zwei Zeilen.
+
+    Kopfzeile und Begruendung stehen zusammen in EINEM umbrochenen Absatz,
+    das Ziel steht nicht dabei: es steht schon im Gruppenkopf darueber, und
+    zweimal dasselbe zu lesen kostet beim Durchsehen mehr, als es hilft.
+
+    `ohne_entscheidung` laesst die Pruefanweisung weg - dann steht sie
+    einmal ueber der Gruppe statt sechsundfuenfzigmal darin.
+    """
+    zaehler[0] += 1
+    name = b["label"] or b["qid"]
+    kopf = f"[{zaehler[0]:04d}] {name}  {WD}{b['qid']}"
+    text = f"{kopf}  |  {b['begruendung']}" if b["begruendung"] else kopf
+    zeilen = [f"# {z}" if i == 0 else f"#        {z}"
+              for i, z in enumerate(
+                  _umbrechen(text, BREITE - 8, erste_laenge=len(kopf)))]
+    if b["entscheidung"] and not ohne_entscheidung:
+        for satz in _umbrechen("Pruefen: " + b["entscheidung"], BREITE - 8):
+            zeilen.append(f"#        {satz}")
+    for qs in (b["quickstatements"] or "").splitlines():
+        # EIN '#' davor, sonst nichts: freigeben heisst genau ein Zeichen
+        # loeschen. Fliesstext traegt immer '# ' mit Leerzeichen, Entwuerfe
+        # nie - im Editor findet die Suche nach '#Q' und '#-Q' also genau
+        # die Entwuerfe. In der einspielbaren Stufe steht die Zeile blank.
+        zeilen.append(qs if einspielbar else f"#{qs}")
+    return zeilen
+
 
 def _stufen_block(nummer: int, titel: str, arten: list, einspielbar: bool,
-                  erklaerung: list, befunde: list, zaehler: list) -> list:
+                  kurz: str, erklaerung: list, befunde: list,
+                  zaehler: list) -> list:
     """Ein Stufenblock als Zeilenliste. `zaehler` ist einelementig und
     laeuft ueber alle Stufen durch - die Nummer im Kopf jedes Vorschlags
-    ist damit ueber die ganze Datei eindeutig und zitierbar."""
+    ist damit ueber die ganze Datei eindeutig und zitierbar.
+
+    Gegliedert wird in drei Ebenen: Stufe -> EIGENSCHAFT -> Befundart, und
+    innerhalb der Befundart nach Ziel. Die Eigenschaft ist die oberste,
+    weil sie bestimmt, WAS beim Freigeben passiert: eine P279-Zeile haengt
+    um, eine P31-Zeile klassifiziert, eine P361-Zeile ordnet ein Teil einem
+    Ganzen zu.
+
+    Jede Ueberschrift ist eine Zeile. Was sich wiederholen wuerde - Ziel,
+    Link, Pruefanweisung - steht im Gruppenkopf und nicht in jedem Eintrag;
+    die Datei wird dadurch rund halb so lang und laesst sich schneller nach
+    QuickStatements kopieren.
+    """
     teil = [b for b in befunde if b["befund"] in arten]
-    marke = "   ***EINSPIELBAR***" if einspielbar else ""
-    zeilen = [
-        "",
-        _TRENNER,
-        f"# STUFE {nummer} - {titel} ({len(teil)} Befunde){marke}",
-        "#",
-    ]
+    marke = "  ***EINSPIELBAR***" if einspielbar else ""
+    zeilen = ["", _TRENNER,
+              f"# STUFE {nummer} - {titel} ({len(teil)}){marke}",
+              f"# {kurz}"]
     zeilen += [f"# {z}".rstrip() for z in erklaerung]
     zeilen.append(_TRENNER)
     if not teil:
         zeilen.append("# (keine)")
         return zeilen
 
-    for art in arten:
-        eintraege = [b for b in teil if b["befund"] == art]
-        if not eintraege:
-            continue
-        kopf, zusatz = ART_TITEL.get(art, (art, ""))
-        zeilen += ["", f"# --- {kopf} ({len(eintraege)}) "
-                       f"{'- ' + zusatz if zusatz else ''} ---"]
-        for b in eintraege:
-            zaehler[0] += 1
-            name = b["label"] or b["qid"]
-            zeilen.append(f"#")
-            zeilen.append(f"# [{zaehler[0]:04d}] {name}   {WD}{b['qid']}")
-            if b.get("ziel_qid"):
-                zeilen.append(f"#        Ziel: {b['ziel_label']}   "
-                              f"{WD}{b['ziel_qid']}")
-            for satz in _umbrechen(b["begruendung"], 68):
-                zeilen.append(f"#        {satz}")
-            if b["entscheidung"]:
-                for satz in _umbrechen("Pruefen: " + b["entscheidung"], 68):
-                    zeilen.append(f"#        {satz}")
-            for qs in (b["quickstatements"] or "").splitlines():
-                # '#!' markiert einen freigabefaehigen Entwurf: pruefen, dann
-                # die zwei Zeichen loeschen. In der einspielbaren Stufe steht
-                # die Zeile gleich ohne Marke da.
-                zeilen.append(qs if einspielbar else f"#!{qs}")
+    nach_eigenschaft = {}
+    for b in teil:
+        nach_eigenschaft.setdefault(b.get("eigenschaft", ""), []).append(b)
+
+    for eigenschaft in sorted(nach_eigenschaft, key=_eigenschaft_rang):
+        gruppe = nach_eigenschaft[eigenschaft]
+        kopf = EIGENSCHAFT_TITEL.get(eigenschaft, eigenschaft)
+        zeilen += ["", f"# ==== EIGENSCHAFT {kopf} ({len(gruppe)}) "
+                       .ljust(BREITE, "=")]
+        for art in arten:
+            eintraege = sorted((b for b in gruppe if b["befund"] == art),
+                               key=_sortierschluessel)
+            if not eintraege:
+                continue
+            art_kopf, zusatz = ART_TITEL.get(art, (art, ""))
+            zeilen.append("")
+            for i, satz in enumerate(_umbrechen(
+                    f"---- {art_kopf} ({len(eintraege)})"
+                    + (f" - {zusatz}" if zusatz else ""), BREITE)):
+                zeilen.append(f"# {satz}" if i == 0 else f"#      {satz}")
+            # Befundarten ohne Ziel (reine Lagemeldungen) bilden keine
+            # Zielgruppen - dort steht die gemeinsame Pruefanweisung unter
+            # dem Artkopf, sonst wiederholt sie sich dreizehnmal wortgleich.
+            saetze = {b["entscheidung"] for b in eintraege}
+            artweit = ("" if any(b.get("ziel_qid") for b in eintraege)
+                       or len(saetze) != 1 else saetze.pop())
+            if artweit:
+                zeilen += _pruefkopf(len(eintraege), artweit)
+            letztes_ziel, gemeinsam = None, artweit
+            for b in eintraege:
+                # Zwischenzeile, sobald das Ziel wechselt: sie traegt Label,
+                # Link und - wenn sie fuer alle dieselbe ist - die
+                # Pruefanweisung. Genau dafuer wird nach Ziel sortiert: die
+                # Frage "passt dieses Ziel?" wird einmal gestellt.
+                ziel = (b.get("ziel_qid", ""), b.get("ziel_label", ""))
+                if ziel != letztes_ziel and ziel[0]:
+                    gleich = [x for x in eintraege
+                              if (x.get("ziel_qid", ""),
+                                  x.get("ziel_label", "")) == ziel]
+                    saetze = {x["entscheidung"] for x in gleich}
+                    gemeinsam = saetze.pop() if len(saetze) == 1 else ""
+                    zeilen += ["#", f"#   -> ZIEL {ziel[1]}  {WD}{ziel[0]}"
+                                    f"   ({_stueck(len(gleich))})"]
+                    if gemeinsam:
+                        zeilen += _pruefkopf(len(gleich), gemeinsam)
+                elif ziel != letztes_ziel:
+                    gemeinsam = artweit
+                letztes_ziel = ziel
+                zeilen += _befund_block(b, einspielbar, zaehler,
+                                        ohne_entscheidung=bool(gemeinsam))
     return zeilen
 
 
-def _umbrechen(text: str, breite: int) -> list:
+def _umbrechen(text: str, breite: int, erste_laenge: int = 0) -> list:
     """Fliesstext auf `breite` Zeichen umbrechen - ohne textwrap, weil der
-    lange QIDs und Pfadketten mitten im Bezeichner trennt."""
+    lange QIDs und Pfadketten mitten im Bezeichner trennt.
+
+    `erste_laenge` haelt die erste Zeile mindestens so lang: der Kopf eines
+    Vorschlags (Nummer, Bezeichnung, Link) gehoert zusammen, auch wenn der
+    Link allein schon breiter ist als das Umbruchmass.
+    """
     zeilen, aktuell = [], ""
     for wort in text.split():
-        if aktuell and len(aktuell) + 1 + len(wort) > breite:
+        grenze = max(breite, erste_laenge) if not zeilen else breite
+        if aktuell and len(aktuell) + 1 + len(wort) > grenze:
             zeilen.append(aktuell)
             aktuell = wort
         else:
@@ -1781,19 +2401,19 @@ def schreibe_empfehlung(befunde: list, pfad: str, population: str,
     Stufen nach Beweiskraft.
 
     Nur Stufe 1 steht als ausfuehrbare QuickStatements-Syntax da. Ab Stufe 2
-    traegt jeder Entwurf die Marke '#!' - QuickStatements liest sie als
-    Kommentar, der Mensch loescht die zwei Zeichen, wenn er die Zeile
-    freigibt. Alle uebrigen Zeilen beginnen mit '#', die Datei laesst sich
+    traegt jeder Entwurf ein einzelnes '#' - QuickStatements liest es als
+    Kommentar, der Mensch loescht dieses eine Zeichen, wenn er die Zeile
+    freigibt. Fliesstext traegt '# ' mit Leerzeichen, die Datei laesst sich
     also jederzeit als Ganzes einfuegen, ohne dass eine ungepruefte Zeile
     zur Aussage wird.
     """
     zaehler = [0]
     bloecke = []
-    for nummer, titel, arten, einspielbar, erklaerung in STUFEN:
+    for nummer, titel, arten, einspielbar, kurz, erklaerung in STUFEN:
         bloecke.append((nummer, titel, arten,
                         _stufen_block(nummer, titel, arten,
                                       einspielbar and not vorsichtig,
-                                      erklaerung, befunde, zaehler)))
+                                      kurz, erklaerung, befunde, zaehler)))
 
     schluss = _schlussblock(luecken, ohne_item)
 
@@ -1802,28 +2422,29 @@ def schreibe_empfehlung(befunde: list, pfad: str, population: str,
     def kopf(offsets: dict) -> list:
         z = [
             _TRENNER,
-            "# P279-EMPFEHLUNG - Werkstoffe in Wikidata",
+            "# EMPFEHLUNG ZUR KLASSENSTRUKTUR IN WIKIDATA",
+            f"# {POPULATIONEN[population]['beschreibung']}",
             f"# Grundgesamtheit '{population}', erzeugt "
             f"{dt.datetime.now():%Y-%m-%d %H:%M}",
             "#",
-            "# SO ARBEITEST DU DAS AB",
-            "#   1. Von oben nach unten. Die Stufen sind nach BEWEISKRAFT",
-            "#      sortiert, nicht nach Wichtigkeit - du kannst jederzeit",
-            "#      aufhoeren, das Gepruefte bleibt gueltig.",
-            "#   2. Stufe 1 ist ausfuehrbar und steht ohne Marke da.",
-            "#   3. Ab Stufe 2 traegt jeder Entwurf die Marke '#!'. Geprueft",
-            "#      und fuer richtig befunden? Dann die zwei Zeichen '#!' am",
-            "#      Zeilenanfang loeschen. Sonst stehenlassen.",
-            "#      Im Editor: nach '#!' suchen, das sind alle Entwuerfe.",
-            "#   4. Jeder Vorschlag hat eine Nummer [0042] und einen Link.",
-            "#      Link im Browser oeffnen, Aussage dort pruefen.",
-            "#   5. Am Ende die ganze Datei nach QuickStatements kopieren.",
-            "#      Alles mit '#' wird ignoriert - nur was du freigegeben",
-            "#      hast, wird zur Aussage.",
+            "# FREIGEBEN = EIN ZEICHEN LOESCHEN.",
+            "#   Jeder Entwurf steht als '#Q123<TAB>P279<TAB>Q456' da - EIN",
+            "#   '#' davor, ohne Leerzeichen. Geprueft und fuer richtig",
+            "#   befunden? Das '#' weg, fertig. Sonst stehenlassen.",
+            "#   Im Editor findet die Suche nach '#Q' und '#-Q' genau die",
+            "#   Entwuerfe: Fliesstext traegt immer '# ' mit Leerzeichen.",
+            "#   Stufe 1 steht schon ohne Marke da und ist einspielbar.",
             "#",
-            "# '-QID<TAB>P279<TAB>QID' entfernt eine Aussage, ohne Minus",
-            "# setzt sie. Zweizeilige Entwuerfe ersetzen: erst entfernen,",
-            "# dann setzen - beide Zeilen gehoeren zusammen.",
+            "#   Die ganze Datei laesst sich jederzeit als GANZES nach",
+            "#   QuickStatements kopieren - alles mit '#' wird ignoriert.",
+            "#   '-QID<TAB>P279<TAB>QID' entfernt eine Aussage, ohne Minus",
+            "#   setzt sie; zweizeilige Entwuerfe gehoeren zusammen.",
+            "#",
+            "# AUFBAU: Stufe (nach BEWEISKRAFT, nicht nach Wichtigkeit) ->",
+            "#   EIGENSCHAFT -> Befundart -> ZIEL. Ziel, Link und",
+            "#   Pruefanweisung stehen im Gruppenkopf, nicht in jedem",
+            "#   Eintrag: das Ziel einmal pruefen, dann die Gruppe darunter",
+            "#   am Stueck abarbeiten. Du kannst jederzeit aufhoeren.",
             "#",
             "# INHALT",
         ]
@@ -1836,6 +2457,17 @@ def schreibe_empfehlung(befunde: list, pfad: str, population: str,
                      f"{ort}{marke}")
         if vorsichtig:
             z.append("#   (--vorsichtig: auch Stufe 1 ist nur ein Entwurf)")
+        nach_eigenschaft = {}
+        for b in befunde:
+            if b["befund"] == "kennzahl":
+                continue
+            nach_eigenschaft.setdefault(b.get("eigenschaft", ""), 0)
+            nach_eigenschaft[b.get("eigenschaft", "")] += 1
+        if nach_eigenschaft:
+            z += ["#", "# BEFUNDE NACH EIGENSCHAFT"]
+            for e in sorted(nach_eigenschaft, key=_eigenschaft_rang):
+                z.append(f"#   {EIGENSCHAFT_TITEL.get(e, e)[:44]:<46}"
+                         f"{nach_eigenschaft[e]:>4}")
         z += ["#", f"# {mengengeruest}", _TRENNER]
         return z
 
@@ -1869,13 +2501,13 @@ def _schlussblock(luecken: dict, ohne_item: list) -> list:
         zeilen.append("#")
         zeilen.append("# Basismetalle ohne Legierungsklasse:")
         for basis, grund in sorted(luecken.items()):
-            for i, satz in enumerate(_umbrechen(f"{basis}: {grund}", 66)):
+            for i, satz in enumerate(_umbrechen(f"{basis}: {grund}", BREITE)):
                 zeilen.append(f"#   {satz}" if i == 0 else f"#     {satz}")
     if ohne_item:
         zeilen.append("#")
         zeilen.append(f"# Listeneintraege ohne Wikidata-Item "
                       f"({len(ohne_item)}):")
-        for satz in _umbrechen(", ".join(ohne_item), 66):
+        for satz in _umbrechen(", ".join(ohne_item), BREITE):
             zeilen.append(f"#   {satz}")
     if not luecken and not ohne_item:
         zeilen.append("# (keine)")
@@ -1883,12 +2515,17 @@ def _schlussblock(luecken: dict, ohne_item: list) -> list:
 
 
 def schreibe_csv(befunde: list, pfad: str) -> None:
-    felder = ["befund", "qid", "label", "ziel_qid", "ziel_label", "kennzahl",
-              "quickstatements", "begruendung", "entscheidung"]
+    felder = ["eigenschaft", "befund", "qid", "label", "ziel_qid",
+              "ziel_label", "kennzahl", "quickstatements", "begruendung",
+              "entscheidung"]
     with open(pfad, "w", newline="", encoding="utf-8") as f:
         schreiber = csv.DictWriter(f, fieldnames=felder)
         schreiber.writeheader()
-        for b in befunde:
+        # Dieselbe Ordnung wie in der Empfehlung: Eigenschaft, dann Ziel.
+        # Eine Tabelle, die anders sortiert ist als die Datei daneben,
+        # kostet beim Abgleich mehr Zeit, als sie spart.
+        for b in sorted(befunde, key=lambda x: (_eigenschaft_rang(
+                x.get("eigenschaft", "")), x["befund"], _sortierschluessel(x))):
             # Der Zeilenumbruch im zweizeiligen P31->P279-Entwurf wuerde die
             # CSV-Zeile sprengen; im Tabellenblatt ist ' | ' lesbarer.
             schreiber.writerow({**{k: b.get(k, "") for k in felder},
@@ -1910,10 +2547,23 @@ def bericht(befunde: list, luecken: dict, ohne_item: list,
         for b in kz:
             print(f"  {b['label']:<44}{b['kennzahl']:>6}")
 
+    nach_eigenschaft = {}
+    for b in befunde:
+        if b["befund"] != "kennzahl":
+            e = b.get("eigenschaft", "")
+            nach_eigenschaft[e] = nach_eigenschaft.get(e, 0) + 1
+    if nach_eigenschaft:
+        print()
+        print("Befunde nach Eigenschaft")
+        print("-" * 60)
+        for e in sorted(nach_eigenschaft, key=_eigenschaft_rang):
+            print(f"  {EIGENSCHAFT_TITEL.get(e, e)[:44]:<46}"
+                  f"{nach_eigenschaft[e]:>6}")
+
     print()
     print("Befunde nach Stufe")
     print("-" * 60)
-    for nummer, titel, arten, einspielbar, _ in STUFEN:
+    for nummer, titel, arten, einspielbar, _, _ in STUFEN:
         teil = [b for b in befunde if b["befund"] in arten]
         entwuerfe = sum(1 for b in teil if b["quickstatements"])
         marke = ("EINSPIELBAR" if einspielbar and not vorsichtig
@@ -1951,9 +2601,12 @@ def main(argv: Optional[list] = None) -> int:
                         help="Grundgesamtheit (Default: benannte-legierungen, "
                              "die Pruefliste aus [[en:List of named alloys]])")
     parser.add_argument("--pruefungen", nargs="+", choices=PRUEFUNGEN,
-                        default=PRUEFUNGEN,
-                        help=f"Auswahl der Pruefungen (Default: alle: "
-                             f"{', '.join(PRUEFUNGEN)})")
+                        default=None,
+                        help=f"Auswahl der Pruefungen (Default: alle ausser "
+                             f"{', '.join(sorted(NUR_PERIODENSYSTEM))}; die "
+                             f"Grundgesamtheit 'periodensystem' bringt ihre "
+                             f"eigene Auswahl mit). Moeglich: "
+                             f"{', '.join(PRUEFUNGEN)}")
     parser.add_argument("--limit", type=int, default=None,
                         help="nur die ersten N Items (fuer Probelaeufe)")
     parser.add_argument("--vorsichtig", action="store_true",
@@ -1963,10 +2616,12 @@ def main(argv: Optional[list] = None) -> int:
                         help="Pruefung 'verkehrt': ab wie vielen Klassen im "
                              "Unterbau der Vergleich aussagekraeftig ist "
                              "(Default 25)")
-    parser.add_argument("--bereichswurzel", default=LEGIERUNG_QID,
+    parser.add_argument("--bereichswurzel", default=None,
                         help="Pruefung 'verkehrt': Wurzel des Bereichs, dessen "
                              "Klassenbaum vollstaendig geholt und geprueft "
-                             f"wird (Default {LEGIERUNG_QID}, Legierung). "
+                             f"wird (Default {LEGIERUNG_QID}, Legierung; in "
+                             f"der Grundgesamtheit 'periodensystem' "
+                             f"{ELEMENT_QID}, chemisches Element). "
                              "Q214609 (material) ist zu gross - der Baum "
                              "umfasst rund 936.000 Klassen.")
     parser.add_argument("--max-umweg", type=int, default=4,
@@ -1998,6 +2653,12 @@ def main(argv: Optional[list] = None) -> int:
                              "und senkt die Trefferquote deutlich - dass in "
                              "einer Beschreibung ein Wort vorkommt, sagt "
                              "nichts ueber die Klasse.")
+    parser.add_argument("--ohne-dichte", action="store_true",
+                        help="Pruefung 'elementklasse': die Einteilung in "
+                             "Leicht- und Schwermetall auslassen. Sie ist "
+                             "die einzige der drei, die auf einer "
+                             "Konvention beruht (5 g/cm3) statt auf der "
+                             "Ordnungszahl.")
     parser.add_argument("--out", default=None,
                         help="Ziel der Empfehlung (Default: "
                              "p279_empfehlung_<Zeitstempel>.txt)")
@@ -2005,6 +2666,23 @@ def main(argv: Optional[list] = None) -> int:
                         help="zusaetzlich eine Befund-CSV schreiben. Ohne "
                              "diese Angabe entsteht NUR die Empfehlung.")
     args = parser.parse_args(argv)
+
+    # Die Grundgesamtheit darf Voreinstellungen mitbringen - aber nur dort,
+    # wo nichts angegeben wurde. Ein Szenario, das eine ausdrueckliche
+    # Angabe ueberschreibt, waere eine Falle.
+    info = POPULATIONEN[args.population]
+    if args.pruefungen is None:
+        args.pruefungen = info.get(
+            "pruefungen", [p for p in PRUEFUNGEN if p not in NUR_PERIODENSYSTEM])
+    if args.bereichswurzel is None:
+        args.bereichswurzel = info.get("bereichswurzel", LEGIERUNG_QID)
+    if (set(args.pruefungen) & NUR_PERIODENSYSTEM
+            and args.population != "periodensystem"):
+        print(f"  {', '.join(sorted(NUR_PERIODENSYSTEM))} uebersprungen: "
+              f"braucht die Ordnungszahl (P1086) und ist nur fuer die "
+              f"Grundgesamtheit 'periodensystem' gedacht.", file=sys.stderr)
+        args.pruefungen = [p for p in args.pruefungen
+                           if p not in NUR_PERIODENSYSTEM]
 
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
     empfehlung_pfad = args.out or f"p279_empfehlung_{stempel}.txt"
@@ -2029,8 +2707,24 @@ def main(argv: Optional[list] = None) -> int:
         # Ebene 1 sind genau die direkt Eingehaengten - die zu Pruefenden.
         direkt_allgemein = {q: allgemein_baum[q] for q in ebene1}
 
+    # Die Elementdaten VOR der Huelle: die Gruppen- und Kategorie-Items
+    # sollen mit in den Graphen, sonst laesst sich nicht feststellen, ob
+    # eine Erwartung ueber einen laengeren P279-Pfad schon erfuellt ist.
+    elementdaten = {}
+    if "elementklasse" in args.pruefungen:
+        print(f"Hole Ordnungszahl, Einordnung und Dichte fuer {len(qids)} "
+              f"Elemente ...", file=sys.stderr)
+        elementdaten = hole_elementdaten(qids)
+        ohne_zahl = len(qids) - len(elementdaten)
+        print(f"  {len(elementdaten)} Elemente mit Ordnungszahl"
+              + (f", {ohne_zahl} ohne (uebersprungen)" if ohne_zahl else ""),
+              file=sys.stderr)
+
     print("Hole P279-Huelle nach oben ...", file=sys.stderr)
-    huelle_start = sorted(set(qids) | set(direkt_allgemein))
+    huelle_start = sorted(set(qids) | set(direkt_allgemein)
+                          | (set(ELEMENTKATEGORIEN) | set(GRUPPEN_QID.values())
+                             | {LEICHTMETALL_QID, SCHWERMETALL_QID}
+                             if elementdaten else set()))
     kanten = hole_p279_huelle(huelle_start)
     graph = nx.DiGraph()
     graph.add_nodes_from(huelle_start)
@@ -2112,6 +2806,9 @@ def main(argv: Optional[list] = None) -> int:
                       | {k for _, k in p31_kanten}
                       | {q for n, p, _, _ in verkehrt for q in (n, p)}
                       | set(direkt_allgemein))
+    if elementdaten:
+        zu_beschriften |= (set(ELEMENTKATEGORIEN) | set(GRUPPEN_QID.values())
+                           | {LEICHTMETALL_QID, SCHWERMETALL_QID})
     print(f"Hole {len(zu_beschriften)} Bezeichnungen ...", file=sys.stderr)
     labels = hole_labels(sorted(zu_beschriften))
 
@@ -2182,6 +2879,9 @@ def main(argv: Optional[list] = None) -> int:
                                          set(direkt_allgemein), labels)
     if "parallelzweig" in args.pruefungen:
         befunde += pruefe_parallelzweig(items, unter_material, labels)
+    if "elementklasse" in args.pruefungen:
+        befunde += pruefe_elementklasse(items, elementdaten, graph, labels,
+                                        mit_dichte=not args.ohne_dichte)
 
     mengengeruest = (
         f"Mengengeruest: {len(items)} Items der Grundgesamtheit, "

@@ -27,8 +27,20 @@ Die Projektseite listet nur Messgroessen. Die CAS-Nummer (P231) wird deshalb
 fest ergaenzt (Abschnitt "Identifikatoren", abschaltbar mit --no-extra) - sie
 ist der zentrale externe Schluessel zu Stoffdatenbanken.
 
-Zusaetzlich wird markiert, welche Properties materialswiki ueberhaupt bedienen
-kann: PROPERTY_MAP und MP_FIELD_MAP werden importiert, nicht kopiert.
+Zusaetzlich wird je Property markiert, AUS WELCHER QUELLE materialswiki den
+Wert ueberhaupt holen koennte - also welche Stufe des Laufs sie wirklich
+abfragt:
+
+  COD     Crystallography Open Database (Struktur)
+  MP      Materials Project (DFT-Rechnung)
+  NIST    NIST Chemistry WebBook (Thermochemie)
+  WP      Wikipedia-Infoboxen (de und en)
+  Formel  aus der Summenformel abgeleitet, ohne Abruf nach aussen
+  WD      aus dem Wikidata-Item selbst abgeleitet (Punktgruppe aus Raumgruppe)
+
+Die vier Netz-Stufen kommen aus STUFEN_PIDS, die Ableitungen aus
+PROPERTY_MAP - alles importiert, nicht kopiert, damit Benchmark und
+Vorschlagslauf nicht auseinanderlaufen.
 
 Grundgesamtheit
 ---------------
@@ -88,7 +100,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import konfig  # noqa: E402
 from materialswiki.cli import (  # noqa: E402
-    HALBMETALLE, MP_FIELD_MAP, NICHTMETALLE, PROPERTY_MAP, WERKSTOFFGRUPPEN,
+    CHEMBOX_FIELDS, HALBMETALLE, MP_FIELD_MAP, NICHTMETALLE, PROPERTY_MAP,
+    STUFEN_PIDS, WERKSTOFFGRUPPEN, WIKIPEDIA_DE_CHEM_FIELDS,
+    WIKIPEDIA_DE_FIELDS, WIKIPEDIA_NUMERIC_FIELDS,
 )
 
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
@@ -138,6 +152,179 @@ METALLE_PATTERN = (
     "?i wdt:P31 wd:Q11344 ; wdt:P1086 ?z ; wdt:P246 ?sym . "
     "FILTER(?z <= {max_z}) FILTER(?sym NOT IN ({nichtmetalle}))"
 )
+
+# ---------------------------------------------------------------------------
+# Welche Quelle liefert welche Property - und in welchem Lauf?
+# ---------------------------------------------------------------------------
+#
+# Die vier Stufen, die wirklich nach aussen gehen, stehen schon in
+# STUFEN_PIDS (materialswiki/properties.py) - genau die Menge, mit der der
+# Lauf entscheidet, ob er eine Quelle ueberhaupt noch befragen muss. Sie wird
+# hier importiert, nicht abgeschrieben.
+#
+# Die beiden ABLEITUNGEN stehen dort nicht, weil sie nichts abfragen: die
+# Formelstufe zerlegt die Summenformel (P2670/P527), die Punktgruppenstufe
+# liest die Raumgruppe am Item selbst ab (P589).
+#
+# Entscheidend ist, dass nicht jeder Lauf jede Stufe fahren kann - sonst
+# verspricht der Benchmark Vorschlaege, die nie kommen:
+#
+#   Gruppenlauf (--group, also lauf.py legierungen|minerale|oxide|carbide)
+#       faehrt alle sechs Stufen.
+#   Elementlauf (--periodic-table, also lauf.py metalle|periodensystem)
+#       faehrt NUR die vier externen Quellen. Punktgruppe und Formel gibt es
+#       dort nicht: build_periodic_table_proposals ruft sie nicht auf.
+#
+# Und die Formelstufe ist ueberdies per Default AUS (--formel, cli.py:
+# "P527 und P2670 sollen nicht mehr vorgeschlagen werden"). Sie wird deshalb
+# eingeklammert ausgewiesen: "(Formel)" heisst "nur, wenn eingeschaltet".
+QUELLEN = {
+    "cod":         ("COD",    "Crystallography Open Database"),
+    "mp":          ("MP",     "Materials Project (DFT)"),
+    "nist":        ("NIST",   "NIST Chemistry WebBook"),
+    "punktgruppe": ("WD",     "aus der Raumgruppe am Item abgeleitet"),
+    "formel":      ("Formel", "aus der Summenformel abgeleitet"),
+    # Die Wikipedia-Stufe zerfaellt in ihre Vorlagen - siehe unten.
+    "de-element":    ("WPde-El",   "de {{Infobox Chemisches Element}}"),
+    "de-chemikalie": ("WPde-Chem", "de {{Infobox Chemikalie}}"),
+    "de-mineral":    ("WPde-Min",  "de {{Infobox Mineral}}"),
+    "en-element":    ("WPen-El",   "en Template:Infobox <element>"),
+    "en-chembox":    ("WPen-Chem", "en {{Chembox}}"),
+}
+
+# Stufen, die nichts abfragen und deshalb nicht in STUFEN_PIDS stehen:
+# Stufe -> interne Schluessel aus PROPERTY_MAP.
+ABLEITUNGS_SCHLUESSEL = {
+    "punktgruppe": ("point_group",),
+    "formel": ("has_part_of_class", "has_part"),
+}
+
+# Stufe -> Schalter, mit dem sie erst angeht. Alles andere laeuft von selbst.
+DEFAULT_AUS = {"formel": "--formel"}
+
+# ---------------------------------------------------------------------------
+# Die Wikipedia-Stufe ist keine Quelle, sondern fuenf
+# ---------------------------------------------------------------------------
+#
+# STUFEN_PIDS["wikipedia"] ist die Vereinigung aller vier Feldkarten - richtig
+# fuer die Frage "muss die Stufe ueberhaupt laufen?", aber viel zu grosszuegig
+# fuer die Frage "was kommt bei DIESER Gruppe an". infobox.py wirft die
+# Feldnamen einfach auf den Wikitext; welche greifen, entscheidet die Vorlage
+# im Artikel:
+#
+#   Elemente     tragen {{Infobox Chemisches Element}} - die ergiebigste
+#   Verbindungen tragen {{Infobox Chemikalie}} - Dichte, Schmelz-, Siedepunkt,
+#                CAS
+#   Minerale     tragen {{Infobox Mineral}} - dort greifen nur 'Dichte' und
+#                'Mohshaerte', weil diese beiden Felder zufaellig genauso
+#                heissen wie in der Elementinfobox. Gemessen am Lauf vom
+#                2026-08-28 (650 Minerale): genau P2054 und P1088, sonst
+#                nichts.
+#
+# Die englische Seite haengt dagegen am LAUF, nicht am Artikel:
+# wikipedia_fallback_proposals bekommt im Elementlauf en_element (die
+# Elementvorlage) und im Gruppenlauf en_title (die {{Chembox}}).
+#
+# Nur der Laengenausdehnungskoeffizient (P5672) haengt an der englischen
+# Elementvorlage - also gibt es ihn ausserhalb des Elementlaufs gar nicht.
+WP_SCHLUESSEL = {
+    "de-element": ({k for k, _ in WIKIPEDIA_DE_FIELDS.values()}
+                   | {"cas_number", "crystal_system"}),
+    "de-chemikalie": ({k for k, _ in WIKIPEDIA_DE_CHEM_FIELDS.values()}
+                      | {"melting_point", "boiling_point", "cas_number"}),
+    "de-mineral": {"density", "mohs_hardness"},
+    "en-element": ({k for k, _ in WIKIPEDIA_NUMERIC_FIELDS.values()}
+                   | {"density", "electrical_resistivity", "crystal_system",
+                      "linear_thermal_expansion"}),
+    "en-chembox": ({k for k, _, _ in CHEMBOX_FIELDS.values()}
+                   | {"cas_number"}),
+}
+
+# Welche Vorlage tragen die Artikel dieser Grundgesamtheit? Die einzige
+# Zuordnung hier, die nicht aus dem Code folgt - sie ist an den Laeufen vom
+# 2026-08-28 abgelesen (Minerale: nur P2054/P1088; Legierungen: Dichte, CAS,
+# Schmelz- und Siedepunkt aus de und en, dazu vereinzelt Mohshaerte).
+WP_JE_POPULATION = {
+    "minerale": ["de-mineral"],
+    "oxide": ["de-chemikalie", "en-chembox"],
+    "carbide": ["de-chemikalie", "en-chembox"],
+    "legierungen": ["de-chemikalie", "de-mineral", "en-chembox"],
+    "benannte-legierungen": ["de-chemikalie", "de-mineral", "en-chembox"],
+    "metalle": ["de-element", "en-element"],
+    "periodensystem": ["de-element", "en-element"],
+}
+
+# Kennt der Benchmark die Gruppe nicht (--population subtree, --root ...),
+# steht die Vorlage nicht fest. Dann werden alle im jeweiligen Lauf
+# erreichbaren ausgewiesen - lieber zu viel als eine falsche Einschraenkung.
+WP_UNBEKANNT = {
+    "gruppe": ["de-element", "de-chemikalie", "de-mineral", "en-chembox"],
+    "elemente": ["de-element", "en-element"],
+}
+
+# Welcher Lauf faehrt welche Stufen? Reihenfolge wie im Lauf; "WP" wird durch
+# die Vorlagen der Grundgesamtheit ersetzt.
+LAEUFE = {
+    "gruppe": ("Gruppenlauf (--group)",
+               ["cod", "mp", "nist", "WP", "punktgruppe", "formel"]),
+    "elemente": ("Elementlauf (--periodic-table)",
+                 ["cod", "mp", "nist", "WP"]),
+}
+
+
+def lauf_modus(population: str) -> str:
+    """Welcher materialswiki-Lauf gehoert zu dieser Grundgesamtheit?
+
+    lauf.py bildet beides aufeinander ab: die Werkstoffgruppen laufen ueber
+    --group, 'metalle' und 'periodensystem' ueber --periodic-table. Der
+    Default 'subtree' hat keinen eigenen Lauf; er wird wie ein Gruppenlauf
+    behandelt, weil ihn dieselben Stufen bedienen wuerden.
+    """
+    return "elemente" if population in ("metalle", "periodensystem") else "gruppe"
+
+
+def stufen_des_laufs(population: str) -> list:
+    """Die Stufen, die fuer diese Grundgesamtheit wirklich etwas liefern."""
+    modus = lauf_modus(population)
+    wp = WP_JE_POPULATION.get(population, WP_UNBEKANNT[modus])
+    stufen = []
+    for stufe in LAEUFE[modus][1]:
+        stufen += wp if stufe == "WP" else [stufe]
+    return stufen
+
+
+def stufen_pids(stufe: str) -> frozenset:
+    """Die PIDs einer Stufe.
+
+    Die vier Netz-Stufen stehen in STUFEN_PIDS, die Ableitungen und die
+    einzelnen Infoboxen werden ueber PROPERTY_MAP aufgeloest.
+    """
+    if stufe in ABLEITUNGS_SCHLUESSEL:
+        schluessel = ABLEITUNGS_SCHLUESSEL[stufe]
+    elif stufe in WP_SCHLUESSEL:
+        schluessel = WP_SCHLUESSEL[stufe]
+    else:
+        return STUFEN_PIDS[stufe]
+    return frozenset(PROPERTY_MAP[k]["pid"] for k in schluessel)
+
+
+def quellen_je_property(population: str) -> dict:
+    """{PID: [Quellenkuerzel, ...]} fuer die Stufen, die dieser Lauf faehrt.
+
+    Eine Property kann aus mehreren Quellen kommen (das Kristallsystem aus
+    COD, MP und den Infoboxen); im Lauf gewinnt die zuerst laufende Stufe,
+    hier werden alle ausgewiesen. Eingeklammert steht, was erst ein Schalter
+    einschaltet.
+    """
+    out = {}
+    for stufe in stufen_des_laufs(population):
+        kuerzel = QUELLEN[stufe][0]
+        if stufe in DEFAULT_AUS:
+            kuerzel = f"({kuerzel})"
+        for pid in stufen_pids(stufe):
+            out.setdefault(pid, []).append(kuerzel)
+    return out
+
 
 HEADING_RE = re.compile(r"^(={2,})\s*(.+?)\s*\1\s*$", re.M)
 ROW_ID_RE = re.compile(r"/Row\|id=(\d+)")  # nur echte Zahlen, "new" faellt raus
@@ -331,9 +518,13 @@ def best_covered(population: str, pids: list, limit: int = 10) -> list:
 # Bericht
 # ---------------------------------------------------------------------------
 
-def build_rows(sections: dict, meta: dict, filled: dict, total: int) -> list:
-    # Welche Properties kann materialswiki bedienen?
+def build_rows(sections: dict, meta: dict, filled: dict, total: int,
+               population: str = "subtree") -> list:
+    # Welche Properties kann materialswiki bedienen - und woher? Das haengt
+    # an der Grundgesamtheit: der Elementlauf kennt die beiden Ableitungen
+    # nicht, und welche Wikipedia-Vorlage greift, entscheidet die Gruppe.
     pid_to_key = {info["pid"]: key for key, info in PROPERTY_MAP.items()}
+    quellen = quellen_je_property(population)
     # MP_FIELD_MAP bildet Feldpfad -> (Schluessel, Faktor) ab; hier zaehlt
     # nur der Schluessel.
     mit_mp_pfad = {schluessel for schluessel, _ in MP_FIELD_MAP.values()}
@@ -352,15 +543,21 @@ def build_rows(sections: dict, meta: dict, filled: dict, total: int) -> list:
                 "luecke": total - n,
                 "anteil_prozent": round(100.0 * n / total, 2) if total else 0.0,
                 "in_property_map": key or "",
+                # Alle Quellen, die diese Property in DIESEM Lauf liefern
+                # koennen - leer, wenn keine Stufe sie abfragt.
+                "quellen": ", ".join(quellen.get(pid, [])),
                 "mp_quelle": "ja" if key in mit_mp_pfad else "nein",
             })
     return rows
 
 
-def print_report(titel: str, population: dict, rows: list) -> None:
+def print_report(titel: str, population: dict, rows: list,
+                 gruppe: str = "subtree") -> None:
     total = population["gesamt"]
+    modus = lauf_modus(gruppe)
     print()
     print(f"Grundgesamtheit: {titel}")
+    print(f"Vorschlagslauf:  {LAEUFE[modus][0]}")
     if "instanzen" in population:
         print(f"  Instanzen (P31/P279*)          {population['instanzen']:>7}")
         print(f"  Unterklassen (P279*)           {population['unterklassen']:>7}")
@@ -380,8 +577,8 @@ def print_report(titel: str, population: dict, rows: list) -> None:
         print("  " + "-" * (len(kopf) - 2))
         for r in teil:
             marker = "<- " + r["in_property_map"] if r["in_property_map"] else ""
-            if r["mp_quelle"] == "ja":
-                marker += " [MP]"
+            if r["quellen"]:
+                marker += f" [{r['quellen']}]"
             print(f"  {r['pid']:<8}{r['label'][:33]:<34}{r['datatype'][:11]:<12}"
                   f"{r['gefuellt']:>9}{r['anteil_prozent']:>8.2f}%  {marker}")
 
@@ -390,12 +587,37 @@ def print_report(titel: str, population: dict, rows: list) -> None:
     print(f"Zusammenfassung: {len(rows)} Properties, "
           f"{len(rows) - len(leer)} mindestens einmal belegt, "
           f"{len(leer)} komplett leer.")
-    belegbar = [r for r in rows if r["mp_quelle"] == "ja"]
+    belegbar = [r for r in rows if r["quellen"]]
     if belegbar:
-        print("Aus dem Materials Project tatsaechlich belegbar:")
-        for r in belegbar:
+        print("Von materialswiki belegbar - und aus welcher Quelle:")
+        for r in sorted(belegbar, key=lambda r: r["luecke"], reverse=True):
             print(f"  {r['pid']} {r['label']:<28} {r['gefuellt']:>6} von "
-                  f"{total} gefuellt  ->  {r['luecke']} offen")
+                  f"{total} gefuellt  ->  {r['luecke']} offen"
+                  f"   [{r['quellen']}]")
+        # Wie viel traegt jede einzelne Stufe bei? Summen sind hier sinnlos
+        # (eine Property haengt an mehreren Quellen), gezaehlt wird deshalb
+        # je Quelle die Zahl der Properties.
+        gefahren = stufen_des_laufs(gruppe)
+        print()
+        print(f"Quellen, die der {LAEUFE[modus][0]} bei dieser "
+              f"Grundgesamtheit abfragt:")
+        for stufe in gefahren:
+            kuerzel, text = QUELLEN[stufe]
+            schalter = DEFAULT_AUS.get(stufe)
+            if schalter:
+                kuerzel = f"({kuerzel})"
+                text += f" - nur mit {schalter}, Default aus"
+            n = sum(1 for r in belegbar
+                    if kuerzel in r["quellen"].split(", "))
+            print(f"  {kuerzel:<11}{text:<50}{n:>3} "
+                  f"{'Property' if n == 1 else 'Properties'}")
+        nicht_gefahren = [QUELLEN[st][0] for st in QUELLEN
+                          if st not in gefahren]
+        if nicht_gefahren:
+            print(f"  nicht in diesem Lauf: {', '.join(nicht_gefahren)}")
+        if gruppe not in WP_JE_POPULATION:
+            print("  Wikipedia-Vorlage fuer diese Grundgesamtheit nicht "
+                  "hinterlegt - alle erreichbaren ausgewiesen")
     print()
 
 
@@ -484,8 +706,9 @@ def main(argv: Optional[list] = None) -> int:
     meta = fetch_property_meta(pids)
     population = count_population(teilmengen)
     filled = count_filled(population_pattern, pids)
-    rows = build_rows(sections, meta, filled, population["gesamt"])
-    print_report(titel, population, rows)
+    rows = build_rows(sections, meta, filled, population["gesamt"],
+                      args.population)
+    print_report(titel, population, rows, args.population)
 
     if args.top:
         print(f"Am besten belegte Items (max. {len(pids)} Aussagen):")

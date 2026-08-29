@@ -1405,8 +1405,9 @@ warnt das Skript auf stderr — ohne Einheit stünde in Wikidata eine nackte Zah
 
 ## Abgedeckte Properties
 
-`PROPERTY_MAP` in [cli.py](cli.py) enthält nur auf wikidata.org verifizierte
-Properties:
+`PROPERTY_MAP` in [properties.py](properties.py) enthält nur auf wikidata.org
+verifizierte Properties. **Bedient** werden davon die 22 unten — sie haben
+einen MP-Feldpfad, eine Infobox-Feldkarte oder eine Ableitung hinter sich:
 
 | Größe | Property | Einheit / Typ |
 |---|---|---|
@@ -1414,8 +1415,8 @@ Properties:
 | Schmelzpunkt | `P2101` | Kelvin |
 | Siedepunkt | `P2102` | Kelvin |
 | Kristallsystem | `P556` | Item (7 Werte, 1:1 zum MP-Vokabular) |
-| Kompressionsmodul | `P5668` | Pascal |
-| Schubmodul | `P5673` | Pascal |
+| Kompressionsmodul | `P5668` | Gigapascal |
+| Schubmodul | `P5673` | Gigapascal |
 | Wärmeleitfähigkeit | `P2068` | W/(m·K) |
 | Elektrische Leitfähigkeit | `P2055` | S/m |
 | Spezifischer Widerstand | `P5679` | Ω·m |
@@ -1433,6 +1434,16 @@ Properties:
 | COD-ID | `P9824` | external-id |
 | Längenausdehnungskoeffizient | `P5672` | µm/(m·K), **mit Temperatur** |
 
+Seit dem 28.08.2026 stehen zusätzlich die **44 übrigen Properties des
+WikiProject Materials** in der Tabelle (aus
+[../benchmark/properties_snapshot.json](../benchmark/properties_snapshot.json),
+Datentyp und Einheiten-Constraint an dem Tag von wikidata.org geholt). Sie
+sind dort nur *bekannt*, nicht *bedient*: keine Quelle liefert sie, und wo
+die Property gar keinen Einheiten-Constraint trägt, bleibt `unit_qid` bewusst
+leer, bis eine Quelle den Wert wirklich liefert. Welche Properties ein Lauf
+abfragt, steht in der Spalte `quellen` des
+[Benchmarks](../benchmark/README.md), nicht in dieser Tabelle.
+
 Wichtig: **Ein Eintrag in `PROPERTY_MAP` allein erzeugt noch keine
 Vorschläge.** Aus dem Materials Project kommen nur Größen, die auch in
 `MP_FIELD_MAP` einen Pfad haben — das sind fünf:
@@ -1441,14 +1452,18 @@ Vorschläge.** Aus dem Materials Project kommen nur Größen, die auch in
 |---|---|---|
 | Dichte `P2054` | `density` | keine — g/cm³ ist schon die Zieleinheit; **mit Messbedingungen**, siehe unten |
 | Kristallsystem `P556` | `symmetry.crystal_system` + `symmetry.symbol` | Groß-/Kleinschreibung, dann `value_map`; Zentrierung → fcc/bcc; **Beleg aus Literatur** |
-| Kompressionsmodul `P5668` | `bulk_modulus.vrh` | GPa → Pa (×10⁹) |
-| Schubmodul `P5673` | `shear_modulus.vrh` | GPa → Pa (×10⁹) |
+| Kompressionsmodul `P5668` | `bulk_modulus.vrh` | keine — GPa ist die Zieleinheit |
+| Schubmodul `P5673` | `shear_modulus.vrh` | keine — GPa ist die Zieleinheit |
 | Poissonzahl `P5593` | `homogeneous_poisson` | keine; **mit Temperatur** (0 K), siehe unten |
 
-Die **Einheiten sind der Fallstrick**: MP rechnet in GPa, Wikidata erwartet
-Pascal. Bei der Dichte fällt die Umrechnung weg, seit sie in g/cm³ nach
-Wikidata geht. Die Faktoren stehen in `MP_FIELD_MAP` und sind
-einzeln getestet ([../tests/test_mp.py](../tests/test_mp.py)). Die Moduln
+Die **Einheiten sind der Fallstrick** — seit dem 28.08.2026 aber keiner
+mehr: kein einziges MP-Feld wird noch umgerechnet. Die Moduln gehen in
+Gigapascal nach Wikidata, weil der Einheiten-Constraint von `P5668` und
+`P5673` ausschließlich `Q53448922` (Gigapascal) zulässt — genau die Einheit,
+in der MP rechnet. Vorher schrieb das Werkzeug Pascal (×10⁹) und verletzte
+damit bei jeder Modul-Aussage den Constraint. Die Dichte kommt ohnehin schon
+in g/cm³. Die Faktoren stehen in `MP_FIELD_MAP` und sind einzeln getestet
+([../tests/test_mp.py](../tests/test_mp.py)). Die Moduln
 kommen als Voigt-Reuss-Hill-Mittel (`vrh`), das übliche Mittel für
 polykristalline Werkstoffe — nicht als `voigt` oder `reuss`.
 

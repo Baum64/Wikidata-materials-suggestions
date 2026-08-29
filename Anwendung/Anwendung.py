@@ -39,6 +39,14 @@ ein EINZELDING ist (keine Instanzen, keine Unterklassen) - bei einer
 konkreten Glocke stimmt die Aussage. Bei einer Klasse geht dieselbe Zeile
 auskommentiert raus, mit dem Quantorenhinweis daneben.
 
+Derselbe Sprung droht auf der anderen Seite der Aussage: steht am WERKSTOFF
+kein P31, ist er ueber P279 in die Grundgesamtheit gekommen und damit
+selbst eine Klasse von Werkstoffen ("Aluminiumlegierung", "Stahl"). P366
+an ihm behauptet den Gebrauch fuer jede Unterklasse. Auch diese Zeilen
+gehen auskommentiert raus; die Belege haengen an den Unterklassen, dorthin
+gehoert die Aussage. Das ist dieselbe Klasse/Instanz-Trennung, die
+Material class structure vor jedem Entwurf zieht.
+
 Zwei weitere Faelle faengt die Vorpruefung ab:
   * Der P366-Wert ist eine TAETIGKEIT (Schweissen, Loeten, Giessen,
     Halbleitertechnik). Ein Vorgang besteht aus keinem Material - hier gibt
@@ -74,7 +82,7 @@ Die sechs Pruefungen
   1. p366-aus-p186   Objekte mit P186 -> Werkstoff, gruppiert nach ihrer
                      Klasse (P31). Ab --min-belege Objekten wird die Klasse
                      als Verwendung vorgeschlagen. EINSPIELBAR.
-                     Vier Filter haengen daran, und sie sind der
+                     Fuenf Filter haengen daran, und sie sind der
                      eigentliche Inhalt der Pruefung:
                        KLASSEN_SPERRE  wirft die Klassen raus, die keine
                          Verwendung bezeichnen, sondern einen Fundumstand
@@ -93,9 +101,15 @@ Die sechs Pruefungen
                          abdeckt - sonst stuenden neben "Bronze fuer
                          Skulpturen" noch Statue, Statuette, Portraetbueste
                          und Gedenkbueste.
-                     Nur der erste Filter loescht. Was die drei anderen
+                       NUR KLASSE      wirft raus, was am Werkstoff selbst
+                         kein P31 hat. Ein solches Item steht ueber P279 in
+                         der Grundgesamtheit und ist eine KLASSE von
+                         Werkstoffen; P366 an ihm behauptet die Verwendung
+                         fuer jede Unterklasse. --auch-werkstoffklassen
+                         schaltet die Trennung ab.
+                     Nur der erste Filter loescht. Was die vier anderen
                      aussortieren, steht auskommentiert in den Abschnitten
-                     2 bis 4 - zum Nachsehen, nicht zum Wegwerfen.
+                     2 bis 5 - zum Nachsehen, nicht zum Wegwerfen.
   2. p186-einzelding P366 am Werkstoff vorhanden, Rueckkante P186 fehlt,
                      und das Anwendungsitem ist ein Einzelding. EINSPIELBAR.
   3. p186-klasse     dasselbe, aber das Anwendungsitem ist eine Klasse.
@@ -124,6 +138,7 @@ Aufruf
   python "Anwendung/Anwendung.py" --population metallischer-werkstoff
   python "Anwendung/Anwendung.py" --min-belege 5 --pruefungen p366-aus-p186
   python "Anwendung/Anwendung.py" --pruefungen p2079-wikipedia --sprachen de
+  python "Anwendung/Anwendung.py" --auch-werkstoffklassen
   python "Anwendung/Anwendung.py" --vorsichtig    # nichts einspielbar
 """
 
@@ -505,6 +520,27 @@ def hole_p2079(qids: list) -> dict:
     return treffer
 
 
+def hole_hat_p31(qids: list) -> set:
+    """{qid} derer, die ueberhaupt ein P31 tragen - also Instanzen sind.
+
+    [[Help:Basic membership properties]] trennt Klasse und Instanz an genau
+    dieser Kante: ein Item, das nur ueber P279 in der Grundgesamtheit steht,
+    ist eine KLASSE von Werkstoffen, kein Werkstoff. Wozu es gebraucht wird,
+    ist an ihm keine Aussage ueber ein Ding, sondern eine ueber alle seine
+    Unterklassen - denselben Quantorensprung meidet die Rueckkante P186
+    schon (siehe pruefe_p186_rueckkante). Deshalb entwirft
+    pruefe_p366_aus_p186 nur fuer Items aus dieser Menge.
+    """
+    instanzen = set()
+    for teil in bloecke(qids):
+        for b in sparql(f"""SELECT DISTINCT ?i WHERE {{
+          {values(teil)}
+          ?i wdt:P31 ?c .
+        }}"""):
+            instanzen.add(qid_aus(b, "i"))
+    return instanzen
+
+
 def hole_p279_eltern(qids: list) -> dict:
     """{kind: {elter, ...}} - nur die direkten Kanten."""
     treffer = collections.defaultdict(set)
@@ -779,7 +815,8 @@ def befund(art: str, qid: str, ziel: str, kennzahl, qs: str,
 
 def pruefe_p366_aus_p186(nach_klasse: dict, p366: dict, rollen: dict,
                          oberklassen: dict, sitelinks: dict, min_belege: int,
-                         min_sprachen: int) -> list:
+                         min_sprachen: int,
+                         instanzen: Optional[set] = None) -> list:
     """Aggregation: >= min_belege Objekte einer Klasse aus demselben
     Werkstoff -> die Klasse ist eine Verwendung des Werkstoffs.
 
@@ -813,8 +850,18 @@ def pruefe_p366_aus_p186(nach_klasse: dict, p366: dict, rollen: dict,
     Beide loeschen nichts: die Zeilen stehen auskommentiert in ihren
     eigenen Abschnitten. Und beide werden VOR der Ueberdeckung angewandt,
     damit eine aussortierte Klasse nie eine gute verdraengt.
+
+    Am Ende steht die Klasse/Instanz-Trennung: entworfen wird nur an
+    Werkstoffe aus 'instanzen' - denen, die ein P31 tragen. Ein Item ohne
+    P31 steht ueber P279 in der Grundgesamtheit und ist damit eine KLASSE
+    von Werkstoffen; 'wird fuer Muenzen verwendet' behauptet dort nicht
+    einen Gebrauch, sondern denselben Gebrauch fuer jede Unterklasse. Das
+    ist der Quantorensprung, den die Rueckkante P186 schon meidet, nur auf
+    der anderen Seite der Aussage. Solche Zeilen gehen als
+    'p366-nur-klasse' auskommentiert raus - ohne Belege zu verlieren, denn
+    die stehen daneben. instanzen=None schaltet die Trennung ab.
     """
-    treffer, ueberdeckt, verbund, speziell = [], [], [], []
+    treffer, ueberdeckt, verbund, speziell, nur_klasse = [], [], [], [], []
     for werkstoff, klassen in nach_klasse.items():
         kandidaten = {}
         for klasse, objekte in klassen.items():
@@ -900,14 +947,25 @@ def pruefe_p366_aus_p186(nach_klasse: dict, p366: dict, rollen: dict,
                     "manuell: nur zusätzlich setzen, wenn gerade diese engere "
                     "Klasse die Verwendung ist"))
                 continue
+            if instanzen is not None and werkstoff not in instanzen:
+                nur_klasse.append(befund(
+                    "p366-nur-klasse", werkstoff, klasse, len(objekte),
+                    f"{werkstoff}\tP366\t{klasse}",
+                    f"{begruendung} - aber der Werkstoff traegt kein P31, "
+                    f"ist also selbst eine Klasse: P366 hier hiesse, JEDE "
+                    f"ihrer Unterklassen wird so verwendet",
+                    "manuell: nur setzen, wenn die Verwendung fuer die ganze "
+                    "Werkstoffklasse gilt - sonst an der Unterklasse, die "
+                    "die Belege tragen"))
+                continue
             treffer.append(befund(
                 "p366-aus-p186", werkstoff, klasse, len(objekte),
                 f"{werkstoff}\tP366\t{klasse}", begruendung, "einspielbar"))
 
     schluessel = (lambda b: (-b["kennzahl"], b["qid"], b["ziel_qid"]))
-    for teil in (treffer, ueberdeckt, verbund, speziell):
+    for teil in (treffer, ueberdeckt, verbund, speziell, nur_klasse):
         teil.sort(key=schluessel)
-    return treffer + ueberdeckt + verbund + speziell
+    return treffer + ueberdeckt + verbund + speziell + nur_klasse
 
 
 def pruefe_p186_rueckkante(p366: dict, rollen: dict, klassen: set,
@@ -1085,6 +1143,16 @@ MELDE_ABSCHNITTE = [
       "Carteluhren' beschreibt einen Einzelfall, nicht einen Gebrauch.",
       "Oft waere die Oberklasse richtig; die steht hier aber nur, wenn sie",
       "selbst genug Belege hat."]),
+    ("p366-nur-klasse", "DER WERKSTOFF IST SELBST EINE KLASSE",
+     ["Das Item traegt kein P31, steht also ueber P279 in der Grund-",
+      "gesamtheit: es ist eine KLASSE von Werkstoffen, kein Werkstoff.",
+      "'Aluminiumlegierung wird fuer Muenzen verwendet' behauptet den",
+      "Gebrauch fuer jede ihrer Unterklassen - denselben Quantorensprung",
+      "meidet die Rueckkante P186 auf der anderen Seite der Aussage.",
+      "Die Belege sind darum nicht falsch, sie haengen nur an den",
+      "Unterklassen: dorthin gehoert die Zeile, oder an die Klasse, wenn",
+      "die Verwendung wirklich fuer alle gilt (Loetzinn fuer Loeten ja,",
+      "Bronze fuer Muenzen nein)."]),
     ("p2079-wikipedia", "P2079 AUS DER WIKIPEDIA - PRUEFLISTE",
      ["Fertig belegte Zeilen: S143+S4656 verweisen auf die Artikelversion,",
       "der Kommentar zitiert den Satz. Wer den Satz gelesen hat und ihn",
@@ -1257,7 +1325,7 @@ def bericht(items: dict, befunde: list, p366: dict, objekte: dict,
     print("Befunde")
     zaehler = collections.Counter(b["befund"] for b in befunde)
     for art in PRUEFUNGEN + ["p366-ueberdeckt", "p366-verbund",
-                             "p366-zu-speziell"]:
+                             "p366-zu-speziell", "p366-nur-klasse"]:
         print(f"  {art:<18} {zaehler.get(art, 0):5d}")
     print()
     print(f"  {taetigkeiten} P366-Werte sind Taetigkeiten - fuer die gibt es "
@@ -1303,6 +1371,14 @@ def main(argv: Optional[list] = None) -> int:
                              "werden (Default: de en). Das ist der teuerste "
                              "Teil des Laufs - ein Artikelabruf je Werkstoff "
                              "und Sprache bei einer Anfrage pro Sekunde.")
+    parser.add_argument("--auch-werkstoffklassen", action="store_true",
+                        help="Pruefung 'p366-aus-p186': auch fuer Items ohne "
+                             "P31 entwerfen. Ohne den Schalter bekommen nur "
+                             "Instanzen einen einspielbaren Vorschlag; ein "
+                             "Item ohne P31 ist eine Werkstoffklasse, und "
+                             "P366 an ihr behauptet die Verwendung fuer alle "
+                             "ihre Unterklassen. Die Zeilen stehen dann "
+                             "auskommentiert in Abschnitt 5.")
     parser.add_argument("--limit", type=int, default=None,
                         help="nur die ersten N Werkstoffe (fuer Probelaeufe)")
     parser.add_argument("--vorsichtig", action="store_true",
@@ -1375,6 +1451,7 @@ def main(argv: Optional[list] = None) -> int:
     rollen = klassifiziere(anwendungen) if anwendungen else {}
 
     oberklassen, sitelinks = {}, {}
+    instanzen = None
     if "p366-aus-p186" in args.pruefungen and kandidaten:
         print(f"Hole die P279-Oberklassen von {len(kandidaten)} "
               f"Kandidatenklassen ...", file=sys.stderr)
@@ -1382,6 +1459,12 @@ def main(argv: Optional[list] = None) -> int:
         if args.min_sprachen > 0:
             print("Hole die Zahl der Sprachversionen ...", file=sys.stderr)
             sitelinks = hole_sitelinks(sorted(kandidaten))
+        if not args.auch_werkstoffklassen:
+            print("Trenne Instanzen von Werkstoffklassen (P31) ...",
+                  file=sys.stderr)
+            instanzen = hole_hat_p31(qids)
+            print(f"  {len(instanzen)} von {len(qids)} Werkstoffen tragen "
+                  f"ein P31 - nur fuer die wird entworfen", file=sys.stderr)
 
     braucht_klassen = {"p186-einzelding", "p186-klasse"} & set(args.pruefungen)
     p366_werte = sorted({a for v in p366.values() for a in v})
@@ -1398,7 +1481,8 @@ def main(argv: Optional[list] = None) -> int:
     if "p366-aus-p186" in args.pruefungen:
         befunde += pruefe_p366_aus_p186(nach_klasse, p366, rollen,
                                         oberklassen, sitelinks,
-                                        args.min_belege, args.min_sprachen)
+                                        args.min_belege, args.min_sprachen,
+                                        instanzen)
     if braucht_klassen:
         einzeln, klassenfall, taetigkeiten = pruefe_p186_rueckkante(
             p366, rollen, klassen, vorhanden)

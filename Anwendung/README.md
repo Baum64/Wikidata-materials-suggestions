@@ -65,10 +65,10 @@ Zwei Fälle fängt die Vorprüfung vorher ab:
   `P2079` gemeint. Das ist eine Frage, keine Aussage, und landet im
   Klärungsabschnitt.
 
-## Vier Filter auf der Aggregation
+## Fünf Filter auf der Aggregation
 
 Ohne sie ist Abschnitt 1 fünfmal so lang und deutlich schlechter. Nur der
-erste löscht etwas; die anderen drei verschieben die Zeile in einen
+erste löscht etwas; die anderen vier verschieben die Zeile in einen
 auskommentierten Abschnitt.
 
 **Sperrliste** (`KLASSEN_SPERRE`). Nicht theoretisch zusammengestellt,
@@ -110,6 +110,22 @@ Fahrzeugteil 0.
 
 Die Schwäche steht hier, nicht im Kleingedruckten: **Skulptur hat nur 26.**
 Eine Schwelle über 10 fängt an, gute Verwendungen zu treffen. 440 Zeilen.
+
+**Der Werkstoff ist selbst eine Klasse.** Trägt das Item kein `P31`, ist
+es über `P279` in die Grundgesamtheit gekommen — es ist eine *Klasse* von
+Werkstoffen („Aluminiumlegierung", „Stahl"), kein Werkstoff.
+[[Help:Basic membership properties]] zieht die Grenze genau dort, und
+[Material class structure/](../Material%20class%20structure/) zieht sie vor
+jedem Entwurf. Hier gilt sie aus demselben Grund wie bei der Rückkante, nur
+auf der anderen Seite der Aussage:
+
+    P366 an der Instanz:  Bronze wird für Münzen verwendet.        (richtig)
+    P366 an der Klasse:   JEDE Aluminiumlegierung ist Münzmetall.  (Unsinn)
+
+Die Belege sind darum nicht falsch, sie hängen nur an den Unterklassen —
+dorthin gehört die Zeile, oder an die Klasse selbst, wenn die Verwendung
+wirklich für alle gilt. Also: auskommentiert in Abschnitt 5, mit den Belegen
+daneben. `--auch-werkstoffklassen` schaltet die Trennung ab.
 
 **Überdeckung.** Liefert ein Werkstoff Vorschläge für Skulptur (11 353
 Belege), Statue (3168), Statuette (915) und Porträtbüste (636), dann ist die
@@ -225,10 +241,15 @@ Ableitung — legierter Stahl entsteht anders als Roheisen.
 | — (`p366-ueberdeckt`) | von einer allgemeineren Klasse abgedeckt | Abschnitt 2 | 524 |
 | — (`p366-verbund`) | Gegenstand besteht nur zum Teil aus dem Werkstoff | Abschnitt 3 | 331 |
 | — (`p366-zu-speziell`) | Klasse in < `--min-sprachen` Wikipedias | Abschnitt 4 | 440 |
-| `p2079-wikipedia` | Verfahren im Herstellungsabschnitt des Artikels, belegt | Abschnitt 5 | 82 |
-| `p186-klasse` | wie oben, aber das Anwendungsitem ist eine Klasse | Abschnitt 6 | 58 |
-| `p2079-vererbt` | Werkstoff ohne `P2079`, eine Oberklasse hat eines | Abschnitt 7 | 77 |
-| `p366-verfahren` | `P366` zeigt auf ein Fertigungsverfahren | Abschnitt 8 | 5 |
+| — (`p366-nur-klasse`) | der Werkstoff trägt kein `P31`, ist also selbst eine Klasse | Abschnitt 5 | — |
+| `p2079-wikipedia` | Verfahren im Herstellungsabschnitt des Artikels, belegt | Abschnitt 6 | 82 |
+| `p186-klasse` | wie oben, aber das Anwendungsitem ist eine Klasse | Abschnitt 7 | 58 |
+| `p2079-vererbt` | Werkstoff ohne `P2079`, eine Oberklasse hat eines | Abschnitt 8 | 77 |
+| `p366-verfahren` | `P366` zeigt auf ein Fertigungsverfahren | Abschnitt 9 | 5 |
+
+Die Zahlen stammen aus dem Lauf vom 2026-08-22, also von **vor** der
+Klasse/Instanz-Trennung; ein Teil der 294 Zeilen aus Abschnitt 1 steht
+seit dem 2026-08-27 in Abschnitt 5.
 
 Was Abschnitt 1 danach enthält, sind Gebrauchsklassen: Münze, Skulptur,
 Glocke, Werkzeug, Astrolabium, Leuchter, Löffel, Schnalle, Axt, Schwert,
@@ -243,6 +264,7 @@ python "Anwendung/Anwendung.py"
 python "Anwendung/Anwendung.py" --population metallischer-werkstoff
 python "Anwendung/Anwendung.py" --min-belege 5 --pruefungen p366-aus-p186
 python "Anwendung/Anwendung.py" --pruefungen p2079-wikipedia --sprachen de
+python "Anwendung/Anwendung.py" --auch-werkstoffklassen
 python "Anwendung/Anwendung.py" --vorsichtig    # nichts einspielbar
 ```
 
@@ -253,6 +275,7 @@ python "Anwendung/Anwendung.py" --vorsichtig    # nichts einspielbar
 | `--min-belege` | Belegschwelle für `P366` (Vorgabe 3). Kleiner heißt mehr Vorschläge und mehr Zufallstreffer. |
 | `--min-sprachen` | wie viele Wikipedia-Sprachversionen die Klasse haben muss (Vorgabe 10). `0` schaltet den Filter ab. Über 10 trifft er gute Verwendungen. |
 | `--sprachen` | welche Wikipedias nach einem Herstellungsabschnitt durchsucht werden (Vorgabe `de en`). Der teuerste Teil des Laufs: ein Artikelabruf je Werkstoff und Sprache bei einer Anfrage pro Sekunde — 317 deutsche und 539 englische Artikel. |
+| `--auch-werkstoffklassen` | auch für Items ohne `P31` entwerfen. Ohne den Schalter bekommen nur Instanzen einen einspielbaren Vorschlag. |
 | `--limit` | nur die ersten N Werkstoffe, für Probeläufe |
 | `--vorsichtig` | auch die abgeleiteten Zeilen auskommentieren — dann enthält die Datei keine ausführbare Zeile |
 | `--csv`, `--qs-out` | Ziel und Namen der Ausgabedateien |

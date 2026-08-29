@@ -65,3 +65,18 @@ werkstoff_check.csv
 werkstoff_graph.png
 subclass_tree_material.png
 trace_*.png
+szenario_*.png
+szenario_*.csv
+
+# Visualisierung/Diagramme.ipynb: die eigenstaendige Diagrammseite und der
+# Zwischenspeicher der SPARQL-Antwort. Beides ist reproduzierbar - das
+# Notebook holt die Daten mit einem Lauf neu.
+dichte_ueber_raumgruppe.html
+wikidata_dichte_raumgruppe.json
+
+# Arbeitsverzeichnisse, die nicht ins Repo gehoeren:
+#   Archiv/         abgelegte Laufergebnisse frueherer Durchgaenge
+#   Visualisierung/ Diagramm-Werkstatt (Notebook, Skript und die daraus
+#                   erzeugten HTML-Seiten und JSON-Zwischenspeicher)
+Archiv/
+Visualisierung/

@@ -31,6 +31,9 @@ Ausgabe
                                     Pfad zu Q214609, gruen = Pfad vorhanden)
   - trace_<gruppe>_<achse>.png   : Pfade der Gruppen aus TRACE_GROUPS hinauf zu
                                     den Achsen aus TRACE_ROOTS
+  - szenario_*.png / .csv        : nur mit --szenario. Drei feste Ausschnitte
+                                    (periodensystem, legierungen, minerale) -
+                                    siehe Abschnitt 5.
   - subclass_tree_material.png   : nur mit --tree. Der volle Baum umfasst rund
                                     936.000 Klassen; der zeichenbare Ausschnitt
                                     daraus ist willkuerlich und beantwortet die
@@ -41,12 +44,17 @@ Nutzung
   python "Material class structure/visualisierung.py"
   # oder mit eigener Liste:
   python "Material class structure/visualisierung.py" --materials Stahl Titan Beton Diamant PVC
+  # oder eines der drei Szenarien:
+  python "Material class structure/visualisierung.py" --szenario periodensystem
+  python "Material class structure/visualisierung.py" --szenario legierungen minerale
+  python "Material class structure/visualisierung.py" --szenario alle
 """
 
 import argparse
 import csv
 import os
 import sys
+import textwrap
 import time
 from typing import Optional
 
@@ -678,6 +686,405 @@ def run_default_traces(out_dir: str = ".") -> None:
 
 
 # ---------------------------------------------------------------------------
+# 5) Szenarien: Periodensystem, Legierungen, Minerale
+# ---------------------------------------------------------------------------
+#
+# Drei feste Ausschnitte der Klassenhierarchie, je einer pro --szenario. Sie
+# beantworten dieselbe Frage wie die Trace-Graphen ("wie haengt das an der
+# Wurzel?"), nur fuer Gruppen, bei denen die Antwort nicht am Pfad, sondern an
+# der Klassenvergabe selbst haengt:
+#
+#   periodensystem  alle 118 Elemente im PSE-Raster, eingefaerbt nach ihrer
+#                   P279-Klasse. Sichtbar wird, dass die Klassen ungleich
+#                   vergeben sind (17 Elemente als Uebergangsmetall, aber nur
+#                   6 ueberhaupt als "Metall") und viele Zellen leer bleiben.
+#   legierungen     10 Legierungsklassen mit ihren direkten Subklassen -
+#                   also der Blick nach UNTEN statt nach oben.
+#   minerale        10 Mineralarten mit ihren Pfaden hinauf zu Mineral
+#                   (Q7946); Minerale haengen ueber P31 "Mineralart" und
+#                   P279 "Silicate"/"Carbonate"/... dort, nicht ueber Q214609.
+
+ELEMENT_QID = "Q11344"   # chemisches Element
+ALLOY_ROOT = "Q37756"    # Legierung
+MINERAL_ROOT = "Q7946"   # Mineral
+
+# Bewusst QIDs: die Labelsuche liefert fuer "Diamant" ein Schiff und fuer
+# "Gips" einen Familiennamen (beides wbsearchentities-Treffer vor dem Mineral).
+SZENARIO_LEGIERUNGEN = [
+    "Q11427",    # Stahl
+    "Q172587",   # rostfreier Stahl
+    "Q34095",    # Bronze
+    "Q39782",    # Messing
+    "Q483269",   # Gusseisen
+    "Q518350",   # Kupferlegierung
+    "Q447725",   # Aluminiumlegierung
+    "Q1985623",  # Nickelbasislegierung
+    "Q3300719",  # Titanlegierung
+    "Q637345",   # Superlegierung
+]
+
+SZENARIO_MINERALE = [
+    "Q43010",    # Quarz
+    "Q171917",   # Calcit
+    "Q50769",    # Pyrit
+    "Q103223",   # Haematit
+    "Q181395",   # Magnetit
+    "Q5314",     # Halit
+    "Q82658",    # Gips
+    "Q131777",   # Korund
+    "Q102151",   # Fluorit
+    "Q5283",     # Diamant
+]
+
+# Reihenfolge = Vorrang bei der Einfaerbung: ein Element traegt oft mehrere
+# dieser Klassen (Platin ist Platinmetall UND Uebergangsmetall), gezeichnet
+# wird die spezifischere. Alles andere landet in "andere Klasse".
+PSE_KATEGORIEN = [
+    ("Q19609", "#ffe08a"),     # Edelgas
+    ("Q19557", "#ff9e7a"),     # Alkalimetalle
+    ("Q19563", "#ffc08a"),     # 2. Hauptgruppe (Erdalkalimetalle)
+    ("Q19605", "#d7f28a"),     # 17. Hauptgruppe (Halogene)
+    ("Q104567", "#c7e6a0"),    # 16. Hauptgruppe
+    ("Q223995", "#b7d4f0"),    # Platinmetalle
+    ("Q19588", "#9fc7e8"),     # Uebergangsmetalle
+    ("Q19577", "#d9b8e8"),     # Actinoide
+    ("Q428778", "#c3a0d8"),    # Transactinoide
+    ("Q19596", "#a8ddd6"),     # Halbmetalle
+    ("Q19753344", "#c8f0c0"),  # zweiatomiges Nichtmetall
+    ("Q19753345", "#a8e6a0"),  # vielatomige Nichtmetalle
+    ("Q19600", "#8fd98a"),     # Nichtmetalle
+    ("Q19591", "#cfcfe8"),     # Metall des p-Blocks
+    ("Q11426", "#bdbdd8"),     # Metalle
+]
+
+FARBE_ANDERE = "#e6e6e6"
+FARBE_KEINE = "#ffffff"
+
+
+def fetch_elemente(max_z: int = 118) -> list:
+    """Alle chemischen Elemente mit Ordnungszahl, Symbol und ihren
+    P279-Klassen.
+
+    Zwei Abfragen statt einer: das Label-Service laesst sich mit GROUP_CONCAT
+    ueber optionale Klassen nicht zuverlaessig kombinieren, und getrennt
+    bleibt jede Abfrage im Sekundenbereich.
+    """
+    basis = f"""
+    SELECT ?e ?eLabel ?num ?sym WHERE {{
+      ?e wdt:P31 wd:{ELEMENT_QID} ; wdt:P1086 ?num .
+      FILTER(xsd:integer(?num) <= {max_z})
+      OPTIONAL {{ ?e wdt:P246 ?sym }}
+      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
+    }}
+    """
+    nach_z = {}
+    for b in sparql_query(basis).get("results", {}).get("bindings", []):
+        qid = b["e"]["value"].rsplit("/", 1)[-1]
+        z = int(b["num"]["value"])
+        el = {
+            "qid": qid, "z": z,
+            "label": b.get("eLabel", {}).get("value", qid),
+            "symbol": b.get("sym", {}).get("value", ""),
+            "klassen": {},
+        }
+        # Mehrere Items koennen dieselbe Ordnungszahl tragen (Isotopen- und
+        # Duplikat-Items). Das kanonische Element hat die kleinste QID.
+        alt = nach_z.get(z)
+        if alt is None or int(qid[1:]) < int(alt["qid"][1:]):
+            if alt is not None:
+                print(f"  Ordnungszahl {z}: {alt['qid']} verworfen zugunsten "
+                      f"von {qid}", file=sys.stderr)
+            nach_z[z] = el
+
+    klassen = f"""
+    SELECT ?e ?c ?cLabel WHERE {{
+      ?e wdt:P31 wd:{ELEMENT_QID} ; wdt:P1086 ?num ; wdt:P279 ?c .
+      FILTER(xsd:integer(?num) <= {max_z})
+      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
+    }}
+    """
+    nach_qid = {el["qid"]: el for el in nach_z.values()}
+    for b in sparql_query(klassen).get("results", {}).get("bindings", []):
+        el = nach_qid.get(b["e"]["value"].rsplit("/", 1)[-1])
+        if el is None:
+            continue
+        cqid = b["c"]["value"].rsplit("/", 1)[-1]
+        el["klassen"][cqid] = b.get("cLabel", {}).get("value", cqid)
+
+    return [nach_z[z] for z in sorted(nach_z)]
+
+
+def pse_position(z: int) -> Optional[tuple]:
+    """Ordnungszahl -> (Zeile, Spalte) im 18-spaltigen Raster.
+
+    Lanthanoide und Actinoide bekommen die abgesetzten Zeilen 8 und 9 -
+    dieselbe Konvention wie im gedruckten Periodensystem.
+    """
+    if z == 1:
+        return (1, 1)
+    if z == 2:
+        return (1, 18)
+    if z in (3, 4):
+        return (2, z - 2)
+    if 5 <= z <= 10:
+        return (2, z + 8)
+    if z in (11, 12):
+        return (3, z - 10)
+    if 13 <= z <= 18:
+        return (3, z)
+    if 19 <= z <= 36:
+        return (4, z - 18)
+    if 37 <= z <= 54:
+        return (5, z - 36)
+    if z in (55, 56):
+        return (6, z - 54)
+    if 57 <= z <= 71:
+        return (8, z - 54)
+    if 72 <= z <= 86:
+        return (6, z - 68)
+    if z in (87, 88):
+        return (7, z - 86)
+    if 89 <= z <= 103:
+        return (9, z - 86)
+    if 104 <= z <= 118:
+        return (7, z - 100)
+    return None
+
+
+def plot_periodensystem(elemente: list, path_png: str) -> None:
+    """PSE-Raster, jede Zelle eingefaerbt nach ihrer spezifischsten Klasse.
+
+    Weiss-schraffiert = das Element hat ueberhaupt keine P279-Klasse; genau
+    diese Zellen sind die Luecke, um die es hier geht.
+    """
+    from matplotlib.patches import Patch
+
+    farben = dict(PSE_KATEGORIEN)
+    vorrang = [qid for qid, _ in PSE_KATEGORIEN]
+    alle_klassen = {}
+    genutzt = {}
+    ohne_klasse = []
+
+    fig, ax = plt.subplots(figsize=(21, 13))
+    for el in elemente:
+        pos = pse_position(el["z"])
+        if pos is None:
+            continue
+        zeile, spalte = pos
+        y = -(zeile + (0.7 if zeile >= 8 else 0.0))
+        for cqid, clabel in el["klassen"].items():
+            alle_klassen[cqid] = (clabel, alle_klassen.get(cqid, (clabel, 0))[1] + 1)
+
+        kategorie = next((q for q in vorrang if q in el["klassen"]), None)
+        if kategorie:
+            farbe = farben[kategorie]
+            genutzt[kategorie] = el["klassen"][kategorie]
+        elif el["klassen"]:
+            farbe = FARBE_ANDERE
+        else:
+            farbe = FARBE_KEINE
+            ohne_klasse.append(el)
+
+        ax.add_patch(plt.Rectangle(
+            (spalte, y), 0.94, 0.94, facecolor=farbe, edgecolor="0.3",
+            linewidth=0.9, hatch="///" if not el["klassen"] else None))
+        ax.text(spalte + 0.07, y + 0.76, str(el["z"]), fontsize=6.5, color="0.35")
+        ax.text(spalte + 0.47, y + 0.50, el["symbol"] or "?", fontsize=14,
+                fontweight="bold", ha="center", va="center")
+        ax.text(spalte + 0.47, y + 0.24, el["label"][:14], fontsize=5.5,
+                ha="center", va="center", color="0.2")
+        ax.text(spalte + 0.47, y + 0.08,
+                f"{len(el['klassen'])} Klassen" if el["klassen"] else "keine Klasse",
+                fontsize=5, ha="center", va="center", color="0.35")
+
+    # Kopfband ueber dem Raster freihalten: die Legende hat 17 Eintraege und
+    # laege sonst ueber Wasserstoff und den Alkalimetallen.
+    ax.set_xlim(0.5, 19.6)
+    ax.set_ylim(-10.1, 2.1)
+    ax.set_aspect("equal")
+    ax.axis("off")
+
+    handles = [Patch(facecolor=farben[q], edgecolor="0.3", label=genutzt[q])
+               for q in vorrang if q in genutzt]
+    handles.append(Patch(facecolor=FARBE_ANDERE, edgecolor="0.3",
+                         label="nur andere Klassen"))
+    handles.append(Patch(facecolor=FARBE_KEINE, edgecolor="0.3", hatch="///",
+                         label=f"keine P279-Klasse ({len(ohne_klasse)})"))
+    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.0, 2.0),
+              bbox_transform=ax.transData, ncol=5, fontsize=8, frameon=False)
+
+    rang = sorted(alle_klassen.values(), key=lambda t: (-t[1], t[0]))
+    fusszeile = textwrap.fill(
+        "alle vergebenen P279-Klassen: " +
+        " · ".join(f"{n}× {label}" for label, n in rang), 210)
+    ax.set_title(
+        f"Periodensystem: Klassenzuordnung (P279) in Wikidata\n"
+        f"{len(elemente)} Elemente, {len(alle_klassen)} verschiedene Klassen, "
+        f"{len(ohne_klasse)} Elemente ganz ohne Klasse", fontsize=13)
+    fig.text(0.5, 0.045, fusszeile, ha="center", fontsize=6.5, color="0.25")
+    fig.savefig(path_png, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    print(f"Graph geschrieben: {path_png}", file=sys.stderr)
+
+
+def write_elemente_csv(elemente: list, path: str) -> None:
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["ordnungszahl", "symbol", "label", "qid",
+                         "anzahl_klassen", "klassen"])
+        for el in elemente:
+            writer.writerow([
+                el["z"], el["symbol"], el["label"], el["qid"],
+                len(el["klassen"]),
+                "; ".join(f"{lbl} ({q})" for q, lbl in sorted(
+                    el["klassen"].items(), key=lambda kv: kv[1])),
+            ])
+    print(f"Bericht geschrieben: {path}", file=sys.stderr)
+
+
+def fetch_subclasses(qids: list, limit: int) -> tuple:
+    """Direkte Subklassen (P279 genau eine Stufe) je QID.
+
+    Liefert ({qid: [(kind_qid, kind_label)]}, {qid: gesamtzahl}) - die Liste
+    ist auf `limit` gekuerzt, die Gesamtzahl bleibt erhalten, damit die
+    Kuerzung im Bild benannt werden kann.
+    """
+    values = " ".join(f"wd:{q}" for q in qids)
+    sparql = f"""
+    SELECT ?p ?s ?sLabel WHERE {{
+      VALUES ?p {{ {values} }}
+      ?s wdt:P279 ?p .
+      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
+    }}
+    """
+    kinder = {}
+    for b in sparql_query(sparql).get("results", {}).get("bindings", []):
+        parent = b["p"]["value"].rsplit("/", 1)[-1]
+        child = b["s"]["value"].rsplit("/", 1)[-1]
+        kinder.setdefault(parent, {})[child] = b.get("sLabel", {}).get("value", child)
+    gesamt = {q: len(kinder.get(q, {})) for q in qids}
+    gekuerzt = {
+        q: sorted(kinder.get(q, {}).items(), key=lambda kv: kv[1])[:limit]
+        for q in qids
+    }
+    return gekuerzt, gesamt
+
+
+def plot_subklassen_faecher(root: str, eltern: list, kinder: dict, gesamt: dict,
+                            labels: dict, path_png: str, title: str) -> None:
+    """Wurzel -> 10 Beispiele -> deren Subklassen, je Beispiel eine Spalte.
+
+    Kein spring_layout: die Positionen stehen fest (Spalte je Beispiel), sonst
+    schieben sich die langen Legierungsnamen uebereinander.
+    """
+    g = nx.DiGraph()
+    pos, tiefste = {}, 0
+    g.add_node(root)
+    pos[root] = ((len(eltern) - 1) / 2.0, 1.35)
+    for i, parent in enumerate(eltern):
+        g.add_node(parent)
+        pos[parent] = (float(i), 0.0)
+        g.add_edge(root, parent)
+        for j, (child, _) in enumerate(kinder.get(parent, [])):
+            g.add_node(child)
+            # Eine Subklasse kann unter mehreren Beispielen haengen (Alumel
+            # unter Aluminium- UND Nickelbasislegierung). Sie behaelt ihre
+            # erste Spalte, die zweite Kante laeuft dann quer - genau das
+            # soll sichtbar bleiben.
+            pos.setdefault(child, (float(i), -0.55 - j * 0.5))
+            g.add_edge(parent, child)
+            tiefste = max(tiefste, j + 1)
+
+    def beschriftung(qid: str) -> str:
+        # break_long_words=False: sonst zerfaellt "Aluminiumlegierung" mitten
+        # im Wort; ein zu breiter Kasten ist das kleinere Uebel.
+        return textwrap.fill(labels.get(qid, qid), 17, break_long_words=False)
+
+    fig = plt.figure(figsize=(max(14, 2.1 * len(eltern)), 4.5 + 0.62 * tiefste))
+    nx.draw_networkx_edges(g, pos, edge_color="0.6", arrows=False, width=0.8)
+    stil = dict(font_size=7, bbox=dict(boxstyle="round,pad=0.35", linewidth=0.7))
+    nx.draw_networkx_labels(g, pos, labels={root: beschriftung(root)},
+                            font_weight="bold",
+                            **{**stil, "bbox": dict(stil["bbox"], facecolor="gold",
+                                                    edgecolor="0.3")})
+    nx.draw_networkx_labels(
+        g, pos,
+        labels={p: f"{beschriftung(p)}\n({gesamt.get(p, 0)} Subklassen)"
+                for p in eltern},
+        **{**stil, "bbox": dict(stil["bbox"], facecolor="lightgreen",
+                                edgecolor="0.3")})
+    kinder_labels = {c: beschriftung(c) for p in eltern
+                     for c, _ in kinder.get(p, [])}
+    if kinder_labels:
+        nx.draw_networkx_labels(
+            g, pos, labels=kinder_labels, font_size=6,
+            bbox=dict(boxstyle="round,pad=0.3", facecolor="lightblue",
+                      edgecolor="0.55", linewidth=0.6))
+    plt.title(f"{title}\ngold = Wurzel, gruen = Beispiel, blau = direkte "
+              f"Subklasse (P279); je Beispiel hoechstens die ersten "
+              f"{max((len(v) for v in kinder.values()), default=0)} "
+              f"alphabetisch, Querkanten = Subklasse mehrerer Beispiele",
+              fontsize=11)
+    plt.axis("off")
+    plt.tight_layout()
+    plt.savefig(path_png, dpi=150)
+    plt.close()
+    print(f"Graph geschrieben: {path_png}", file=sys.stderr)
+
+
+def szenario_periodensystem(out_dir: str) -> None:
+    print("Lade alle chemischen Elemente mit ihren Klassen ...", file=sys.stderr)
+    elemente = fetch_elemente()
+    print(f"  {len(elemente)} Elemente geladen.", file=sys.stderr)
+    write_elemente_csv(elemente, os.path.join(out_dir, "szenario_periodensystem.csv"))
+    plot_periodensystem(elemente, os.path.join(out_dir, "szenario_periodensystem.png"))
+    ohne = [el for el in elemente if not el["klassen"]]
+    if ohne:
+        print("  ohne jede P279-Klasse: " +
+              ", ".join(f"{el['symbol'] or el['label']}" for el in ohne),
+              file=sys.stderr)
+
+
+def szenario_legierungen(out_dir: str, limit: int) -> None:
+    print("Lade Subklassen der Legierungs-Beispiele ...", file=sys.stderr)
+    kinder, gesamt = fetch_subclasses(SZENARIO_LEGIERUNGEN, limit)
+    labels = fetch_labels(SZENARIO_LEGIERUNGEN + [ALLOY_ROOT])
+    labels.update({c: l for p in SZENARIO_LEGIERUNGEN
+                   for c, l in kinder.get(p, [])})
+    for qid in SZENARIO_LEGIERUNGEN:
+        gezeigt = kinder.get(qid, [])
+        print(f"  {labels.get(qid, qid)} ({qid}): {gesamt.get(qid, 0)} Subklassen"
+              + (f", gezeigt {len(gezeigt)}" if len(gezeigt) < gesamt.get(qid, 0)
+                 else ""))
+        for child, clabel in gezeigt:
+            print(f"      {clabel} ({child})")
+    plot_subklassen_faecher(
+        ALLOY_ROOT, SZENARIO_LEGIERUNGEN, kinder, gesamt, labels,
+        os.path.join(out_dir, "szenario_legierungen.png"),
+        f"Legierungen: 10 Beispiele und ihre Subklassen unter "
+        f"{labels.get(ALLOY_ROOT, ALLOY_ROOT)} ({ALLOY_ROOT})")
+
+
+def szenario_minerale(out_dir: str) -> None:
+    root_label = fetch_labels([MINERAL_ROOT]).get(MINERAL_ROOT, MINERAL_ROOT)
+    print(f"Verfolge 10 Mineralarten hinauf zu {root_label} ({MINERAL_ROOT}) ...",
+          file=sys.stderr)
+    ohne = run_trace(SZENARIO_MINERALE, MINERAL_ROOT,
+                     os.path.join(out_dir, "szenario_minerale.png"),
+                     title=f"Minerale: 10 Beispiele und ihre Pfade zu "
+                           f"{root_label} ({MINERAL_ROOT})")
+    print(f"  {len(SZENARIO_MINERALE) - ohne}/{len(SZENARIO_MINERALE)} mit Pfad, "
+          f"{ohne} ohne.", file=sys.stderr)
+
+
+SZENARIEN = {
+    "periodensystem": lambda out_dir, limit: szenario_periodensystem(out_dir),
+    "legierungen": lambda out_dir, limit: szenario_legierungen(out_dir, limit),
+    "minerale": lambda out_dir, limit: szenario_minerale(out_dir),
+}
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -712,10 +1119,34 @@ def main():
                               f"material; z. B. Q79529 fuer die chemische Achse)")
     parser.add_argument("--trace-out", metavar="PNG", default="trace_graph.png",
                          help="Ausgabedatei fuer den Trace-Graphen")
+    parser.add_argument("--szenario", nargs="+", metavar="NAME",
+                         choices=sorted(SZENARIEN) + ["alle"],
+                         help="statt des Standardlaufs eines oder mehrere "
+                              "Szenarien zeichnen: periodensystem (alle 118 "
+                              "Elemente nach P279-Klasse eingefaerbt), "
+                              "legierungen (10 Beispiele mit ihren "
+                              "Subklassen), minerale (10 Beispiele mit ihren "
+                              "Pfaden zu Mineral Q7946) oder alle")
+    parser.add_argument("--szenario-out", metavar="DIR",
+                         help="Zielverzeichnis fuer die Szenario-Dateien "
+                              "(Default: das Verzeichnis dieses Skripts)")
+    parser.add_argument("--max-subklassen", type=int, default=8, metavar="N",
+                         help="nur mit --szenario legierungen: hoechstens N "
+                              "Subklassen je Beispiel zeichnen (Default 8; "
+                              "Kupferlegierung allein hat 44)")
     args = parser.parse_args()
 
     # QID direkt angeben umgeht die Labelsuche - wbsearchentities loest z. B.
     # "Stahl" auf Q1236029 (Familienname) statt auf den Werkstoff Q11427 auf.
+    if args.szenario:
+        out_dir = args.szenario_out or os.path.dirname(os.path.abspath(__file__))
+        os.makedirs(out_dir, exist_ok=True)
+        namen = sorted(SZENARIEN) if "alle" in args.szenario else args.szenario
+        for name in dict.fromkeys(namen):
+            print(f"\n=== Szenario: {name} ===", file=sys.stderr)
+            SZENARIEN[name](out_dir, args.max_subklassen)
+        return
+
     if args.trace:
         run_trace(args.trace, args.trace_root, args.trace_out)
         return

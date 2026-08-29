@@ -8,7 +8,7 @@ Wikidata geschrieben.
 | Anwendung | Verzeichnis | Was sie macht |
 |---|---|---|
 | **Wikidata Knowledge Graph** | [wikikg/](wikikg/) | Vergleicht die ausgehenden Links eines Wikipedia-Artikels mit den Statements des zugehörigen Wikidata-Items und zeigt fehlende Beziehungen. Enthält zusätzlich den browserbasierten *Wortfeld-Explorer*. |
-| **Materials Wiki** | [materialswiki/](materialswiki/) | Leitet „besteht aus" (P527) aus der Summenformel des Items ab, holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
+| **Materials Wiki** | [materialswiki/](materialswiki/) | Holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
 | **Benchmark** | [benchmark/](benchmark/) | Misst, wie gut metallische Werkstoffe in Wikidata belegt sind — je Property aus dem WikiProject Materials. Zeigt, wo Vorschläge sich überhaupt lohnen. |
 | **Material class structure** | [Material%20class%20structure/](Material%20class%20structure/) | Zwei Werkzeuge zur Klassenhierarchie der Werkstoffe. *Vorschläge generieren* prüft auf elf Arten, wie `P279` („Unterklasse von") verwendet wird — fehlende, doppelte, verkehrte und mit `P31` verwechselte Kanten, dazu die fehlende chemische Metaklasse der Legierungen — und schreibt **eine gestaffelte Empfehlung**: vier Stufen nach Beweiskraft, ausführbar ist nur die erste. *visualisierung* zeichnet, wie Werkstoffe unter `material` (Q214609) hängen und welche über einen parallelen Zweig laufen. |
 | **Anwendungen** | [Anwendung/](Anwendung/) | Leitet ab, **wozu** ein Werkstoff gebraucht wird: aggregiert die `P186`-Rückverweise der Objekte (21495 Items der Klasse „Münze" nennen Bronze) zu `P366`-Vorschlägen am Werkstoff und entwirft, wo es ohne Quantorensprung geht, die Rückkante `P186` am Anwendungsitem. Filtert dabei Verbundgegenstände (Wolkenkratzer, Fahrzeuge) und zu eng gefasste Klassen heraus. Für `P2079`, das in Wikidata fast leer ist, liest sie die Herstellungsabschnitte der deutschen und englischen Wikipedia aus und schlägt die dort verlinkten Verfahren mit Beleg auf die Artikelversion vor. |
@@ -159,7 +159,7 @@ Bedingungen:
 
 | Quelle | Lizenz | Was daraus stammt | Pflichten |
 |---|---|---|---|
-| Wikidata selbst (P274) | CC0 (Public Domain) | „besteht aus" (P527), aus der Summenformel abgeleitet | keine |
+| Wikidata selbst (P274) | CC0 (Public Domain) | „besteht aus" (P527) und „enthält Elemente von" (P2670), aus der Summenformel abgeleitet — **Stufe abgeschaltet**, nur mit `--formel` | keine |
 | [Materials Project](https://next-gen.materialsproject.org/) | CC BY 4.0 | Dichte, elastische Moduln, Poissonzahl; Kristallsystem nur als Rückfall | Namensnennung + Zitierung, siehe unten |
 | [Crystallography Open Database](https://www.crystallography.net/cod/) | CC0 (Public Domain) | Raumgruppe, Kristallsystem, COD-ID | keine; Nennung der Originalautoren erbeten |
 | Wikipedia (de/en) | CC BY-SA 4.0 | Infobox-Werte als Rückfall | Namensnennung, Weitergabe unter gleichen Bedingungen |
@@ -204,10 +204,16 @@ Vorschlagslisten erzeugen und **nie automatisch nach Wikidata schreiben** —
 und warum COD (CC0) für Struktur­angaben die bevorzugte Quelle ist, wo es
 etwas liefert.
 
-Die Stufe „Formel" ist von alledem nicht betroffen: sie leitet P527 aus der
-Summenformel ab, die am Wikidata-Item bereits steht. Es wird nichts von außen
-geholt und nichts weitergegeben — deshalb tragen diese Aussagen auch keinen
-Beleg, sondern nur die Herkunftsnotiz in der CSV-Spalte `ref_note`.
+Die Stufe „Formel" war von alledem nicht betroffen: sie leitet P527 und P2670
+aus der Summenformel ab, die am Wikidata-Item bereits steht. Es wird nichts von
+außen geholt und nichts weitergegeben — deshalb tragen diese Aussagen auch
+keinen Beleg, sondern nur die Herkunftsnotiz in der CSV-Spalte `ref_note`.
+
+**Seit dem 27.08.2026 ist diese Stufe abgeschaltet**: P527 und P2670 sollen
+nicht mehr vorgeschlagen werden, und sie ist die einzige Stufe, die beide
+erzeugt — samt der Umstellung bestehender Aussagen „Stoff P527 Element" auf
+P2670, der einzigen Stufe mit Löschzeilen. Der Code bleibt erhalten; `--formel`
+schaltet ihn für einen einzelnen Lauf wieder ein.
 
 ## Lizenz
 

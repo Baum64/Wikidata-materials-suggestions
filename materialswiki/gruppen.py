@@ -84,6 +84,17 @@ OXID_PATTERN = (
     "?i wdt:P274 ?pflichtformel ."
 )
 
+# Carbide: der Subtree unter Q241906 ist mit 27 Items winzig, aber sauber -
+# fast durchweg technisch relevante Hartstoffe (SiC, WC, TiC, B4C ...), kein
+# Massenimport. Deshalb hier KEIN Formelzwang wie bei den Oxiden: die 10
+# Items ohne Summenformel (Zementit, Urancarbide, Mangancarbid ...) sind
+# gerade die, bei denen etwas vorzuschlagen ist.
+CARBID_QID = "Q241906"
+CARBID_PATTERN = (
+    f"{{ ?i wdt:P31/wdt:P279* wd:{CARBID_QID} }} UNION "
+    f"{{ ?i wdt:P279* wd:{CARBID_QID} }}"
+)
+
 # ---------------------------------------------------------------------------
 # Benannte Legierungen aus der Wikipedia-Liste
 # ---------------------------------------------------------------------------
@@ -197,6 +208,10 @@ WERKSTOFFGRUPPEN = {
     "oxide": {
         "pattern": OXID_PATTERN,
         "beschreibung": "Oxide mit Summenformel (Q50690)",
+    },
+    "carbide": {
+        "pattern": CARBID_PATTERN,
+        "beschreibung": "Carbide (Q241906)",
     },
 }
 

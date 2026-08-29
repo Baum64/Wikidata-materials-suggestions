@@ -29,6 +29,9 @@ Gruppen
   oxide          die 154 Oxide mit Summenformel. Der volle Subtree unter
                  Q50690 hat 27670 Items, ist aber fast nur labelloser
                  Massenimport
+  carbide        die 27 Carbide unter Q241906 - technische Hartstoffe wie
+                 SiC, WC, TiC und B4C. Die kleinste Gruppe, in Minuten durch;
+                 10 tragen noch keine Summenformel
   metalle        98 metallische und halbmetallische Elemente
   periodensystem alle 118 chemischen Elemente
 
@@ -38,6 +41,7 @@ Aufruf
   python -m lauf minerale --weiter --stempel 2026-08-16_1830 --nur-vorschlaege
   python -m lauf minerale --limit 50
   python -m lauf oxide
+  python -m lauf carbide
   python -m lauf legierungen
   python -m lauf legierungen --nur-benchmark
   python -m lauf legierungen -- --no-wikipedia     # alles nach -- geht an
@@ -81,6 +85,11 @@ GRUPPEN = {
         "cli": ["--group", "oxide"],
         "beschreibung": "Oxide mit Summenformel (Q50690)",
     },
+    "carbide": {
+        "population": "carbide",
+        "cli": ["--group", "carbide"],
+        "beschreibung": "Carbide (Q241906)",
+    },
     "metalle": {
         "population": "metalle",
         "cli": ["--periodic-table", "--nur-metalle"],
@@ -121,7 +130,7 @@ def main(argv=None) -> int:
                         help="Zielverzeichnis fuer CSV, Entwurf und Protokolle")
     parser.add_argument("--limit", type=int, default=None,
                         help="nur die ersten N Items (bei den Gruppen "
-                             "legierungen, minerale, oxide)")
+                             "legierungen, minerale, oxide, carbide)")
     parser.add_argument("--batch-size", type=int, default=500, metavar="N",
                         help="Items je Charge; nach jeder Charge werden CSV "
                              "und QuickStatements geschrieben (Default: 500). "

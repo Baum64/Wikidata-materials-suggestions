@@ -234,6 +234,41 @@ def test_verbund_geht_dem_sprachfilter_vor():
     assert [b["befund"] for b in treffer] == ["p366-verbund"]
 
 
+# --- Klasse oder Instanz: fuer wen wird ueberhaupt entworfen? -------------
+
+def test_nur_instanzen_bekommen_einen_entwurf():
+    """Ohne P31 ist der Werkstoff selbst eine Klasse - 'wird fuer Muenzen
+    verwendet' gaelte dann fuer jede seiner Unterklassen."""
+    nach_klasse = {"QBronze": {"QMuenze": objekte(500)},
+                   "QAlLegierung": {"QMuenze": objekte(300, "Q8")}}
+    treffer = anwendung.pruefe_p366_aus_p186(
+        nach_klasse, {}, {}, {}, {}, min_belege=3, min_sprachen=0,
+        instanzen={"QBronze"})
+    nach_art = {b["befund"]: b["qid"] for b in treffer}
+    assert nach_art == {"p366-aus-p186": "QBronze",
+                        "p366-nur-klasse": "QAlLegierung"}
+    nur_klasse = [b for b in treffer if b["befund"] == "p366-nur-klasse"][0]
+    assert nur_klasse["quickstatements"] == "QAlLegierung\tP366\tQMuenze"
+    assert nur_klasse["entscheidung"] != "einspielbar"
+
+
+def test_trennung_abschaltbar():
+    """instanzen=None ist der Schalter --auch-werkstoffklassen."""
+    treffer = anwendung.pruefe_p366_aus_p186(
+        {"QAlLegierung": {"QMuenze": objekte(300)}}, {}, {}, {}, {},
+        min_belege=3, min_sprachen=0, instanzen=None)
+    assert [b["befund"] for b in treffer] == ["p366-aus-p186"]
+
+
+def test_inhaltliche_filter_gehen_der_trennung_vor():
+    """Ein Verbundgegenstand bleibt ein Verbundgegenstand, auch wenn der
+    Werkstoff eine Klasse ist - gemeldet wird der inhaltliche Grund."""
+    treffer = anwendung.pruefe_p366_aus_p186(
+        {"QStahl": {"QBruecke": objekte(80)}}, {}, {"QBruecke": {"Q12280"}},
+        {}, {}, min_belege=3, min_sprachen=0, instanzen=set())
+    assert [b["befund"] for b in treffer] == ["p366-verbund"]
+
+
 # --- Rueckkante P186: der Quantorensprung ---------------------------------
 
 def test_einzelding_ja_klasse_nein():
