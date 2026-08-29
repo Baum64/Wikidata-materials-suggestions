@@ -66,7 +66,7 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 # Die Wikidata-Zugriffsschicht teilt sich dieses Skript mit
-# "Vorschläge generieren.py" daneben - HTTP-Retry, SPARQL-POST, ASK.
+# ClassCheck.py daneben - HTTP-Retry, SPARQL-POST, ASK.
 from wikidata_graph import (  # noqa: E402
     WIKIDATA_API, ask, request_with_retry, sparql_json as sparql_query,
 )

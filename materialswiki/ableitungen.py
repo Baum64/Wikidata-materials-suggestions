@@ -11,7 +11,7 @@ steht:
 Die chemische Metaklasse (P31) fuer Legierungen stand hier bis 2026-08-23
 daneben. Sie folgt nicht aus einer Quelle, sondern aus der
 Klassenzugehoerigkeit, und ist deshalb in "Material class structure/
-Vorschläge generieren.py" gewandert (Pruefung 'metaklasse') - dort liegt der
+ClassCheck.py" gewandert (Pruefung 'metaklasse') - dort liegt der
 P279-Graph ohnehin im Speicher. Die Klassenlage (metaklassen()) bleibt hier:
 die Formel-Stufe braucht sie, um Stoffe von Aufzaehlungen zu trennen.
 

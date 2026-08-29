@@ -10,7 +10,7 @@ Wikidata geschrieben.
 | **Wikidata Knowledge Graph** | [wikikg/](wikikg/) | Vergleicht die ausgehenden Links eines Wikipedia-Artikels mit den Statements des zugehörigen Wikidata-Items und zeigt fehlende Beziehungen. Enthält zusätzlich den browserbasierten *Wortfeld-Explorer*. |
 | **Materials Wiki** | [materialswiki/](materialswiki/) | Holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
 | **Benchmark** | [benchmark/](benchmark/) | Misst, wie gut metallische Werkstoffe in Wikidata belegt sind — je Property aus dem WikiProject Materials. Zeigt, wo Vorschläge sich überhaupt lohnen. |
-| **Material class structure** | [Material%20class%20structure/](Material%20class%20structure/) | Zwei Werkzeuge zur Klassenhierarchie der Werkstoffe. *Vorschläge generieren* prüft auf elf Arten, wie `P279` („Unterklasse von") verwendet wird — fehlende, doppelte, verkehrte und mit `P31` verwechselte Kanten, dazu die fehlende chemische Metaklasse der Legierungen — und schreibt **eine gestaffelte Empfehlung**: vier Stufen nach Beweiskraft, ausführbar ist nur die erste. *visualisierung* zeichnet, wie Werkstoffe unter `material` (Q214609) hängen und welche über einen parallelen Zweig laufen. |
+| **Material class structure** | [Material%20class%20structure/](Material%20class%20structure/) | Zwei Werkzeuge zur Klassenhierarchie der Werkstoffe. *ClassCheck* prüft auf zwölf Arten, wie `P279` („Unterklasse von") verwendet wird — fehlende, doppelte, verkehrte und mit `P31` verwechselte Kanten, dazu die fehlende chemische Metaklasse der Legierungen — und schreibt **eine gestaffelte Empfehlung**: vier Stufen nach Beweiskraft, ausführbar ist nur die erste. *visualisierung* zeichnet, wie Werkstoffe unter `material` (Q214609) hängen und welche über einen parallelen Zweig laufen. |
 | **Anwendungen** | [Anwendung/](Anwendung/) | Leitet ab, **wozu** ein Werkstoff gebraucht wird: aggregiert die `P186`-Rückverweise der Objekte (21495 Items der Klasse „Münze" nennen Bronze) zu `P366`-Vorschlägen am Werkstoff und entwirft, wo es ohne Quantorensprung geht, die Rückkante `P186` am Anwendungsitem. Filtert dabei Verbundgegenstände (Wolkenkratzer, Fahrzeuge) und zu eng gefasste Klassen heraus. Für `P2079`, das in Wikidata fast leer ist, liest sie die Herstellungsabschnitte der deutschen und englischen Wikipedia aus und schlägt die dort verlinkten Verfahren mit Beleg auf die Artikelversion vor. |
 
 Details, Nutzung und Grenzen stehen jeweils im README der Anwendung:
@@ -37,10 +37,12 @@ benchmark/     Abdeckungsmessung der Werkstoff-Properties in Wikidata
   benchmark.py       Kommandozeile (python -m benchmark.benchmark)
   properties_snapshot.json  Momentaufnahme der Property-Liste (für --offline)
 Material class structure/  Klassenhierarchie der Werkstoffe: prüfen und zeichnen
-  Vorschläge generieren.py  zehn Strukturprüfungen -> gestaffelte Empfehlung
+  ClassCheck.py             zwölf Strukturprüfungen -> gestaffelte Empfehlung
   visualisierung.py         Anbindung an die Wurzel als Graph (PNG)
+  wikidata_graph.py         gemeinsame Wikidata-Zugriffsschicht beider Skripte
 Anwendung/     Anwendungen der Werkstoffe (P366/P186/P2079) entwerfen
   Anwendung.py       Kommandozeile (python "Anwendung/Anwendung.py")
+lauf.py        Sammelbefehl: Benchmark + materialswiki + ClassCheck je Gruppe
 tests/         Offline-Tests (pytest)
 ```
 
@@ -62,26 +64,47 @@ Gestartet wird aus dem Repo-Wurzelverzeichnis heraus:
 python -m wikikg --title Holz --lang de
 python -m materialswiki --elements Ti O --max 50
 python -m benchmark.benchmark --offline
-python "Material class structure/Vorschläge generieren.py"
 python "Anwendung/Anwendung.py"
 python "Material class structure/visualisierung.py"
 ```
 
+`python -m lauf` bündelt Benchmark, `materialswiki` und die Strukturprüfung
+(`ClassCheck.py`) zu **einem** kurzen Befehl je Werkstoffgruppe; alle
+Ergebnisse tragen denselben Zeitstempel und landen zusammen in `--out-dir`
+(Default `proposals/`):
+
+```bash
+python -m lauf legierungen                  # Benchmark + materialswiki
+python -m lauf legierungen --struktur        # zusätzlich die Klassenstruktur
+
+# nur die Strukturprüfung (ClassCheck.py), für JEDE Grundgesamtheit:
+python -m lauf struktur benannte-legierungen
+python -m lauf struktur oxide
+python -m lauf struktur material --limit 500
+python -m lauf struktur periodensystem -- --ohne-dichte
+```
+
+`python -m lauf struktur <population>` deckt auch `material` und
+`metallischer-werkstoff` ab, die kein Benchmark-Gegenstück haben. ClassCheck
+lässt sich weiterhin direkt aufrufen — mit `--out-dir` landet die Empfehlung
+im selben `proposals/`-Ordner.
+
 ## Ausgabedateien
 
-Alle Anwendungen schreiben ihre Ergebnisse als Datei in das
-**aktuelle Arbeitsverzeichnis** (`--out`, `--qs-out`, `--csv`, `--output`,
-`--trace-out` steuern Ziel und Namen). Diese Dateien sind Momentaufnahmen
-eines Laufs und stehen deshalb in [.gitignore](.gitignore) — sie gehören
-nicht ins Repo:
+Vorschlagsdateien (CSV, QuickStatements, die gestaffelte Empfehlung) landen in
+**`proposals/`** (CLAUDE.md, „Arbeitsweise" Punkt 2) — `--out` / `--qs-out` /
+`--csv` / `--out-dir` verlegen sie. Graphen und `--output` bleiben im
+aktuellen Arbeitsverzeichnis. Alle diese Dateien sind Momentaufnahmen eines
+Laufs und stehen in [.gitignore](.gitignore) — sie gehören nicht ins Repo:
 
 | Datei | Erzeugt von |
 |---|---|
-| `vorschlaege_<Zeitstempel>.csv`, `quickstatements_entwurf_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
+| `proposals/vorschlaege_<Zeitstempel>.csv`, `proposals/quickstatements_entwurf_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
 | `werkstoffe_vorschlaege.csv`, `werkstoffe_quickstatements_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
 | `abdeckung.csv` (bzw. was `--csv` angibt) | [benchmark/benchmark.py](benchmark/benchmark.py) |
-| `p279_empfehlung_<Zeitstempel>.txt` (und `p279_befunde_*.csv` nur mit `--csv`) | [Material class structure/Vorschläge generieren.py](Material%20class%20structure/Vorschläge%20generieren.py) |
-| `anwendungen_befunde_<Zeitstempel>.csv`, `quickstatements_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
+| `proposals/p279_empfehlung_<Population>_<Zeitstempel>.txt` (und `p279_befunde_*.csv` nur mit `--csv`) | [Material class structure/ClassCheck.py](Material%20class%20structure/ClassCheck.py) |
+| alle drei Schritte (`abdeckung_*`, `quickstatements_*`, `p279_empfehlung_*`) mit gemeinsamem Zeitstempel in `--out-dir` (Default `proposals/`) | [lauf.py](lauf.py) |
+| `proposals/anwendungen_befunde_<Zeitstempel>.csv`, `proposals/quickstatements_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
 | `werkstoff_check.csv`, `werkstoff_graph.png`, `trace_*.png`, `subclass_tree_material.png` (nur `--tree`) | [Material class structure/visualisierung.py](Material%20class%20structure/visualisierung.py) |
 | `output/…` (`--output`) | [wikikg/cli.py](wikikg/cli.py) |
 

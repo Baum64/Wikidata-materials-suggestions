@@ -2,7 +2,7 @@
 [[Wikidata:WikiProject Chemistry/Guidelines/Basic metaclasses and relations]].
 
 Die Pruefung stand bis 2026-08-23 in materialswiki und liegt jetzt in
-"Material class structure/Vorschläge generieren.py". Alles netzwerkfrei: die
+"Material class structure/ClassCheck.py". Alles netzwerkfrei: die
 Pruefung selbst rechnet nur auf dem Graphen und den P31-Kanten, die der Lauf
 ohnehin geholt hat.
 """
@@ -15,8 +15,8 @@ import pytest
 # "Material class structure/" ist kein Paket - das Modul kommt ueber den Pfad
 # herein, wie in test_anwendung.py auch.
 _PFAD = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-                     "Material class structure", "Vorschläge generieren.py")
-_spec = importlib.util.spec_from_file_location("vorschlaege_struktur", _PFAD)
+                     "Material class structure", "ClassCheck.py")
+_spec = importlib.util.spec_from_file_location("classcheck", _PFAD)
 vg = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(vg)
 

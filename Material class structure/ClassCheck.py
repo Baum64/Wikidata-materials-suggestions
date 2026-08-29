@@ -172,19 +172,42 @@ faellt beim Bauen nicht auf, beim Einspielen schon:
 
 Ausgabe
 -------
-  p279_empfehlung_<Zeitstempel>.txt   die gestaffelte Empfehlung
-  --csv <pfad>                        zusaetzlich, optional
+  proposals/p279_empfehlung_<Population>_<Zeitstempel>.txt   die Empfehlung
+  --csv <pfad>                                              zusaetzlich, optional
+Beide landen in proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2) - im selben
+Ordner wie alles, was "python -m lauf <gruppe>" schreibt. --out-dir stellt
+den Ordner um.
 
 Aufruf
 ------
-  python "Material class structure/Vorschläge generieren.py"
-  python "Material class structure/Vorschläge generieren.py" --population legierungen
-  python "Material class structure/Vorschläge generieren.py" --pruefungen redundant verkehrt
-  python "Material class structure/Vorschläge generieren.py" --pruefungen metaklasse
-  python "Material class structure/Vorschläge generieren.py" --tiefe 3 --beleg beides
-  python "Material class structure/Vorschläge generieren.py" --vorsichtig   # nichts einspielbar
-  python "Material class structure/Vorschläge generieren.py" --population periodensystem
-  python "Material class structure/Vorschläge generieren.py" --population periodensystem --ohne-dichte
+Kurz ueber den gemeinsamen Sammelbefehl (empfohlen - Ausgabe landet mit
+Benchmark und materialswiki im selben proposals/-Ordner):
+
+  python -m lauf legierungen --nur-struktur
+  python -m lauf periodensystem --nur-struktur
+  python -m lauf legierungen --struktur          # zusammen mit dem Rest
+
+Direkt:
+
+  python "Material class structure/ClassCheck.py"
+  python "Material class structure/ClassCheck.py" --population legierungen
+  python "Material class structure/ClassCheck.py" --pruefungen redundant verkehrt
+  python "Material class structure/ClassCheck.py" --pruefungen metaklasse
+  python "Material class structure/ClassCheck.py" --tiefe 3 --beleg beides
+  python "Material class structure/ClassCheck.py" --vorsichtig   # nichts einspielbar
+  python "Material class structure/ClassCheck.py" --population periodensystem --ohne-dichte
+  python "Material class structure/ClassCheck.py" --population oxide
+  python "Material class structure/ClassCheck.py" --population material --out-dir laeufe/
+
+Grundgesamtheiten (--population)
+-------------------------------
+  benannte-legierungen   die Prueferliste aus [[en:List of named alloys]] (Vorgabe)
+  legierungen            Legierungen unter Q37756, ohne Elemente/Isotope
+  metallischer-werkstoff unterhalb von Q1924900
+  material               unterhalb von Q214609
+  oxide                  Oxide mit Summenformel (Q50690) - dieselbe Menge wie
+                         'python -m lauf oxide'; eigene Pruefungsauswahl
+  periodensystem         die 118 chemischen Elemente (P31 Q11344)
 """
 
 import argparse
@@ -200,10 +223,15 @@ from typing import Optional
 # kopiert - dasselbe Vorgehen wie in benchmark/benchmark.py, sonst driften
 # Benchmark und Vorschlagslauf auseinander.
 _HIER = os.path.dirname(os.path.abspath(__file__))
-sys.path[:0] = [_HIER, os.path.dirname(_HIER)]
+_REPO = os.path.dirname(_HIER)
+sys.path[:0] = [_HIER, _REPO]
+
+# Alle Vorschlagsdateien gehoeren nach proposals/ (CLAUDE.md, "Arbeitsweise"
+# Punkt 2) - unabhaengig davon, aus welchem Verzeichnis das Skript startet.
+PROPOSALS_DIR = os.path.join(_REPO, "proposals")
 
 from materialswiki.cli import (  # noqa: E402
-    LEGIERUNG_PATTERN, LEGIERUNG_QID, fetch_named_alloys,
+    LEGIERUNG_PATTERN, LEGIERUNG_QID, OXID_PATTERN, fetch_named_alloys,
 )
 
 # Die Wikidata-Zugriffsschicht teilt sich dieses Skript mit visualisierung.py
@@ -221,6 +249,7 @@ except ImportError:  # pragma: no cover - Hinweis ist hilfreicher als Traceback
 
 MATERIAL_QID = "Q214609"        # material
 METALL_WERKSTOFF_QID = "Q1924900"  # metallischer Werkstoff
+OXID_QID = "Q50690"             # Oxid - Bereichswurzel der Grundgesamtheit 'oxide'
 
 SUBTREE_PATTERN = (
     "{{ ?i wdt:P31/wdt:P279* wd:{root} }} UNION {{ ?i wdt:P279* wd:{root} }}"
@@ -329,6 +358,27 @@ POPULATIONEN = {
     "material": {
         "pattern": SUBTREE_PATTERN.format(root=MATERIAL_QID),
         "beschreibung": "unterhalb von material (Q214609)",
+    },
+    # Oxide - dieselbe Menge wie 'python -m lauf oxide' und der Benchmark:
+    # OXID_PATTERN kommt woertlich aus materialswiki.gruppen, damit die drei
+    # Werkzeuge garantiert dieselbe Grundgesamtheit meinen. Die Summenformel
+    # (P274) ist dort Teil der Definition - ohne sie besteht der Subtree unter
+    # Q50690 fast nur aus 27000 labellosen Massenimporten, ein untauglicher
+    # Kandidatenpool (siehe DEFAULT_TIEFE).
+    #
+    # Andere Pruefungen als die Legierungs-Voreinstellung: 'metaklasse',
+    # 'zusammensetzung' und 'ohne-einordnung' setzen den Legierungsbezug
+    # (Q37756, [[List of named alloys]]) voraus und finden an Oxiden nichts;
+    # 'elementklasse' braucht die Ordnungszahl. 'zu-allgemein' und
+    # 'p31-neben-p279' holen einen Kandidatenpool unter material/Legierung
+    # (tausende Items), der die Oxidwurzel gar nicht enthaelt - teuer und
+    # fruchtlos. Bleibt der Strukturkern auf dem Graphen selbst.
+    "oxide": {
+        "pattern": OXID_PATTERN,
+        "beschreibung": "Oxide mit Summenformel (Q50690) - wie 'lauf oxide'",
+        "pruefungen": ["kennzahlen", "redundant", "verkehrt",
+                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+        "bereichswurzel": OXID_QID,
     },
     # Das Szenario Periodensystem. Es teilt sich mit den uebrigen nur den
     # Rahmen (Graph, Staffelung, Ausgabe) - die Pruefungen sind andere,
@@ -2678,13 +2728,19 @@ def main(argv: Optional[list] = None) -> int:
                              "die einzige der drei, die auf einer "
                              "Konvention beruht (5 g/cm3) statt auf der "
                              "Ordnungszahl.")
+    parser.add_argument("--out-dir", default=PROPOSALS_DIR,
+                        help="Zielordner fuer Empfehlung und --csv (Default: "
+                             "proposals/ im Repo). Relative --out/--csv werden "
+                             "hierunter abgelegt, so landen die Dateien im "
+                             "selben Ordner wie ein 'python -m lauf'-Lauf.")
     parser.add_argument("--out", default=None,
                         help="Ziel der Empfehlung (Default: "
-                             "p279_empfehlung_<Zeitstempel>.txt)")
+                             "<out-dir>/p279_empfehlung_<Population>_<Zeit>.txt)")
     parser.add_argument("--csv", default=None,
                         help="zusaetzlich eine Befund-CSV schreiben. Ohne "
                              "diese Angabe entsteht NUR die Empfehlung.")
-    parser.add_argument("--review-needed", default="proposals/review-needed.md",
+    parser.add_argument("--review-needed",
+                        default=os.path.join(PROPOSALS_DIR, "review-needed.md"),
                         help="Ziel fuer offene Fragen ohne automatischen "
                              "Entwurf (aktuell nur Fall 3 aus "
                              ".claude/rules/periodic-table-conventions.md: "
@@ -2711,7 +2767,15 @@ def main(argv: Optional[list] = None) -> int:
                            if p not in NUR_PERIODENSYSTEM]
 
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
-    empfehlung_pfad = args.out or f"p279_empfehlung_{stempel}.txt"
+    os.makedirs(args.out_dir, exist_ok=True)
+
+    def im_ordner(pfad: str) -> str:
+        """Relative Pfade unter --out-dir, absolute bleiben unangetastet."""
+        return pfad if os.path.isabs(pfad) else os.path.join(args.out_dir, pfad)
+
+    empfehlung_pfad = im_ordner(
+        args.out or f"p279_empfehlung_{args.population}_{stempel}.txt")
+    csv_pfad = im_ordner(args.csv) if args.csv else None
 
     items, ohne_item = hole_population(args.population, args.limit)
     if not items:
@@ -2919,8 +2983,8 @@ def main(argv: Optional[list] = None) -> int:
     bericht(befunde, luecken, ohne_item, args.vorsichtig)
     schreibe_empfehlung(befunde, empfehlung_pfad, args.population,
                         luecken, ohne_item, args.vorsichtig, mengengeruest)
-    if args.csv:
-        schreibe_csv(befunde, args.csv)
+    if csv_pfad:
+        schreibe_csv(befunde, csv_pfad)
     schreibe_review_needed(befunde, args.review_needed)
     return 0
 

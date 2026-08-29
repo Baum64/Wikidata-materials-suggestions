@@ -1,7 +1,7 @@
 """Gemeinsame Wikidata-Zugriffsschicht der beiden Skripte in diesem Ordner.
 
-visualisierung.py und "Vorschläge generieren.py" fragen beide denselben
-Query-Service ab, buendeln ihre VALUES-Bloecke gleich und trugen bis
+visualisierung.py und ClassCheck.py fragen beide denselben Query-Service
+ab, buendeln ihre VALUES-Bloecke gleich und trugen bis
 2026-08-29 jeweils eine eigene Kopie von HTTP-Retry, SPARQL-POST und
 QID-Zerlegung. Das steht jetzt hier einmal.
 

@@ -126,11 +126,11 @@ Zusaetzlich zaehlt der Bericht die Werkstoffe ohne jede Anwendungsangabe -
 ohne P366 und ohne einen einzigen P186-Rueckverweis. Fuer die kann dieses
 Skript nichts tun; die Zahl sagt, wie gross die Luecke wirklich ist.
 
-Ausgabe
--------
-  anwendungen_befunde_<Zeitstempel>.csv        alle Befunde
-  quickstatements_anwendungen_<Zeitstempel>.txt  Entwurf, Abschnitt 1
-                                                 einspielbar
+Ausgabe (nach proposals/, siehe CLAUDE.md "Arbeitsweise" Punkt 2)
+----------------------------------------------------------------
+  proposals/anwendungen_befunde_<Zeitstempel>.csv          alle Befunde
+  proposals/quickstatements_anwendungen_<Zeitstempel>.txt  Entwurf,
+                                                Abschnitt 1 einspielbar
 
 Aufruf
 ------
@@ -380,9 +380,10 @@ BLOCK = 150
 # HTTP mit Drosselung und Backoff
 # ---------------------------------------------------------------------------
 #
-# Woertlich wie in "Material class structure/Vorschläge generieren.py". Bewusst kopiert statt
-# importiert: dieses Skript soll nicht networkx mitziehen, nur weil das
-# andere es braucht.
+# Dieselbe Aufgabe wie "Material class structure/wikidata_graph.py" (das
+# ClassCheck.py und visualisierung.py teilen). Hier bewusst eigenstaendig:
+# dieses Skript soll weder networkx noch das materialswiki-Paket mitziehen,
+# nur wegen der HTTP-Schicht.
 
 REQUEST_DELAY_SEC = 1.0
 _LETZTE_ANFRAGE = 0.0
@@ -1386,15 +1387,21 @@ def main(argv: Optional[list] = None) -> int:
                              "dann enthaelt die Datei keine ausfuehrbare Zeile")
     parser.add_argument("--csv", default=None,
                         help="Ziel der Befund-CSV (Default: "
-                             "anwendungen_befunde_<Zeitstempel>.csv)")
+                             "proposals/anwendungen_befunde_<Zeitstempel>.csv)")
     parser.add_argument("--qs-out", default=None,
                         help="Ziel des Entwurfs (Default: "
-                             "quickstatements_anwendungen_<Zeitstempel>.txt)")
+                             "proposals/quickstatements_anwendungen_<Zeit>.txt)")
     args = parser.parse_args(argv)
 
+    # Ohne --csv/--qs-out nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
+    _proposals = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "proposals")
+    os.makedirs(_proposals, exist_ok=True)
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
-    csv_pfad = args.csv or f"anwendungen_befunde_{stempel}.csv"
-    qs_pfad = args.qs_out or f"quickstatements_anwendungen_{stempel}.txt"
+    csv_pfad = args.csv or os.path.join(
+        _proposals, f"anwendungen_befunde_{stempel}.csv")
+    qs_pfad = args.qs_out or os.path.join(
+        _proposals, f"quickstatements_anwendungen_{stempel}.txt")
 
     print(f"Hole Grundgesamtheit '{args.population}' ...", file=sys.stderr)
     items = hole_population(args.population, args.limit)

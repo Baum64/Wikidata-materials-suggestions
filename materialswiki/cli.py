@@ -74,8 +74,13 @@ import requests
 # konfig.py liegt im Repo-Wurzelverzeichnis, eine Ebene ueber diesem Paket.
 # Der Pfad wird ergaenzt, damit der Import auch beim direkten Aufruf
 # (python materialswiki/cli.py) und aus fremden Arbeitsverzeichnissen greift.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _REPO)
 import konfig  # noqa: E402
+
+# Alle Vorschlagsdateien (CSV, QuickStatements) gehoeren nach proposals/ -
+# CLAUDE.md, "Arbeitsweise" Punkt 2. Unabhaengig vom Arbeitsverzeichnis.
+PROPOSALS_DIR = os.path.join(_REPO, "proposals")
 
 # ---------------------------------------------------------------------------
 # Konfiguration
@@ -973,18 +978,20 @@ def main():
     )
     parser.add_argument("--out", default=None,
                         help="CSV-Ausgabe (Default: "
-                             "vorschlaege_<Zeitstempel>.csv im aktuellen "
-                             "Verzeichnis)")
+                             "proposals/vorschlaege_<Zeitstempel>.csv)")
     parser.add_argument("--qs-out", default=None,
                         help="QuickStatements-Entwurf (Default: "
-                             "quickstatements_entwurf_<Zeitstempel>.txt)")
+                             "proposals/quickstatements_entwurf_<Zeitstempel>.txt)")
     args = parser.parse_args()
 
     # Zeitstempel im Dateinamen, fuer beide Dateien derselbe: so ueberschreibt
     # kein Lauf den vorherigen, und CSV und Entwurf sind als Paar erkennbar.
+    # Ohne --out/--qs-out nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
-    out = args.out or f"vorschlaege_{stempel}.csv"
-    qs_out = args.qs_out or f"quickstatements_entwurf_{stempel}.txt"
+    os.makedirs(PROPOSALS_DIR, exist_ok=True)
+    out = args.out or os.path.join(PROPOSALS_DIR, f"vorschlaege_{stempel}.csv")
+    qs_out = args.qs_out or os.path.join(
+        PROPOSALS_DIR, f"quickstatements_entwurf_{stempel}.txt")
 
     if args.group and args.batch_size:
         return chargenlauf(args, out, qs_out)

@@ -6,7 +6,7 @@ Zwei Werkzeuge zur **Wikidata-Klassenhierarchie der Werkstoffe** — wie
 
 | Skript | Was es tut | Ausgabe |
 |---|---|---|
-| **[Vorschläge generieren.py](Vorschläge%20generieren.py)** | prüft die Struktur auf zwölf Arten und schreibt **eine gestaffelte Empfehlung** — vier Stufen nach Beweiskraft | `p279_empfehlung_<Zeitstempel>.txt` |
+| **[ClassCheck.py](ClassCheck.py)** | prüft die Struktur auf zwölf Arten und schreibt **eine gestaffelte Empfehlung** — vier Stufen nach Beweiskraft | `proposals/p279_empfehlung_<Population>_<Zeitstempel>.txt` |
 | **[visualisierung.py](visualisierung.py)** | prüft und **zeichnet**, wie Werkstoffe an der Wurzel hängen und welche über einen parallelen Zweig laufen; mit `--szenario` zusätzlich Periodensystem, Legierungen und Minerale | `werkstoff_check.csv`, `*.png` |
 
 Die beiden ergänzen sich: die Visualisierung beantwortet **ob und wie** ein
@@ -20,7 +20,7 @@ wird aus dem Repo-Wurzelverzeichnis.
 
 ---
 
-# Vorschläge generieren.py
+# ClassCheck.py
 
 Prüft, wie **P279** unterhalb der Werkstoffe verwendet wird, und schreibt
 **eine gestaffelte Empfehlung** zum Durchsehen am Bildschirm.
@@ -34,16 +34,27 @@ Hier sind zwei Ansätze zusammengeführt: die Strukturprüfungen auf dem
 P279-Graphen und die Label-Heuristik aus dem früheren
 `material_subclass_check.py`, das darin aufgegangen ist.
 
+Kurz über den Sammelbefehl (`python -m lauf`) — deckt jede Grundgesamtheit ab
+und schreibt nach `proposals/`:
+
 ```bash
-python "Material class structure/Vorschläge generieren.py"
-python "Material class structure/Vorschläge generieren.py" --population legierungen
-python "Material class structure/Vorschläge generieren.py" --pruefungen redundant verkehrt
-python "Material class structure/Vorschläge generieren.py" --pruefungen metaklasse
-python "Material class structure/Vorschläge generieren.py" --tiefe 3 --beleg beides
-python "Material class structure/Vorschläge generieren.py" --vorsichtig   # nichts einspielbar
+python -m lauf struktur benannte-legierungen
+python -m lauf struktur material --limit 500
+python -m lauf struktur periodensystem -- --ohne-dichte
 ```
 
-Es entsteht **eine** Datei: `p279_empfehlung_<Zeitstempel>.txt`. Eine
+Direkt:
+
+```bash
+python "Material class structure/ClassCheck.py"
+python "Material class structure/ClassCheck.py" --population legierungen
+python "Material class structure/ClassCheck.py" --pruefungen redundant verkehrt
+python "Material class structure/ClassCheck.py" --pruefungen metaklasse
+python "Material class structure/ClassCheck.py" --tiefe 3 --beleg beides
+python "Material class structure/ClassCheck.py" --vorsichtig   # nichts einspielbar
+```
+
+Es entsteht **eine** Datei: `proposals/p279_empfehlung_<Population>_<Zeitstempel>.txt`. Eine
 Befund-CSV gibt es nur auf Wunsch (`--csv`).
 
 ## Die Staffelung
@@ -357,6 +368,7 @@ und Handelsprodukte, ein Treffer gegen die wäre fast immer Zufall.
 | `legierungen` | Legierungen unter Q37756, ohne Elemente und Isotope |
 | `metallischer-werkstoff` | unterhalb von Q1924900 |
 | `material` | unterhalb von Q214609 |
+| `oxide` | Oxide mit Summenformel unter Q50690 — dieselbe Menge wie `python -m lauf oxide` und der Benchmark (`OXID_PATTERN` importiert, nicht kopiert). Bringt eine eigene Prüfungsauswahl mit (`kennzahlen`, `redundant`, `verkehrt`, `instanz-als-klasse`, `zyklus`, `parallelzweig`) und `--bereichswurzel Q50690` |
 | `periodensystem` | die 118 chemischen Elemente (`P31 = Q11344`, Ordnungszahl ≤ 118) |
 
 Die Muster kommen aus [materialswiki/cli.py](../materialswiki/cli.py) — sie
@@ -394,7 +406,7 @@ Eisenwerkstoffe.
 ## Das Szenario `periodensystem`
 
 ```bash
-python "Material class structure/Vorschläge generieren.py" --population periodensystem
+python "Material class structure/ClassCheck.py" --population periodensystem
 ```
 
 Prüft **nur** die 118 chemischen Elemente und bringt seine eigene
