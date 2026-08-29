@@ -48,6 +48,9 @@ def request_with_retry(method: str, url: str, attempts: int = 4, **kwargs):
     """
     host = _gegenstelle(url)
     delay = 2.0
+    # timeout ueberschreibbar - der Query-Service braucht fuer groessere
+    # SPARQL-Abfragen mehr als 60s, alle anderen Aufrufer bleiben dabei.
+    timeout = kwargs.pop("timeout", 60)
     for attempt in range(1, attempts + 1):
         wait = REQUEST_DELAY_SEC - (time.monotonic() - _LAST_REQUEST.get(host, 0.0))
         if wait > 0:
@@ -57,7 +60,7 @@ def request_with_retry(method: str, url: str, attempts: int = 4, **kwargs):
             # headers ueberschreibbar - die MP-API braucht zusaetzlich
             # X-API-KEY, alle anderen Aufrufer bleiben bei HEADERS.
             resp = requests.request(
-                method, url, timeout=60,
+                method, url, timeout=timeout,
                 **{"headers": HEADERS, **kwargs}
             )
         except requests.RequestException:

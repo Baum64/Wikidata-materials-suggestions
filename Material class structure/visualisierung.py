@@ -55,23 +55,21 @@ import csv
 import os
 import sys
 import textwrap
-import time
 from typing import Optional
 
-# konfig.py liegt im Repo-Wurzelverzeichnis.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import konfig  # noqa: E402
+# Repo-Wurzel (materialswiki) UND dieser Ordner (wikidata_graph) in den Pfad -
+# das Skript wird von ueberall gestartet und ueber den Pfad importiert.
+_HIER = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [_HIER, os.path.dirname(_HIER)]
 
 import networkx as nx
 import matplotlib.pyplot as plt
-import requests
 
-# Kontaktadresse aus .env im Repo-Wurzelverzeichnis - siehe .env.beispiel.
-USER_AGENT = ("MaterialsWikidataAnalysisBot/0.1 "
-              f'(mailto:{konfig.wert("CONTACT_EMAIL", "DEINE-ADRESSE@example.org")})')
-HEADERS = {"User-Agent": USER_AGENT}
-WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
-WIKIDATA_API = "https://www.wikidata.org/w/api.php"
+# Die Wikidata-Zugriffsschicht teilt sich dieses Skript mit
+# "Vorschläge generieren.py" daneben - HTTP-Retry, SPARQL-POST, ASK.
+from wikidata_graph import (  # noqa: E402
+    WIKIDATA_API, ask, request_with_retry, sparql_json as sparql_query,
+)
 
 ROOT_QID = "Q214609"  # material
 ROOT_LABEL = "material"
@@ -132,60 +130,6 @@ TRACE_ROOTS = {
     "material": ROOT_QID,  # Q214609
     "chemie": "Q79529",    # chemischer Stoff
 }
-
-
-# ---------------------------------------------------------------------------
-# 0) HTTP mit Drosselung und Backoff
-# ---------------------------------------------------------------------------
-
-REQUEST_DELAY_SEC = 1.0
-_LAST_REQUEST = 0.0
-
-
-def request_with_retry(method: str, url: str, attempts: int = 5, timeout: int = 60,
-                       **kwargs):
-    """Einziger HTTP-Einstiegspunkt: drosselt und wiederholt bei 429/5xx.
-
-    Der Query-Service liefert auch bei kleinen Abfragen sporadisch 502; ohne
-    Retry reisst ein einzelner Ausfall den kompletten Lauf ab. Ein 504 nach
-    ~60s ist dagegen kein transienter Fehler, sondern das Query-Timeout - da
-    hilft nur eine kleinere Abfrage (siehe fetch_subclass_tree).
-    """
-    global _LAST_REQUEST
-    delay = 3.0
-    for attempt in range(1, attempts + 1):
-        wait = REQUEST_DELAY_SEC - (time.monotonic() - _LAST_REQUEST)
-        if wait > 0:
-            time.sleep(wait)
-        _LAST_REQUEST = time.monotonic()
-        try:
-            resp = requests.request(method, url, headers=HEADERS, timeout=timeout,
-                                    **kwargs)
-        except requests.RequestException as exc:
-            if attempt == attempts:
-                raise
-            print(f"  {type(exc).__name__} - Versuch {attempt}/{attempts}",
-                  file=sys.stderr)
-        else:
-            if resp.status_code < 500 and resp.status_code != 429:
-                resp.raise_for_status()
-                return resp
-            if attempt == attempts:
-                resp.raise_for_status()
-            print(f"  HTTP {resp.status_code} - Versuch {attempt}/{attempts}, "
-                  f"warte {delay:.0f}s", file=sys.stderr)
-        time.sleep(delay)
-        delay *= 2
-    raise RuntimeError(f"nicht erreichbar: {url}")
-
-
-def sparql_query(query: str) -> dict:
-    """SPARQL per POST - GET reisst bei laengeren VALUES-Bloecken die URL-Laenge."""
-    resp = request_with_retry(
-        "POST", WIKIDATA_SPARQL,
-        data={"query": query, "format": "json"},
-    )
-    return resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -475,10 +419,6 @@ def resolve_qid(label: str, lang: str = "de") -> Optional[dict]:
     if not hits:
         return None
     return {"qid": hits[0]["id"], "label": hits[0].get("label", label)}
-
-
-def ask(query: str) -> bool:
-    return sparql_query(query).get("boolean", False)
 
 
 # hint:Prior bezieht sich auf das UNMITTELBAR davor stehende Triple, muss also

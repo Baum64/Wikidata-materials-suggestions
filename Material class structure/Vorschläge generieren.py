@@ -193,20 +193,24 @@ import datetime as dt
 import os
 import re
 import sys
-import time
 from typing import Optional
 
-import requests
+# Dieser Ordner (wikidata_graph) UND die Repo-Wurzel (materialswiki) in den
+# Pfad. Die Grundgesamtheiten werden aus materialswiki importiert, nicht
+# kopiert - dasselbe Vorgehen wie in benchmark/benchmark.py, sonst driften
+# Benchmark und Vorschlagslauf auseinander.
+_HIER = os.path.dirname(os.path.abspath(__file__))
+sys.path[:0] = [_HIER, os.path.dirname(_HIER)]
 
-# Repo-Wurzel in den Pfad: konfig.py und materialswiki liegen dort. Dasselbe
-# Vorgehen wie in benchmark/benchmark.py - die Grundgesamtheiten werden
-# importiert, nicht kopiert, sonst driften Benchmark und Vorschlagslauf
-# auseinander.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
-import konfig  # noqa: E402
 from materialswiki.cli import (  # noqa: E402
     LEGIERUNG_PATTERN, LEGIERUNG_QID, fetch_named_alloys,
+)
+
+# Die Wikidata-Zugriffsschicht teilt sich dieses Skript mit visualisierung.py
+# daneben - HTTP-Retry, SPARQL-POST, QID-Zerlegung, VALUES-Stueckelung.
+from wikidata_graph import (  # noqa: E402
+    ENWIKI_API, hole_labels_api, in_bloecken, qid as qid_aus,
+    request_with_retry, sparql, werte_klausel,
 )
 
 try:
@@ -214,14 +218,6 @@ try:
 except ImportError:  # pragma: no cover - Hinweis ist hilfreicher als Traceback
     raise SystemExit(
         "networkx fehlt. Installation: pip install -r requirements.txt")
-
-WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
-WIKIDATA_API = "https://www.wikidata.org/w/api.php"
-ENWIKI_API = "https://en.wikipedia.org/w/api.php"
-# Kontaktadresse aus .env - siehe .env.beispiel.
-USER_AGENT = ("MaterialsWikidataStructureBot/0.1 "
-              f'(mailto:{konfig.wert("CONTACT_EMAIL", "DEINE-ADRESSE@example.org")})')
-HEADERS = {"User-Agent": USER_AGENT}
 
 MATERIAL_QID = "Q214609"        # material
 METALL_WERKSTOFF_QID = "Q1924900"  # metallischer Werkstoff
@@ -550,61 +546,8 @@ BASISKLASSEN_BEKANNTE_LUECKE = {
 }
 
 
-# ---------------------------------------------------------------------------
-# HTTP mit Drosselung und Backoff
-# ---------------------------------------------------------------------------
-
-REQUEST_DELAY_SEC = 1.0
-_LETZTE_ANFRAGE = 0.0
-
-
-def request_with_retry(method: str, url: str, attempts: int = 5,
-                       timeout: int = 120, **kwargs):
-    """Einziger HTTP-Einstiegspunkt: drosselt auf 1 Anfrage/s und wiederholt
-    bei 429/5xx.
-
-    Der Query-Service antwortet unter Last sporadisch mit 429/502; ohne Retry
-    reisst ein einzelner Ausfall den ganzen Lauf ab. Ein 504 nach ~60s ist
-    dagegen kein transienter Fehler, sondern das Query-Timeout - dagegen hilft
-    nur eine kleinere Abfrage (siehe hole_p279_huelle).
-    """
-    global _LETZTE_ANFRAGE
-    delay = 3.0
-    for versuch in range(1, attempts + 1):
-        wartezeit = REQUEST_DELAY_SEC - (time.monotonic() - _LETZTE_ANFRAGE)
-        if wartezeit > 0:
-            time.sleep(wartezeit)
-        _LETZTE_ANFRAGE = time.monotonic()
-        try:
-            resp = requests.request(method, url, headers=HEADERS,
-                                    timeout=timeout, **kwargs)
-        except requests.RequestException as exc:
-            if versuch == attempts:
-                raise
-            print(f"  {type(exc).__name__} - Versuch {versuch}/{attempts}",
-                  file=sys.stderr)
-        else:
-            if resp.status_code < 500 and resp.status_code != 429:
-                resp.raise_for_status()
-                return resp
-            if versuch == attempts:
-                resp.raise_for_status()
-            print(f"  HTTP {resp.status_code} - Versuch {versuch}/{attempts}, "
-                  f"warte {delay:.0f}s", file=sys.stderr)
-        time.sleep(delay)
-        delay *= 2
-    raise RuntimeError(f"nicht erreichbar: {url}")
-
-
-def sparql(query: str) -> list:
-    """SPARQL per POST - GET reisst bei laengeren VALUES-Bloecken die URL."""
-    resp = request_with_retry("POST", WIKIDATA_SPARQL,
-                              data={"query": query, "format": "json"})
-    return resp.json()["results"]["bindings"]
-
-
-def qid_aus(binding: dict, feld: str) -> str:
-    return binding[feld]["value"].rsplit("/", 1)[-1]
+# HTTP-Drosselung, Retry, SPARQL-POST und qid_aus stehen in wikidata_graph.py
+# und werden oben importiert - dieselbe Schicht nutzt visualisierung.py.
 
 
 # ---------------------------------------------------------------------------
@@ -738,10 +681,9 @@ def hole_p279_huelle(start: list, abwaerts: bool = False,
         if not offen:
             break
         neu = set()
-        for i in range(0, len(offen), block):
-            werte = " ".join(f"wd:{q}" for q in offen[i:i + block])
+        for teil in in_bloecken(offen, block):
             for b in sparql(f"""SELECT ?c ?p WHERE {{
-              VALUES ?{von} {{ {werte} }}
+              VALUES ?{von} {{ {werte_klausel(teil)} }}
               ?c wdt:P279 ?p .
               FILTER(STRSTARTS(STR(?{nach}), "http://www.wikidata.org/entity/Q"))
             }}"""):
@@ -759,10 +701,9 @@ def hole_p279_huelle(start: list, abwaerts: bool = False,
 def hole_p31_kanten(qids: list, block: int = 200) -> list:
     """(item, klasse)-Paare fuer P31 - fuer die Pruefung instanz-als-klasse."""
     kanten = []
-    for i in range(0, len(qids), block):
-        werte = " ".join(f"wd:{q}" for q in qids[i:i + block])
+    for teil in in_bloecken(qids, block):
         for b in sparql(f"""SELECT ?i ?c WHERE {{
-          VALUES ?i {{ {werte} }}
+          VALUES ?i {{ {werte_klausel(teil)} }}
           ?i wdt:P31 ?c .
           FILTER(STRSTARTS(STR(?c), "http://www.wikidata.org/entity/Q"))
         }}"""):
@@ -774,30 +715,18 @@ def hole_kinder(qids: list, block: int = 200) -> dict:
     """{qid: Anzahl direkter Unterklassen}. Nur die ZAHL wird gebraucht -
     fuer instanz-als-klasse zaehlt, DASS etwas darunter haengt."""
     kinder = {q: 0 for q in qids}
-    for i in range(0, len(qids), block):
-        werte = " ".join(f"wd:{q}" for q in qids[i:i + block])
+    for teil in in_bloecken(qids, block):
         for b in sparql(f"""SELECT ?p (COUNT(DISTINCT ?c) AS ?n) WHERE {{
-          VALUES ?p {{ {werte} }}
+          VALUES ?p {{ {werte_klausel(teil)} }}
           ?c wdt:P279 ?p .
         }} GROUP BY ?p"""):
             kinder[qid_aus(b, "p")] = int(b["n"]["value"])
     return kinder
 
 
-def hole_labels(qids: list, block: int = 50) -> dict:
-    """{qid: Bezeichnung}, deutsch bevorzugt. wbgetentities nimmt max. 50."""
-    labels = {}
-    for i in range(0, len(qids), block):
-        daten = request_with_retry("GET", WIKIDATA_API, params={
-            "action": "wbgetentities", "ids": "|".join(qids[i:i + block]),
-            "props": "labels", "languages": "de|en",
-            "format": "json", "formatversion": "2",
-        }, timeout=60).json()
-        for qid, eintrag in daten.get("entities", {}).items():
-            bez = eintrag.get("labels", {})
-            labels[qid] = (bez.get("de") or bez.get("en")
-                           or {"value": qid})["value"]
-    return labels
+def hole_labels(qids: list) -> dict:
+    """{qid: Bezeichnung}, deutsch bevorzugt. Siehe wikidata_graph."""
+    return hole_labels_api(qids, "de|en")
 
 
 # ---------------------------------------------------------------------------
@@ -823,10 +752,9 @@ def hole_ebenen_baum(wurzeln: list, tiefe: int, block: int = 100) -> dict:
 
     for stufe in range(1, tiefe + 1):
         neu_auf_ebene = set()
-        for i in range(0, len(ebene), block):
-            werte = " ".join(f"wd:{q}" for q in ebene[i:i + block])
+        for teil in in_bloecken(ebene, block):
             for row in sparql(f"""SELECT ?item ?label ?desc WHERE {{
-              VALUES ?parent {{ {werte} }}
+              VALUES ?parent {{ {werte_klausel(teil)} }}
               ?item wdt:P279 ?parent .
               OPTIONAL {{ ?item rdfs:label ?label .
                           FILTER(LANG(?label) IN ("de", "en")) }}
@@ -867,10 +795,9 @@ def hole_elemente(qids: list, block: int = 200) -> set:
     2026-08-23 an 118 Vorschlaegen).
     """
     elemente = set()
-    for i in range(0, len(qids), block):
-        werte = " ".join(f"wd:{q}" for q in qids[i:i + block])
+    for teil in in_bloecken(qids, block):
         for b in sparql(f"""SELECT ?i WHERE {{
-          VALUES ?i {{ {werte} }}
+          VALUES ?i {{ {werte_klausel(teil)} }}
           ?i wdt:P1086 ?ordnungszahl .
         }}"""):
             elemente.add(qid_aus(b, "i"))
@@ -1910,10 +1837,9 @@ def hole_elementdaten(qids: list, block: int = 100) -> dict:
     fehlenden unterscheiden.
     """
     daten = {}
-    for i in range(0, len(qids), block):
-        werte = " ".join(f"wd:{q}" for q in qids[i:i + block])
+    for teil in in_bloecken(qids, block):
         for b in sparql(f"""SELECT ?i ?z ?k ?c ?t ?d ?u WHERE {{
-          VALUES ?i {{ {werte} }}
+          VALUES ?i {{ {werte_klausel(teil)} }}
           ?i wdt:P1086 ?z .
           OPTIONAL {{ ?i wdt:P31 ?k }}
           OPTIONAL {{ ?i wdt:P279 ?c }}
