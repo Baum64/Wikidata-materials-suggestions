@@ -32,19 +32,19 @@ output/
 # Die Dateinamen tragen Gruppe und Zeitstempel und im Chargenbetrieb zusaetzlich
 # eine Chargennummer, z. B.
 #     vorschlaege_minerale_2026-08-16_1844_charge04.csv
-#     quickstatements_minerale_2026-08-16_1844_charge04.txt
-#     quickstatements_minerale_2026-08-16_1844.fortschritt.json
+#     qs_minerale_2026-08-16_1844_charge04.txt
+#     qs_minerale_2026-08-16_1844.fortschritt.json
 # Die Muster sind deshalb bewusst weit gefasst - ein enges Muster wie
-# "quickstatements_entwurf*.txt" hat die Chargendateien nicht mehr erfasst.
+# "qs_entwurf*.txt" hat die Chargendateien nicht mehr erfasst.
 # ---------------------------------------------------------------------------
 vorschlaege*.csv
 vorschlaege*.log
-quickstatements*.txt
-quickstatements*.fortschritt.json
+qs_*.txt
+qs_*.fortschritt.json
 
 # aeltere Multi-Source-Variante (--out / --qs-out)
 werkstoffe_vorschlaege.csv
-werkstoffe_quickstatements_entwurf.txt
+werkstoffe_qs_entwurf.txt
 
 # benchmark/benchmark.py (--csv) und die Protokolle aus lauf.py.
 # benchmark/properties_snapshot.json ist bewusst versioniert, damit --offline
@@ -52,16 +52,24 @@ werkstoffe_quickstatements_entwurf.txt
 abdeckung*.csv
 benchmark_*.log
 
-# Material class structure/Vorschläge generieren.py: die gestaffelte Empfehlung (--out) und
-# die optionale Befund-CSV (--csv). Achtung, p279_empfehlung*.txt faellt
-# NICHT unter quickstatements*.txt weiter oben - eigenes Muster noetig.
+# Material class structure/ClassCheck.py: die gestaffelte Empfehlung (--out,
+# qs_class_*.txt faellt schon unter qs_*.txt weiter oben) und die optionale
+# Befund-CSV (--csv), die ein eigenes Muster braucht.
+qs_class*.log
+qs_class_befunde*.csv
+
+# Anwendung/Anwendung.py (--csv; der Entwurf qs_anwendungen_*.txt faellt
+# schon unter das Muster qs_*.txt weiter oben)
+anwendungen_befunde*.csv
+
+# Altbestand vor der qs_-Umbenennung (quickstatements_* -> qs_*,
+# p279_empfehlung_* -> qs_class_*). Aeltere Laufdateien tragen noch die
+# alten Namen und sollen weiter ignoriert bleiben.
+quickstatements*.txt
+quickstatements*.fortschritt.json
 p279_empfehlung*.txt
 p279_empfehlung*.log
 p279_befunde*.csv
-
-# Anwendung/Anwendung.py (--csv; der Entwurf faellt schon unter
-# das Muster quickstatements*.txt weiter oben)
-anwendungen_befunde*.csv
 
 # Material class structure/visualisierung.py (CSV + Graphen)
 werkstoff_check.csv

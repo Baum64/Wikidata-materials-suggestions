@@ -982,7 +982,7 @@ def main():
                              "proposals/vorschlaege_<Zeitstempel>.csv)")
     parser.add_argument("--qs-out", default=None,
                         help="QuickStatements-Entwurf (Default: "
-                             "proposals/quickstatements_entwurf_<Zeitstempel>.txt)")
+                             "proposals/qs_<Zeitstempel>.txt)")
     args = parser.parse_args()
 
     # Zeitstempel im Dateinamen, fuer beide Dateien derselbe: so ueberschreibt
@@ -992,7 +992,7 @@ def main():
     os.makedirs(PROPOSALS_DIR, exist_ok=True)
     out = args.out or os.path.join(PROPOSALS_DIR, f"vorschlaege_{stempel}.csv")
     qs_out = args.qs_out or os.path.join(
-        PROPOSALS_DIR, f"quickstatements_entwurf_{stempel}.txt")
+        PROPOSALS_DIR, f"qs_{stempel}.txt")
 
     if args.group and args.batch_size:
         return chargenlauf(args, out, qs_out)

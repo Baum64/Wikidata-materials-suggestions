@@ -6,7 +6,7 @@ Zwei Werkzeuge zur **Wikidata-Klassenhierarchie der Werkstoffe** — wie
 
 | Skript | Was es tut | Ausgabe |
 |---|---|---|
-| **[ClassCheck.py](ClassCheck.py)** | prüft die Struktur auf zwölf Arten und schreibt **eine gestaffelte Empfehlung** — vier Stufen nach Beweiskraft | `proposals/p279_empfehlung_<Population>_<Zeitstempel>.txt` |
+| **[ClassCheck.py](ClassCheck.py)** | prüft die Struktur auf zwölf Arten und schreibt **eine gestaffelte Empfehlung** — vier Stufen nach Beweiskraft | `proposals/qs_class_<Population>_<Zeitstempel>.txt` |
 | **[visualisierung.py](visualisierung.py)** | prüft und **zeichnet**, wie Werkstoffe an der Wurzel hängen und welche über einen parallelen Zweig laufen; mit `--szenario` zusätzlich Periodensystem, Legierungen und Minerale | `werkstoff_check.csv`, `*.png` |
 
 Die beiden ergänzen sich: die Visualisierung beantwortet **ob und wie** ein
@@ -54,7 +54,7 @@ python "Material class structure/ClassCheck.py" --tiefe 3 --beleg beides
 python "Material class structure/ClassCheck.py" --vorsichtig   # nichts einspielbar
 ```
 
-Es entsteht **eine** Datei: `proposals/p279_empfehlung_<Population>_<Zeitstempel>.txt`. Eine
+Es entsteht **eine** Datei: `proposals/qs_class_<Population>_<Zeitstempel>.txt`. Eine
 Befund-CSV gibt es nur auf Wunsch (`--csv`).
 
 ## Die Staffelung

@@ -50,6 +50,17 @@ def test_neue_populationen_laufen_die_volle_kette():
         assert lauf.GRUPPEN[name]["struktur"] == name
 
 
+def test_ausgabenamen_tragen_das_qs_schema():
+    """materialswiki-Entwurf -> qs_..., ClassCheck-Empfehlung -> qs_class_...
+    (frueher quickstatements_... bzw. p279_empfehlung_...)."""
+    befehl, log = lauf.struktur_befehl("legierungen", "/tmp/x", "2026-01-01_0000")
+    out = befehl[befehl.index("--out") + 1]
+    csv = befehl[befehl.index("--csv") + 1]
+    assert os.path.basename(out) == "qs_class_legierungen_2026-01-01_0000.txt"
+    assert os.path.basename(csv) == "qs_class_befunde_legierungen_2026-01-01_0000.csv"
+    assert os.path.basename(log) == "qs_class_legierungen_2026-01-01_0000.log"
+
+
 def test_magnetwerkstoffe_filtern_die_isotope_aus():
     """Ohne den Ordnungszahl-Filter zieht Q949573 ueber einen schiefen
     Instanzpfad (Nickel) rund 40 Nickel-Isotope herein."""

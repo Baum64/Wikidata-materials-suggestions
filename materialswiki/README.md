@@ -1528,7 +1528,7 @@ python "materialswiki/Werkstoff wikidata vorschläge.py" \
 | PubChem | `P854` + `P813`, da PubChem keine Eintrags-DOIs vergibt |
 
 Ausgabe: `werkstoffe_vorschlaege.csv` und
-`werkstoffe_quickstatements_entwurf.txt` (`--out` / `--qs-out`). Für die
+`werkstoffe_qs_entwurf.txt` (`--out` / `--qs-out`). Für die
 Materials-Project-Quelle ist ein eigener `MP_API_KEY` im Skript einzutragen
 (kostenloser Account auf
 <https://next-gen.materialsproject.org/api>). Die `PROPERTY_MAP` dieses

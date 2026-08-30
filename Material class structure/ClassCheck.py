@@ -172,8 +172,8 @@ faellt beim Bauen nicht auf, beim Einspielen schon:
 
 Ausgabe
 -------
-  proposals/p279_empfehlung_<Population>_<Zeitstempel>.txt   die Empfehlung
-  --csv <pfad>                                              zusaetzlich, optional
+  proposals/qs_class_<Population>_<Zeitstempel>.txt   die Empfehlung
+  --csv <pfad>                                       zusaetzlich, optional
 Beide landen in proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2) - im selben
 Ordner wie alles, was "python -m lauf <gruppe>" schreibt. --out-dir stellt
 den Ordner um.
@@ -2787,7 +2787,7 @@ def main(argv: Optional[list] = None) -> int:
                              "selben Ordner wie ein 'python -m lauf'-Lauf.")
     parser.add_argument("--out", default=None,
                         help="Ziel der Empfehlung (Default: "
-                             "<out-dir>/p279_empfehlung_<Population>_<Zeit>.txt)")
+                             "<out-dir>/qs_class_<Population>_<Zeit>.txt)")
     parser.add_argument("--csv", default=None,
                         help="zusaetzlich eine Befund-CSV schreiben. Ohne "
                              "diese Angabe entsteht NUR die Empfehlung.")
@@ -2826,7 +2826,7 @@ def main(argv: Optional[list] = None) -> int:
         return pfad if os.path.isabs(pfad) else os.path.join(args.out_dir, pfad)
 
     empfehlung_pfad = im_ordner(
-        args.out or f"p279_empfehlung_{args.population}_{stempel}.txt")
+        args.out or f"qs_class_{args.population}_{stempel}.txt")
     csv_pfad = im_ordner(args.csv) if args.csv else None
 
     items, ohne_item = hole_population(args.population, args.limit)

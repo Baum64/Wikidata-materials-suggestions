@@ -340,7 +340,7 @@ def _klaerungs_zeilen(row: dict) -> list:
     ]
 
 
-def write_quickstatements_draft(proposals: list, path: str = "quickstatements_entwurf.txt") -> None:
+def write_quickstatements_draft(proposals: list, path: str = "qs_entwurf.txt") -> None:
     """Erzeugt einen QuickStatements-V1-Entwurf aus ALLEN Zeilen.
 
     Einspielbar ist nur, was status == 'VORSCHLAG' hat (bestehendes Item,

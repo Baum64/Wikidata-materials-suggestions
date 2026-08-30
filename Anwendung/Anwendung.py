@@ -129,7 +129,7 @@ Skript nichts tun; die Zahl sagt, wie gross die Luecke wirklich ist.
 Ausgabe (nach proposals/, siehe CLAUDE.md "Arbeitsweise" Punkt 2)
 ----------------------------------------------------------------
   proposals/anwendungen_befunde_<Zeitstempel>.csv          alle Befunde
-  proposals/quickstatements_anwendungen_<Zeitstempel>.txt  Entwurf,
+  proposals/qs_anwendungen_<Zeitstempel>.txt  Entwurf,
                                                 Abschnitt 1 einspielbar
 
 Aufruf
@@ -1390,7 +1390,7 @@ def main(argv: Optional[list] = None) -> int:
                              "proposals/anwendungen_befunde_<Zeitstempel>.csv)")
     parser.add_argument("--qs-out", default=None,
                         help="Ziel des Entwurfs (Default: "
-                             "proposals/quickstatements_anwendungen_<Zeit>.txt)")
+                             "proposals/qs_anwendungen_<Zeit>.txt)")
     args = parser.parse_args(argv)
 
     # Ohne --csv/--qs-out nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
@@ -1401,7 +1401,7 @@ def main(argv: Optional[list] = None) -> int:
     csv_pfad = args.csv or os.path.join(
         _proposals, f"anwendungen_befunde_{stempel}.csv")
     qs_pfad = args.qs_out or os.path.join(
-        _proposals, f"quickstatements_anwendungen_{stempel}.txt")
+        _proposals, f"qs_anwendungen_{stempel}.txt")
 
     print(f"Hole Grundgesamtheit '{args.population}' ...", file=sys.stderr)
     items = hole_population(args.population, args.limit)

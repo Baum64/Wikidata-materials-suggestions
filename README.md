@@ -101,12 +101,12 @@ Laufs und stehen in [.gitignore](.gitignore) — sie gehören nicht ins Repo:
 
 | Datei | Erzeugt von |
 |---|---|
-| `proposals/vorschlaege_<Zeitstempel>.csv`, `proposals/quickstatements_entwurf_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
-| `werkstoffe_vorschlaege.csv`, `werkstoffe_quickstatements_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
+| `proposals/vorschlaege_<Zeitstempel>.csv`, `proposals/qs_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
+| `werkstoffe_vorschlaege.csv`, `werkstoffe_qs_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
 | `abdeckung.csv` (bzw. was `--csv` angibt) | [benchmark/benchmark.py](benchmark/benchmark.py) |
-| `proposals/p279_empfehlung_<Population>_<Zeitstempel>.txt` (und `p279_befunde_*.csv` nur mit `--csv`) | [Material class structure/ClassCheck.py](Material%20class%20structure/ClassCheck.py) |
-| alle drei Schritte (`abdeckung_*`, `quickstatements_*`, `p279_empfehlung_*`) mit gemeinsamem Zeitstempel in `--out-dir` (Default `proposals/`) | [lauf.py](lauf.py) |
-| `proposals/anwendungen_befunde_<Zeitstempel>.csv`, `proposals/quickstatements_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
+| `proposals/qs_class_<Population>_<Zeitstempel>.txt` (und `qs_class_befunde_*.csv` nur mit `--csv`) | [Material class structure/ClassCheck.py](Material%20class%20structure/ClassCheck.py) |
+| alle drei Schritte (`abdeckung_*`, `qs_*`, `qs_class_*`) mit gemeinsamem Zeitstempel in `--out-dir` (Default `proposals/`) | [lauf.py](lauf.py) |
+| `proposals/anwendungen_befunde_<Zeitstempel>.csv`, `proposals/qs_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
 | `werkstoff_check.csv`, `werkstoff_graph.png`, `trace_*.png`, `subclass_tree_material.png` (nur `--tree`) | [Material class structure/visualisierung.py](Material%20class%20structure/visualisierung.py) |
 | `output/…` (`--output`) | [wikikg/cli.py](wikikg/cli.py) |
 
@@ -177,7 +177,7 @@ Alle Tests laufen offline und brauchen **keinen** API-Schlüssel.
 
 ## Datenquellen und deren Lizenzen
 
-Die Vorschlagslisten (`vorschlaege*.csv`, `quickstatements_entwurf*.txt`)
+Die Vorschlagslisten (`vorschlaege*.csv`, `qs_*.txt`)
 enthalten abgeleitete Daten aus fremden Datenbanken. Wer sie weitergibt, gibt
 diese Daten mit weiter — deshalb hier die Herkunft und die jeweiligen
 Bedingungen:

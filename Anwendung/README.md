@@ -292,7 +292,7 @@ Eigenheit dieser Anwendung.
 
 ```
 anwendungen_befunde_<Zeitstempel>.csv          alle Befunde, eine Zeile je Befund
-quickstatements_anwendungen_<Zeitstempel>.txt  Entwurf, nur Abschnitt 1 einspielbar
+qs_anwendungen_<Zeitstempel>.txt  Entwurf, nur Abschnitt 1 einspielbar
 ```
 
 Die `P2079`-Zeilen aus der Wikipedia tragen einen Beleg (`S143`+`S4656`,

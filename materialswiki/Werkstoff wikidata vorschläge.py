@@ -355,7 +355,7 @@ def main():
     parser.add_argument("--sources", nargs="+", default=["materials_project", "pubchem"],
                          choices=["materials_project", "pubchem"])
     parser.add_argument("--out", default="werkstoffe_vorschlaege.csv")
-    parser.add_argument("--qs-out", default="werkstoffe_quickstatements_entwurf.txt")
+    parser.add_argument("--qs-out", default="werkstoffe_qs_entwurf.txt")
     args = parser.parse_args()
 
     raw_entries = []

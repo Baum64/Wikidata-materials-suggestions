@@ -84,7 +84,7 @@ Die Gruppenlaeufe arbeiten in Chargen zu je --batch-size Items (Default 500).
 Nach JEDER Charge liegen CSV und QuickStatements fertig vor - man kann also
 einspielen, waehrend der Rest noch laeuft, und ein Abbruch kostet hoechstens
 die angefangene Charge. Bei 6301 Mineralen sind das 13 Chargen; der Stand
-steht in <quickstatements>.fortschritt.json.
+steht in <qs>.fortschritt.json.
 """
 
 import argparse
@@ -186,12 +186,12 @@ def struktur_befehl(population: str, verzeichnis: str, stempel: str,
     """
     basis = os.path.join(verzeichnis, "{}_" + f"{population}_{stempel}")
     befehl = [sys.executable, STRUKTUR_SKRIPT, "--population", population,
-              "--out", basis.format("p279_empfehlung") + ".txt",
-              "--csv", basis.format("p279_befunde") + ".csv",
+              "--out", basis.format("qs_class") + ".txt",
+              "--csv", basis.format("qs_class_befunde") + ".csv",
               "--review-needed", os.path.join(PROPOSALS_DIR, "review-needed.md")]
     if limit is not None and population != "periodensystem":
         befehl += ["--limit", str(limit)]
-    return befehl + list(extra), basis.format("p279_empfehlung") + ".log"
+    return befehl + list(extra), basis.format("qs_class") + ".log"
 
 
 def _fertig(verzeichnis: str, muster: str) -> None:
@@ -293,7 +293,7 @@ def main(argv=None) -> int:
     parser.add_argument("--struktur", action="store_true",
                         help="zusaetzlich die Klassenstruktur pruefen (P279/P31, "
                              "chemische Metaklasse) - schreibt "
-                             "p279_empfehlung_<gruppe>_<stempel>.txt in denselben "
+                             "qs_class_<gruppe>_<stempel>.txt in denselben "
                              "Ordner. Nur legierungen, benannte-legierungen, "
                              "oxide, periodensystem, polymer, magnetwerkstoffe.")
     parser.add_argument("--nur-struktur", action="store_true",
@@ -355,7 +355,7 @@ def main(argv=None) -> int:
         elif name == "vorschlaege":
             befehl = [sys.executable, "-m", "materialswiki", *gruppe["cli"],
                       "--out", pfad("vorschlaege") + ".csv",
-                      "--qs-out", pfad("quickstatements") + ".txt"]
+                      "--qs-out", pfad("qs") + ".txt"]
             if args.limit is not None:
                 befehl += ["--limit", str(args.limit)]
             # Chargenbetrieb nur fuer die Gruppenmodi - der Periodensystem-
