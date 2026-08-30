@@ -36,12 +36,14 @@ def graph_mit(*kanten):
     return g
 
 
-def befunde(items, p31, graph=None, auch_mit_p31=False):
+def befunde(items, p31, graph=None, ist_klasse=None, auch_mit_p31=False):
+    """`ist_klasse` steuert die Klasse/Instanz-Trennung explizit - in main()
+    kommt sie aus Graph und Kinderzahl, hier wird sie direkt gesetzt."""
     graph = graph if graph is not None else graph_mit((BRONZE, vg.LEGIERUNG_QID))
     kanten = [(BRONZE, k) for k in p31]
     return vg.pruefe_metaklasse(
         items, vg.legierungs_items(graph, list(items), kanten), kanten,
-        {BRONZE: "Bronze"}, auch_mit_p31)
+        ist_klasse or set(), {BRONZE: "Bronze"}, auch_mit_p31)
 
 
 # ===========================================================================
@@ -51,13 +53,23 @@ def befunde(items, p31, graph=None, auch_mit_p31=False):
 def test_legierung_ohne_metaklasse_bekommt_die_des_gemischs(items):
     """Eine Legierung ist per Definition ein Gemisch (Q37756: 'mixture or
     metallic solid solution'); die Guideline sieht dafuer eine eigene
-    Metaklasse vor."""
+    Metaklasse vor. Entwurf nur, wenn das Item selbst KEINE Klasse ist."""
     treffer = befunde(items, [])
 
     assert len(treffer) == 1
     assert treffer[0]["befund"] == "metaklasse"
     assert treffer[0]["quickstatements"] == f"{BRONZE}\tP31\t{vg.GEMISCH_METAKLASSE}"
     assert treffer[0]["ziel_qid"] == vg.GEMISCH_METAKLASSE   # Q119892838
+
+
+def test_werkstoffklasse_bekommt_nur_eine_meldung(items):
+    """Hat das Item selbst P279 oder Unterklassen, ist es eine KLASSE - an
+    die schreibt dieses Werkzeug kein P31, es bleibt bei der Meldung."""
+    treffer = befunde(items, [], ist_klasse={BRONZE})
+
+    assert [b["befund"] for b in treffer] == ["metaklasse-klasse"]
+    assert treffer[0]["quickstatements"] == ""
+    assert treffer[0]["ziel_qid"] == vg.GEMISCH_METAKLASSE
 
 
 def test_p31_zaehlt_als_einordnung_mit(items):
@@ -164,6 +176,7 @@ def test_die_guideline_kennt_genau_eine_metaklasse_fuer_gemische():
 def test_die_pruefung_steht_in_stufe_zwei():
     """Aus dem Graphen abgeleitet, aber mit einer fachlichen Entscheidung
     davor - nicht mechanisch sicher wie Stufe 1."""
-    stufe = {nummer: arten for nummer, _, arten, _, _ in vg.STUFEN}
+    stufe = {nummer: arten for nummer, _titel, arten, *_ in vg.STUFEN}
     assert "metaklasse" in stufe[2]
     assert "metaklasse-konflikt" in stufe[2]
+    assert "metaklasse-klasse" in stufe[4]
