@@ -228,6 +228,25 @@ Ausgangsliste: 12 weich-/hartmagnetische Werkstofffamilien. Vollstaendige Analys
 `proposals/qs_class_ferromagnetika_2026-08-30.txt`. Hier nur die Faelle ohne
 verbindliche Entscheidung (CLAUDE.md "Arbeitsweise" Punkt 3, .claude/rules/ontology-p31-p279-p361.md "Nicht selbst entscheiden").
 
+**Ueberarbeitet 2026-08-30** nach neuer Regel `.claude/rules/ontology-magnetismus-p1552.md`:
+konkrete Werkstoffe/Elemente bekommen das magnetische Verhalten ueber
+`has quality (P1552) -> ferromagnetism (Q184207)`, nicht ueber P279 auf eine
+Magnetwerkstoff-Klasse. Dadurch sind zwei zuvor unstrittige Entwuerfe in die
+Review-Liste gewandert:
+
+- **"ferrite" Q114047906** (https://www.wikidata.org/wiki/Q114047906): traegt
+  `P279 -> Q9259184` (ferromagnetic material). Nach neuer Regel fraglich - Ferrit
+  ist eine Keramik-Klasse ("many of them magnetic", also nicht alle), und das
+  Verhalten ist Ferrimagnetismus, nicht Ferromagnetismus. Offen: Kante auf eine
+  Keramik-Oberklasse umhaengen und Merkmal getrennt setzen? Welcher QID fuer
+  Ferrimagnetismus? Nicht automatisch aendern.
+- **Keramikmagnet Q135855031** (https://www.wikidata.org/wiki/Q135855031): steht
+  `P31 -> Q11421` (magnet, Objekt-Ast). Frueherer Entwurf (P31->P279-Tausch auf
+  permanent magnet + `P279 -> Q9259184`) entfaellt - Q9259184 als P279-Ziel an
+  einem konkreten Werkstoff widerspricht der neuen Regel. Passender P1552-Wert
+  (Ferrimagnetismus) nicht sicher belegt. Offen.
+- **Merkmals-Item Ferrimagnetismus**: QID vor Verwendung pruefen, nicht raten.
+
 - **Werkstoff-Ast vs. Objekt-Ast bei Dauermagneten.** Wikidata fuehrt zwei Baeume:
   `Q214609 material -> Q949573 Magnetwerkstoff -> Q9259184 ferromagnetic material`
   und `Q11421 magnet -> Q353743 permanent magnet -> Q428788 rare-earth magnet`.
