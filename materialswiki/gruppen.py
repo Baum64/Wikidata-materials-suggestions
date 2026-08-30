@@ -95,6 +95,36 @@ CARBID_PATTERN = (
     f"{{ ?i wdt:P279* wd:{CARBID_QID} }}"
 )
 
+# Polymere / Kunststoffe: der Subtree unter Q11474 "Kunststoff" (haengt per
+# P279 direkt an Q214609 Material). Gemessen 2026-08-30: 795 Items, davon 206
+# Klassen; nur 8 tragen eine Summenformel (Polyethylen hat keine), aber 113
+# einen de-Wikipedia-Artikel. COD/MP/NIST steuern hier also wenig bei, die
+# Infoboxen (Dichte, Schmelzpunkt) mehr. Kein Formelzwang - der Wert des
+# Laufs liegt in Struktur und Infobox-Kennzahlen, nicht in der Kristallografie.
+#
+# Bewusst Q11474 (Kunststoff) statt Q81163 (polymer, der Chemiebegriff): Q81163
+# umfasst auch Biopolymere (Proteine, DNA, Cellulose) und ist ein
+# heterogener Massenimport - fuer eine WERKSTOFF-Grundgesamtheit ungeeignet.
+KUNSTSTOFF_QID = "Q11474"
+KUNSTSTOFF_PATTERN = (
+    f"{{ ?i wdt:P31/wdt:P279* wd:{KUNSTSTOFF_QID} }} UNION "
+    f"{{ ?i wdt:P279* wd:{KUNSTSTOFF_QID} }}"
+)
+
+# Magnetwerkstoffe: der Subtree unter Q949573 "Magnetwerkstoffe" (P279 ->
+# Q214609 Material). Winzig - mit dem Ordnungszahl-Filter bleiben 10 Klassen
+# (weich-/hartmagnetische Werkstoffe, Ferrite, ferromagnetisches Material,
+# Antiferromagnet ...). OHNE den Filter zieht Q949573 ueber einen schiefen
+# Instanzpfad (Nickel Q744 haengt darunter) rund 40 Nickel-Isotope herein -
+# dieselbe Art Fehlkante wie "Metalle unter Legierung". Der Filter ist hier
+# also Pflicht, nicht Kosmetik. Wegen der geringen Groesse ist der Ertrag an
+# Messwert-Vorschlaegen minimal; der Lauf lohnt vor allem fuer die Struktur.
+MAGNETWERKSTOFF_QID = "Q949573"
+MAGNET_PATTERN = (
+    f"{{ {{ ?i wdt:P31/wdt:P279* wd:{MAGNETWERKSTOFF_QID} }} UNION "
+    f"{{ ?i wdt:P279* wd:{MAGNETWERKSTOFF_QID} }} }} {LEGIERUNG_OHNE_ELEMENTE}"
+)
+
 # ---------------------------------------------------------------------------
 # Benannte Legierungen aus der Wikipedia-Liste
 # ---------------------------------------------------------------------------
@@ -212,6 +242,14 @@ WERKSTOFFGRUPPEN = {
     "carbide": {
         "pattern": CARBID_PATTERN,
         "beschreibung": "Carbide (Q241906)",
+    },
+    "polymer": {
+        "pattern": KUNSTSTOFF_PATTERN,
+        "beschreibung": "Polymere / Kunststoffe (Q11474)",
+    },
+    "magnetwerkstoffe": {
+        "pattern": MAGNET_PATTERN,
+        "beschreibung": "Magnetwerkstoffe (Q949573, ohne Isotope)",
     },
 }
 

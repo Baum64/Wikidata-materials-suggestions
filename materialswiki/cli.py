@@ -169,7 +169,8 @@ from .quellen.nist import (  # noqa: E402,F401
 # Quelle aus einem Item ableiten laesst, in ableitungen.py.
 from . import ableitungen, gruppen  # noqa: E402
 from .gruppen import (  # noqa: E402,F401
-    HALBMETALLE, LEGIERUNG_OHNE_ELEMENTE, LEGIERUNG_PATTERN, LEGIERUNG_QID,
+    HALBMETALLE, KUNSTSTOFF_PATTERN, KUNSTSTOFF_QID, LEGIERUNG_OHNE_ELEMENTE,
+    LEGIERUNG_PATTERN, LEGIERUNG_QID, MAGNET_PATTERN, MAGNETWERKSTOFF_QID,
     MINERAL_PATTERN, NICHTMETALLE,
     NAMED_ALLOYS_SEITE, OXID_PATTERN, WERKSTOFFGRUPPEN, fetch_group_items,
     fetch_named_alloys, gruppen_qids, items_der_gruppe,

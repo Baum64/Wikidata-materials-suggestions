@@ -366,10 +366,12 @@ und Handelsprodukte, ein Treffer gegen die wäre fast immer Zufall.
 |---|---|
 | `benannte-legierungen` (Vorgabe) | die Prüfliste aus [[en:List of named alloys]] |
 | `legierungen` | Legierungen unter Q37756, ohne Elemente und Isotope |
-| `metallischer-werkstoff` | unterhalb von Q1924900 |
-| `material` | unterhalb von Q214609 |
+| `metallischer-werkstoff` | Klassen unterhalb von Q1924900 — **braucht `--limit N`** (die Abfrage läuft sonst ins Timeout) |
+| `material` | Klassen unterhalb von Q214609 — **braucht `--limit N`**; der volle Baum hat rund 936.000 Klassen, in einer Abfrage nicht holbar. Beide Wurzeln liefern nur die *Klassen* (`P279*`), nicht zusätzlich jede Instanz jeder Unterklasse |
 | `oxide` | Oxide mit Summenformel unter Q50690 — dieselbe Menge wie `python -m lauf oxide` und der Benchmark (`OXID_PATTERN` importiert, nicht kopiert). Bringt eine eigene Prüfungsauswahl mit (`kennzahlen`, `redundant`, `verkehrt`, `instanz-als-klasse`, `zyklus`, `parallelzweig`) und `--bereichswurzel Q50690` |
 | `periodensystem` | die 118 chemischen Elemente (`P31 = Q11344`, Ordnungszahl ≤ 118) |
+| `polymer` | **Klassen** der Polymere/Kunststoffe unter Q11474 (`P279*`, ~206) — dieselbe Wurzel wie `python -m lauf polymer` und der Benchmark, dort aber mitsamt Instanzen. Für die Strukturprüfung nur die Klassen, sonst meldet `parallelzweig` massenhaft „kein `P279*`-Pfad zu material" für konkrete Kunststoffsorten. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11474` |
+| `magnetwerkstoffe` | Magnetwerkstoffe unter Q949573, **ohne Isotope** (`FILTER NOT EXISTS { ?i wdt:P1086 ?z }`) — sonst zieht ein schiefer Instanzpfad über Nickel (Q744) ~40 Nickel-Isotope herein. Winzig (~10 Klassen), `MAGNET_PATTERN` mit dem Benchmark identisch, `--bereichswurzel Q949573` |
 
 Die Muster kommen aus [materialswiki/cli.py](../materialswiki/cli.py) — sie
 werden importiert, nicht kopiert, damit dieses Werkzeug und der
@@ -564,19 +566,20 @@ python "Material class structure/visualisierung.py" --szenario alle
 
 | Szenario | Was gezeichnet wird | Dateien |
 |---|---|---|
-| `periodensystem` | alle 118 Elemente im PSE-Raster, jede Zelle eingefärbt nach ihrer spezifischsten `P279`-Klasse; weiß schraffiert = **gar keine** Klasse | `szenario_periodensystem.png`, `szenario_periodensystem.csv` |
+| `periodensystem` | alle 118 Elemente im PSE-Raster. **Füllung** = die aus der Ordnungszahl folgende Elementkategorie; **Rand** = ob deren Zugehörigkeit als `part of` (P361, grün — so will es [periodic-table-conventions.md](../.claude/rules/periodic-table-conventions.md) Fall 2), als `P279`/`P31` (dick rot — falsche Property) oder gar nicht (rot gestrichelt) hängt. Unten in jeder Zelle das Gruppen-Ergebnis (`G8 ✓/!/–`). Die Kategorie/Gruppen-QIDs und die Soll-Tabelle kommen aus `ClassCheck.py` (importiert, nicht kopiert) | `szenario_periodensystem.png`, `szenario_periodensystem.csv` |
 | `legierungen` | 10 Legierungsklassen (Stahl, rostfreier Stahl, Bronze, Messing, Gusseisen, Kupfer-, Aluminium-, Nickelbasis-, Titanlegierung, Superlegierung) mit ihren **direkten Subklassen** — der Blick nach unten statt nach oben | `szenario_legierungen.png` |
 | `minerale` | 10 Mineralarten (Quarz, Calcit, Pyrit, Hämatit, Magnetit, Halit, Gips, Korund, Fluorit, Diamant) mit ihren Pfaden hinauf zu `Mineral` (Q7946) | `szenario_minerale.png` |
 
 Was die drei Bilder zeigen (Stand 29.08.2026):
 
-* **Periodensystem.** 118 Elemente tragen zusammen nur 34 verschiedene
-  `P279`-Klassen, und **41 Elemente haben überhaupt keine** — darunter alle
-  Lanthanoide und fast alle Actinoide, aber auch Ba, Sr, Kr, Rn und Re. Die
-  vergebenen Klassen sind zudem uneinheitlich: 17× Übergangsmetalle, aber nur
-  6× „Metalle"; Aluminium hängt an sechs Klassen, darunter `Arzneimittel` und
-  `Baustoff`. Genau deshalb ist die Fußzeile mit **allen** vergebenen Klassen
-  Teil des Bildes und die vollständige Klassenliste je Element in der CSV.
+* **Periodensystem.** Die *Gruppen* sind über `P361` lückenlos gepflegt (alle
+  118 Elemente ✓). Die *Kategorien* nicht: rund 50 Elemente führen sie korrekt
+  als `P361`, aber ~46 hängen sie an `P279`/`P31` (fast alle Übergangs- und
+  p-Block-Metalle, dazu H und B) und 9 tragen gar keine (C, P, S und die
+  Platinmetalle Ru–Pt). 13 Zellen sind grau — Ordnungszahlen ohne eindeutige
+  Kategorie (12. Gruppe, Se/Po/At, alles ab 113). Das sind exakt die
+  `element-kategorie-falsche-property`- und `element-kategorie-fehlt`-Befunde,
+  die `ClassCheck.py --population periodensystem` als QuickStatements ausgibt.
 * **Legierungen.** Die Beispiele unterscheiden sich um zwei Größenordnungen
   (Stahl 72 Subklassen, Titanlegierung 6); `--max-subklassen` deckelt die
   gezeichneten Kinder (Standard 8), die Gesamtzahl steht am Knoten. Querkanten
@@ -638,8 +641,8 @@ demselben Grund ebenfalls neben sich, `--szenario-out` verlegt sie.
 | `subclass_tree_material.png` | nur mit `--tree`: Subclass-Hierarchie unter Q214609, begrenzt durch `--depth` / `--max-nodes` |
 | `trace_<gruppe>_<achse>.png` | Pfad-Graphen der Matrix `TRACE_GROUPS` × `TRACE_ROOTS` (Standardlauf) |
 | `trace_graph.png` | Pfad-Graph eines Einzelaufrufs mit `--trace` (Name über `--trace-out`) |
-| `szenario_periodensystem.png` | nur mit `--szenario`: PSE-Raster, eingefärbt nach `P279`-Klasse |
-| `szenario_periodensystem.csv` | nur mit `--szenario`: je Element `ordnungszahl`, `symbol`, `label`, `qid`, `anzahl_klassen`, `klassen` (alle, mit QID) |
+| `szenario_periodensystem.png` | nur mit `--szenario`: PSE-Raster, Füllung = Kategorie aus der Ordnungszahl, Rand = P361-Zustand (siehe oben) |
+| `szenario_periodensystem.csv` | nur mit `--szenario`: je Element `ordnungszahl`, `symbol`, `label`, `qid`, `soll_kategorie`, `kategorie_status` (ok/falsch/fehlt/strittig), `kategorie_property` (P361 bzw. P279→P361), `soll_gruppe`, `gruppe_status` |
 | `szenario_legierungen.png` | nur mit `--szenario`: 10 Legierungsklassen mit ihren direkten Subklassen |
 | `szenario_minerale.png` | nur mit `--szenario`: 10 Mineralarten mit ihren Pfaden zu Q7946 |
 

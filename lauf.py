@@ -27,7 +27,8 @@ Nur die Strukturpruefung, fuer JEDE ClassCheck-Grundgesamtheit
 
 Als Gruppenschalter (--struktur / --nur-struktur) gibt es die Strukturpruefung
 nur dort, wo Gruppe und ClassCheck-Grundgesamtheit zusammenfallen
-(legierungen, benannte-legierungen, oxide, periodensystem). Der Unterbefehl
+(legierungen, benannte-legierungen, oxide, periodensystem, polymer,
+magnetwerkstoffe). Der Unterbefehl
 'struktur' nimmt daneben auch metallischer-werkstoff und material und braucht
 weder Benchmark noch materialswiki-Gegenstueck. Ausgabe wie sonst nach
 proposals/.
@@ -55,6 +56,11 @@ Gruppen
                  10 tragen noch keine Summenformel
   metalle        98 metallische und halbmetallische Elemente
   periodensystem alle 118 chemischen Elemente
+  polymer        Polymere/Kunststoffe unter Q11474 (~795 Items, 206 Klassen).
+                 Nur 8 tragen eine Summenformel - der Ertrag liegt in Struktur
+                 und Infobox-Kennzahlen, nicht in COD/MP
+  magnetwerkstoffe  Magnetwerkstoffe unter Q949573, ohne Isotope (~10 Klassen).
+                 Sehr klein; vor allem fuer die Strukturpruefung gedacht
 
 Aufruf
 ------
@@ -141,6 +147,18 @@ GRUPPEN = {
         "struktur": "periodensystem",
         "beschreibung": "alle chemischen Elemente",
     },
+    "polymer": {
+        "population": "polymer",
+        "cli": ["--group", "polymer"],
+        "struktur": "polymer",
+        "beschreibung": "Polymere / Kunststoffe (Q11474)",
+    },
+    "magnetwerkstoffe": {
+        "population": "magnetwerkstoffe",
+        "cli": ["--group", "magnetwerkstoffe"],
+        "struktur": "magnetwerkstoffe",
+        "beschreibung": "Magnetwerkstoffe (Q949573, ohne Isotope)",
+    },
 }
 
 # Alle Grundgesamtheiten von ClassCheck.py - fuer den Unterbefehl 'struktur'.
@@ -149,10 +167,12 @@ GRUPPEN = {
 CLASSCHECK_POPULATIONEN = {
     "benannte-legierungen": "Prueferliste aus [[en:List of named alloys]]",
     "legierungen": "Legierungen unter Q37756 (ohne Elemente/Isotope)",
-    "metallischer-werkstoff": "unterhalb metallischer Werkstoff (Q1924900)",
-    "material": "unterhalb material (Q214609)",
+    "metallischer-werkstoff": "Klassen unter Q1924900 - braucht --limit N",
+    "material": "Klassen unter Q214609 - braucht --limit N (~936.000 gesamt)",
     "oxide": "Oxide mit Summenformel (Q50690) - wie 'lauf oxide'",
     "periodensystem": "die 118 chemischen Elemente",
+    "polymer": "Polymere / Kunststoffe unter Q11474 - wie 'lauf polymer'",
+    "magnetwerkstoffe": "Magnetwerkstoffe unter Q949573 (ohne Isotope)",
 }
 
 
@@ -275,7 +295,7 @@ def main(argv=None) -> int:
                              "chemische Metaklasse) - schreibt "
                              "p279_empfehlung_<gruppe>_<stempel>.txt in denselben "
                              "Ordner. Nur legierungen, benannte-legierungen, "
-                             "periodensystem.")
+                             "oxide, periodensystem, polymer, magnetwerkstoffe.")
     parser.add_argument("--nur-struktur", action="store_true",
                         help="NUR die Strukturpruefung - ohne Benchmark und "
                              "materialswiki")

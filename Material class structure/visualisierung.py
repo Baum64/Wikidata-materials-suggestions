@@ -71,6 +71,15 @@ from wikidata_graph import (  # noqa: E402
     WIKIDATA_API, ask, request_with_retry, sparql_json as sparql_query,
 )
 
+# Die Soll-Zuordnung Ordnungszahl -> Elementkategorie/-Gruppe und die
+# QID-Tabellen kommen aus ClassCheck.py - importiert, nicht kopiert, damit
+# das Bild und die Empfehlung dieselbe Konvention meinen
+# (.claude/rules/periodic-table-conventions.md, Fall 2: Zugehoerigkeit ist
+# part of / P361, nie subclass of / P279).
+from ClassCheck import (  # noqa: E402
+    ELEMENTKATEGORIEN, GRUPPEN_QID, KATEGORIE_NACH_Z, UMSTRITTENE_Z, gruppe_von,
+)
+
 ROOT_QID = "Q214609"  # material
 ROOT_LABEL = "material"
 
@@ -634,10 +643,12 @@ def run_default_traces(out_dir: str = ".") -> None:
 # Wurzel?"), nur fuer Gruppen, bei denen die Antwort nicht am Pfad, sondern an
 # der Klassenvergabe selbst haengt:
 #
-#   periodensystem  alle 118 Elemente im PSE-Raster, eingefaerbt nach ihrer
-#                   P279-Klasse. Sichtbar wird, dass die Klassen ungleich
-#                   vergeben sind (17 Elemente als Uebergangsmetall, aber nur
-#                   6 ueberhaupt als "Metall") und viele Zellen leer bleiben.
+#   periodensystem  alle 118 Elemente im PSE-Raster. Farbe = die aus der
+#                   Ordnungszahl folgende Elementkategorie, Rand und Schraffur
+#                   = ob die Zugehoerigkeit als part of (P361, richtig) oder
+#                   als subclass of / instance of (P279/P31, falsch) haengt
+#                   oder ganz fehlt. Konvention:
+#                   .claude/rules/periodic-table-conventions.md, Fall 2.
 #   legierungen     10 Legierungsklassen mit ihren direkten Subklassen -
 #                   also der Blick nach UNTEN statt nach oben.
 #   minerale        10 Mineralarten mit ihren Pfaden hinauf zu Mineral
@@ -676,38 +687,54 @@ SZENARIO_MINERALE = [
     "Q5283",     # Diamant
 ]
 
-# Reihenfolge = Vorrang bei der Einfaerbung: ein Element traegt oft mehrere
-# dieser Klassen (Platin ist Platinmetall UND Uebergangsmetall), gezeichnet
-# wird die spezifischere. Alles andere landet in "andere Klasse".
-PSE_KATEGORIEN = [
-    ("Q19609", "#ffe08a"),     # Edelgas
-    ("Q19557", "#ff9e7a"),     # Alkalimetalle
-    ("Q19563", "#ffc08a"),     # 2. Hauptgruppe (Erdalkalimetalle)
-    ("Q19605", "#d7f28a"),     # 17. Hauptgruppe (Halogene)
-    ("Q104567", "#c7e6a0"),    # 16. Hauptgruppe
-    ("Q223995", "#b7d4f0"),    # Platinmetalle
-    ("Q19588", "#9fc7e8"),     # Uebergangsmetalle
-    ("Q19577", "#d9b8e8"),     # Actinoide
-    ("Q428778", "#c3a0d8"),    # Transactinoide
-    ("Q19596", "#a8ddd6"),     # Halbmetalle
-    ("Q19753344", "#c8f0c0"),  # zweiatomiges Nichtmetall
-    ("Q19753345", "#a8e6a0"),  # vielatomige Nichtmetalle
-    ("Q19600", "#8fd98a"),     # Nichtmetalle
-    ("Q19591", "#cfcfe8"),     # Metall des p-Blocks
-    ("Q11426", "#bdbdd8"),     # Metalle
-]
+# Farbe je Elementkategorie (die zehn aus ELEMENTKATEGORIEN, Fall 2 der
+# periodic-table-conventions.md). Eingefaerbt wird nach der Kategorie, die
+# aus der Ordnungszahl folgt (KATEGORIE_NACH_Z) - die ist eindeutig; der
+# Ist-Zustand steckt dann in Schraffur und Rand, nicht in der Farbe.
+KATEGORIE_FARBE = {
+    "Q19609": "#ffe08a",   # Edelgase
+    "Q19605": "#d7f28a",   # Halogene
+    "Q19600": "#8fd98a",   # Nichtmetalle
+    "Q19596": "#a8ddd6",   # Halbmetalle
+    "Q19557": "#ff9e7a",   # Alkalimetalle
+    "Q19563": "#ffc08a",   # Erdalkalimetalle
+    "Q19569": "#ecd0f4",   # Lanthanoide
+    "Q19577": "#d9b8e8",   # Actinoide
+    "Q19588": "#9fc7e8",   # Uebergangsmetalle
+    "Q19591": "#cfcfe8",   # Metalle des p-Blocks
+}
 
-FARBE_ANDERE = "#e6e6e6"
-FARBE_KEINE = "#ffffff"
+FARBE_STRITTIG = "#e6e6e6"   # Ordnungszahl ohne eindeutige Soll-Kategorie
+
+# Der Ist-Zustand der P361-Zugehoerigkeit steckt im RAND, nicht in der
+# Fuellung - so bleiben Symbol und Text lesbar. Fuellung = Kategoriefarbe.
+STATUS_STIL = {
+    "ok":       dict(edgecolor="#2e7d32", linewidth=1.1, linestyle="solid"),
+    "falsch":   dict(edgecolor="#c0392b", linewidth=2.6, linestyle="solid"),
+    "fehlt":    dict(edgecolor="#c0392b", linewidth=1.6, linestyle=(0, (2, 1.4))),
+    "strittig": dict(edgecolor="0.6",     linewidth=0.9, linestyle="solid"),
+}
+STATUS_TEXT = {"ok": "", "falsch": "!", "fehlt": "kein P361", "strittig": ""}
+
+
+# Alle Kategorie- und Gruppen-Items - nur ihre Zugehoerigkeit interessiert,
+# nicht beliebige weitere P361/P279/P31-Werte.
+_KAT_UND_GRUPPEN = sorted(set(ELEMENTKATEGORIEN) | set(GRUPPEN_QID.values()))
 
 
 def fetch_elemente(max_z: int = 118) -> list:
-    """Alle chemischen Elemente mit Ordnungszahl, Symbol und ihren
-    P279-Klassen.
+    """Alle chemischen Elemente mit Ordnungszahl, Symbol und ihrer
+    Zugehoerigkeit zu Elementkategorien und Periodensystem-Gruppen -
+    GETRENNT nach Property.
 
-    Zwei Abfragen statt einer: das Label-Service laesst sich mit GROUP_CONCAT
-    ueber optionale Klassen nicht zuverlaessig kombinieren, und getrennt
-    bleibt jede Abfrage im Sekundenbereich.
+    Die Konvention (.claude/rules/periodic-table-conventions.md, Fall 2) will
+    diese Zugehoerigkeit als part of (P361). Trotzdem wird auch P279 und P31
+    geholt: nur so wird im Bild sichtbar, wo die Kante zwar da ist, aber an
+    der falschen Property haengt ('element-kategorie-falsche-property').
+
+    Zwei Abfragen statt einer: das Label-Service laesst sich mit der
+    Mitgliedschafts-UNION nicht zuverlaessig kombinieren, und getrennt bleibt
+    jede Abfrage im Sekundenbereich.
     """
     basis = f"""
     SELECT ?e ?eLabel ?num ?sym WHERE {{
@@ -725,7 +752,8 @@ def fetch_elemente(max_z: int = 118) -> list:
             "qid": qid, "z": z,
             "label": b.get("eLabel", {}).get("value", qid),
             "symbol": b.get("sym", {}).get("value", ""),
-            "klassen": {},
+            # {property: {ziel-qid, ...}} fuer die Kategorie-/Gruppen-Items
+            "mitglied": {"P361": set(), "P279": set(), "P31": set()},
         }
         # Mehrere Items koennen dieselbe Ordnungszahl tragen (Isotopen- und
         # Duplikat-Items). Das kanonische Element hat die kleinste QID.
@@ -736,22 +764,61 @@ def fetch_elemente(max_z: int = 118) -> list:
                       f"von {qid}", file=sys.stderr)
             nach_z[z] = el
 
-    klassen = f"""
-    SELECT ?e ?c ?cLabel WHERE {{
-      ?e wdt:P31 wd:{ELEMENT_QID} ; wdt:P1086 ?num ; wdt:P279 ?c .
+    werte = " ".join(f"wd:{q}" for q in _KAT_UND_GRUPPEN)
+    mitglied = f"""
+    SELECT ?e ?p ?t WHERE {{
+      ?e wdt:P31 wd:{ELEMENT_QID} ; wdt:P1086 ?num .
       FILTER(xsd:integer(?num) <= {max_z})
-      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
+      VALUES ?t {{ {werte} }}
+      {{ ?e wdt:P361 ?t . BIND("P361" AS ?p) }}
+      UNION {{ ?e wdt:P279 ?t . BIND("P279" AS ?p) }}
+      UNION {{ ?e wdt:P31 ?t . BIND("P31" AS ?p) }}
     }}
     """
     nach_qid = {el["qid"]: el for el in nach_z.values()}
-    for b in sparql_query(klassen).get("results", {}).get("bindings", []):
+    for b in sparql_query(mitglied).get("results", {}).get("bindings", []):
         el = nach_qid.get(b["e"]["value"].rsplit("/", 1)[-1])
         if el is None:
             continue
-        cqid = b["c"]["value"].rsplit("/", 1)[-1]
-        el["klassen"][cqid] = b.get("cLabel", {}).get("value", cqid)
+        el["mitglied"][b["p"]["value"]].add(b["t"]["value"].rsplit("/", 1)[-1])
 
     return [nach_z[z] for z in sorted(nach_z)]
+
+
+def kategorie_status(el: dict) -> tuple:
+    """(farbe, status, property-text) fuer die Elementkategorie-Zelle.
+
+    status: 'ok' (Kategorie haengt als P361), 'falsch' (als P279/P31),
+    'fehlt' (gar keine Kategorie-Kante), 'strittig' (Ordnungszahl ohne
+    eindeutige Soll-Kategorie - 12. Gruppe, Se/Po/At, alles ab 113)."""
+    soll = KATEGORIE_NACH_Z.get(el["z"])
+    m = el["mitglied"]
+    p361 = m["P361"] & set(ELEMENTKATEGORIEN)
+    falsch = (m["P279"] | m["P31"]) & set(ELEMENTKATEGORIEN)
+    if el["z"] in UMSTRITTENE_Z or not soll:
+        return FARBE_STRITTIG, "strittig", ""
+    farbe = KATEGORIE_FARBE[soll]
+    if soll in p361:
+        return farbe, "ok", "P361"
+    if soll in falsch:
+        props = "/".join(p for p in ("P279", "P31") if soll in m[p])
+        return farbe, "falsch", f"{props}→P361"
+    return farbe, "fehlt", "P361 fehlt"
+
+
+def gruppe_status(el: dict) -> Optional[tuple]:
+    """(nummer, status) fuer die Periodensystem-Gruppe - oder None fuer den
+    f-Block (Lanthanoide/Actinoide stehen in keiner Gruppe)."""
+    nummer = gruppe_von(el["z"])
+    if not nummer:
+        return None
+    ziel = GRUPPEN_QID[nummer]
+    m = el["mitglied"]
+    if ziel in m["P361"]:
+        return nummer, "ok"
+    if ziel in m["P279"] or ziel in m["P31"]:
+        return nummer, "falsch"
+    return nummer, "fehlt"
 
 
 def pse_position(z: int) -> Optional[tuple]:
@@ -792,76 +859,100 @@ def pse_position(z: int) -> Optional[tuple]:
 
 
 def plot_periodensystem(elemente: list, path_png: str) -> None:
-    """PSE-Raster, jede Zelle eingefaerbt nach ihrer spezifischsten Klasse.
+    """PSE-Raster: Fuellung = Elementkategorie aus der Ordnungszahl, RAND =
+    Ist-Zustand der Zugehoerigkeit.
 
-    Weiss-schraffiert = das Element hat ueberhaupt keine P279-Klasse; genau
-    diese Zellen sind die Luecke, um die es hier geht.
+    Konvention (.claude/rules/periodic-table-conventions.md, Fall 2): die
+    Zugehoerigkeit zu Kategorie und Gruppe gehoert an part of (P361), nie an
+    subclass of (P279) oder instance of (P31). Der Rand zeigt, was Wikidata
+    tatsaechlich fuehrt -
+
+      gruener Rand    Kategorie haengt als P361 (richtig)
+      dicker roter    Kategorie haengt an P279/P31 (falsche Property)
+      roter gestrichelt   keine Kategorie-Kante (P361 fehlt)
+      grauer Rand     Ordnungszahl ohne eindeutige Kategorie (12. Gruppe,
+                      Se/Po/At, alles ab 113)
+
+    Das Gruppen-Ergebnis steht als kleines Kuerzel unten in der Zelle
+    (G8 ✓ / G8 ! / G8 – ); der f-Block steht in keiner Gruppe.
     """
     from matplotlib.patches import Patch
 
-    farben = dict(PSE_KATEGORIEN)
-    vorrang = [qid for qid, _ in PSE_KATEGORIEN]
-    alle_klassen = {}
-    genutzt = {}
-    ohne_klasse = []
+    zaehl_kat = {"ok": 0, "falsch": 0, "fehlt": 0, "strittig": 0}
+    zaehl_grp = {"ok": 0, "falsch": 0, "fehlt": 0}
+    genutzt = {}   # soll-Kategorie-QID -> Anzahl Zellen dieser Farbe
+    zeichen = {"ok": "✓", "falsch": "!", "fehlt": "–"}
 
-    fig, ax = plt.subplots(figsize=(21, 13))
+    fig, ax = plt.subplots(figsize=(20, 12.5))
     for el in elemente:
         pos = pse_position(el["z"])
         if pos is None:
             continue
         zeile, spalte = pos
         y = -(zeile + (0.7 if zeile >= 8 else 0.0))
-        for cqid, clabel in el["klassen"].items():
-            alle_klassen[cqid] = (clabel, alle_klassen.get(cqid, (clabel, 0))[1] + 1)
 
-        kategorie = next((q for q in vorrang if q in el["klassen"]), None)
-        if kategorie:
-            farbe = farben[kategorie]
-            genutzt[kategorie] = el["klassen"][kategorie]
-        elif el["klassen"]:
-            farbe = FARBE_ANDERE
-        else:
-            farbe = FARBE_KEINE
-            ohne_klasse.append(el)
+        farbe, status, _ = kategorie_status(el)
+        zaehl_kat[status] += 1
+        soll = KATEGORIE_NACH_Z.get(el["z"])
+        if soll and status != "strittig":
+            genutzt[soll] = genutzt.get(soll, 0) + 1
 
-        ax.add_patch(plt.Rectangle(
-            (spalte, y), 0.94, 0.94, facecolor=farbe, edgecolor="0.3",
-            linewidth=0.9, hatch="///" if not el["klassen"] else None))
-        ax.text(spalte + 0.07, y + 0.76, str(el["z"]), fontsize=6.5, color="0.35")
-        ax.text(spalte + 0.47, y + 0.50, el["symbol"] or "?", fontsize=14,
+        ax.add_patch(plt.Rectangle((spalte, y), 0.92, 0.92, facecolor=farbe,
+                                   joinstyle="round", **STATUS_STIL[status]))
+        ax.text(spalte + 0.08, y + 0.77, str(el["z"]), fontsize=6, color="0.4")
+        ax.text(spalte + 0.46, y + 0.52, el["symbol"] or "?", fontsize=13,
                 fontweight="bold", ha="center", va="center")
-        ax.text(spalte + 0.47, y + 0.24, el["label"][:14], fontsize=5.5,
-                ha="center", va="center", color="0.2")
-        ax.text(spalte + 0.47, y + 0.08,
-                f"{len(el['klassen'])} Klassen" if el["klassen"] else "keine Klasse",
-                fontsize=5, ha="center", va="center", color="0.35")
+        ax.text(spalte + 0.46, y + 0.29, el["label"][:13], fontsize=5,
+                ha="center", va="center", color="0.25")
 
-    # Kopfband ueber dem Raster freihalten: die Legende hat 17 Eintraege und
-    # laege sonst ueber Wasserstoff und den Alkalimetallen.
+        kat_note = STATUS_TEXT[status]
+        gs = gruppe_status(el)
+        if gs:
+            nummer, gstatus = gs
+            zaehl_grp[gstatus] += 1
+            grp_note = f"G{nummer} {zeichen[gstatus]}"
+        else:
+            grp_note = ""
+        note = "  ".join(t for t in (kat_note, grp_note) if t)
+        schlecht = status in ("falsch", "fehlt") or (gs and gs[1] != "ok")
+        ax.text(spalte + 0.46, y + 0.10, note or "·", fontsize=4.7,
+                ha="center", va="center",
+                color="#c0392b" if schlecht else "0.45")
+
     ax.set_xlim(0.5, 19.6)
     ax.set_ylim(-10.1, 2.1)
     ax.set_aspect("equal")
     ax.axis("off")
 
-    handles = [Patch(facecolor=farben[q], edgecolor="0.3", label=genutzt[q])
-               for q in vorrang if q in genutzt]
-    handles.append(Patch(facecolor=FARBE_ANDERE, edgecolor="0.3",
-                         label="nur andere Klassen"))
-    handles.append(Patch(facecolor=FARBE_KEINE, edgecolor="0.3", hatch="///",
-                         label=f"keine P279-Klasse ({len(ohne_klasse)})"))
-    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.0, 2.0),
-              bbox_transform=ax.transData, ncol=5, fontsize=8, frameon=False)
+    handles = [Patch(facecolor=KATEGORIE_FARBE[q], edgecolor="0.4",
+                     label=f"{ELEMENTKATEGORIEN[q]} ({genutzt[q]})")
+               for q in KATEGORIE_FARBE if q in genutzt]
+    handles += [
+        Patch(facecolor="white", label=f"P361 – richtig ({zaehl_kat['ok']})",
+              **STATUS_STIL["ok"]),
+        Patch(facecolor="white", **STATUS_STIL["falsch"],
+              label=f"P279/P31 – falsche Property ({zaehl_kat['falsch']})"),
+        Patch(facecolor="white", **STATUS_STIL["fehlt"],
+              label=f"P361 fehlt ({zaehl_kat['fehlt']})"),
+        Patch(facecolor=FARBE_STRITTIG, **STATUS_STIL["strittig"],
+              label=f"Ordnungszahl strittig ({zaehl_kat['strittig']})"),
+    ]
+    ax.legend(handles=handles, loc="upper left", bbox_to_anchor=(1.0, 2.05),
+              bbox_transform=ax.transData, ncol=4, fontsize=8, frameon=False)
 
-    rang = sorted(alle_klassen.values(), key=lambda t: (-t[1], t[0]))
-    fusszeile = textwrap.fill(
-        "alle vergebenen P279-Klassen: " +
-        " · ".join(f"{n}× {label}" for label, n in rang), 210)
     ax.set_title(
-        f"Periodensystem: Klassenzuordnung (P279) in Wikidata\n"
-        f"{len(elemente)} Elemente, {len(alle_klassen)} verschiedene Klassen, "
-        f"{len(ohne_klasse)} Elemente ganz ohne Klasse", fontsize=13)
-    fig.text(0.5, 0.045, fusszeile, ha="center", fontsize=6.5, color="0.25")
+        "Periodensystem: Zugehoerigkeit als »part of« (P361), gemessen gegen "
+        "die Ordnungszahl\n"
+        f"Kategorie – {zaehl_kat['ok']}x P361, {zaehl_kat['falsch']}x an "
+        f"P279/P31 (falsche Property), {zaehl_kat['fehlt']}x fehlt, "
+        f"{zaehl_kat['strittig']}x strittig      "
+        f"Gruppe – {zaehl_grp['ok']}x P361, {zaehl_grp['falsch']}x falsch, "
+        f"{zaehl_grp['fehlt']}x fehlt", fontsize=12)
+    fig.text(0.5, 0.05,
+             ".claude/rules/periodic-table-conventions.md, Fall 2: ein Element "
+             "»ist keine Art von Alkalimetall« (P279), sondern »gehoert zur "
+             "Gruppe der Alkalimetalle« (P361).",
+             ha="center", fontsize=7.5, color="0.3")
     fig.savefig(path_png, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print(f"Graph geschrieben: {path_png}", file=sys.stderr)
@@ -871,13 +962,17 @@ def write_elemente_csv(elemente: list, path: str) -> None:
     with open(path, "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["ordnungszahl", "symbol", "label", "qid",
-                         "anzahl_klassen", "klassen"])
+                         "soll_kategorie", "kategorie_status",
+                         "kategorie_property", "soll_gruppe", "gruppe_status"])
         for el in elemente:
+            _, kstatus, kprop = kategorie_status(el)
+            soll = KATEGORIE_NACH_Z.get(el["z"])
+            gs = gruppe_status(el)
             writer.writerow([
                 el["z"], el["symbol"], el["label"], el["qid"],
-                len(el["klassen"]),
-                "; ".join(f"{lbl} ({q})" for q, lbl in sorted(
-                    el["klassen"].items(), key=lambda kv: kv[1])),
+                ELEMENTKATEGORIEN.get(soll, "") if soll else "",
+                kstatus, kprop,
+                gs[0] if gs else "", gs[1] if gs else "kein (f-Block)",
             ])
     print(f"Bericht geschrieben: {path}", file=sys.stderr)
 
@@ -973,15 +1068,22 @@ def plot_subklassen_faecher(root: str, eltern: list, kinder: dict, gesamt: dict,
 
 
 def szenario_periodensystem(out_dir: str) -> None:
-    print("Lade alle chemischen Elemente mit ihren Klassen ...", file=sys.stderr)
+    print("Lade alle chemischen Elemente mit ihrer P361-Zugehoerigkeit ...",
+          file=sys.stderr)
     elemente = fetch_elemente()
     print(f"  {len(elemente)} Elemente geladen.", file=sys.stderr)
     write_elemente_csv(elemente, os.path.join(out_dir, "szenario_periodensystem.csv"))
     plot_periodensystem(elemente, os.path.join(out_dir, "szenario_periodensystem.png"))
-    ohne = [el for el in elemente if not el["klassen"]]
-    if ohne:
-        print("  ohne jede P279-Klasse: " +
-              ", ".join(f"{el['symbol'] or el['label']}" for el in ohne),
+
+    falsch = [el for el in elemente if kategorie_status(el)[1] == "falsch"]
+    fehlt = [el for el in elemente if kategorie_status(el)[1] == "fehlt"]
+    if falsch:
+        print("  Kategorie an P279/P31 statt P361: " +
+              ", ".join(el["symbol"] or el["label"] for el in falsch),
+              file=sys.stderr)
+    if fehlt:
+        print("  Kategorie fehlt ganz (kein P361): " +
+              ", ".join(el["symbol"] or el["label"] for el in fehlt),
               file=sys.stderr)
 
 
@@ -1063,7 +1165,8 @@ def main():
                          choices=sorted(SZENARIEN) + ["alle"],
                          help="statt des Standardlaufs eines oder mehrere "
                               "Szenarien zeichnen: periodensystem (alle 118 "
-                              "Elemente nach P279-Klasse eingefaerbt), "
+                              "Elemente, Zugehoerigkeit als part of / P361 "
+                              "geprueft, s. periodic-table-conventions.md), "
                               "legierungen (10 Beispiele mit ihren "
                               "Subklassen), minerale (10 Beispiele mit ihren "
                               "Pfaden zu Mineral Q7946) oder alle")

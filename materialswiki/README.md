@@ -1115,6 +1115,17 @@ Wikidata-Items durchgehen. Wie ergiebig das ist, hängt stark an der Gruppe
 | `minerale` | 6301 | 5694 | 1806 |
 | `legierungen` | 568 | 10 | 178 |
 | `oxide` | 154 | 154 | 108 |
+| `polymer` | ~795 | 8 | 113 |
+| `magnetwerkstoffe` | ~10 | 0 | wenige |
+
+**`polymer`** ist der Subtree unter `Q11474` „Kunststoff" (nicht `Q81163`
+„polymer", das auch Biopolymere umfasst). Wie bei den Legierungen ist die
+Summenformel die Ausnahme — der Ertrag liegt in Struktur und
+Infobox-Kennzahlen. **`magnetwerkstoffe`** (`Q949573`) ist winzig und trägt
+den Isotopenfilter `FILTER NOT EXISTS { ?i wdt:P1086 ?z }`: ohne ihn zieht ein
+schiefer Instanzpfad über Nickel ~40 Nickel-Isotope herein (dieselbe Fehlkante
+wie „Metalle unter Legierung", siehe unten). Der Lauf lohnt vor allem für die
+Strukturprüfung.
 
 **`minerale`** ist mit Abstand die ergiebigste Gruppe: Instanzen von
 `Q12089225`, also die von der IMA geführten Arten — bewusst **nicht** der

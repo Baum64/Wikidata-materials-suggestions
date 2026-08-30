@@ -231,7 +231,8 @@ sys.path[:0] = [_HIER, _REPO]
 PROPOSALS_DIR = os.path.join(_REPO, "proposals")
 
 from materialswiki.cli import (  # noqa: E402
-    LEGIERUNG_PATTERN, LEGIERUNG_QID, OXID_PATTERN, fetch_named_alloys,
+    KUNSTSTOFF_QID, LEGIERUNG_PATTERN, LEGIERUNG_QID,
+    MAGNET_PATTERN, MAGNETWERKSTOFF_QID, OXID_PATTERN, fetch_named_alloys,
 )
 
 # Die Wikidata-Zugriffsschicht teilt sich dieses Skript mit visualisierung.py
@@ -254,6 +255,14 @@ OXID_QID = "Q50690"             # Oxid - Bereichswurzel der Grundgesamtheit 'oxi
 SUBTREE_PATTERN = (
     "{{ ?i wdt:P31/wdt:P279* wd:{root} }} UNION {{ ?i wdt:P279* wd:{root} }}"
 )
+
+# Fuer die grossen Wurzeln (material, metallischer Werkstoff) nur die KLASSEN,
+# nicht zusaetzlich jede Instanz jeder Unterklasse. Der Instanz-Zweig
+# (P31/P279*) laesst die Abfrage unter Q214609 zuverlaessig ins Timeout
+# laufen - ~936.000 Treffer - und ein zufaelliger Instanz-Ausschnitt sagt
+# fuer eine Strukturpruefung ohnehin nichts. Diese Grundgesamtheiten sind als
+# "gross" markiert und brauchen ein --limit (siehe hole_population).
+SUBTREE_KLASSEN_PATTERN = "?i wdt:P279* wd:{root} ."
 
 # ---------------------------------------------------------------------------
 # Szenario Periodensystem: die Einordnung der chemischen Elemente
@@ -352,12 +361,14 @@ POPULATIONEN = {
         "beschreibung": "benannte Legierungen aus [[en:List of named alloys]]",
     },
     "metallischer-werkstoff": {
-        "pattern": SUBTREE_PATTERN.format(root=METALL_WERKSTOFF_QID),
-        "beschreibung": "unterhalb von metallischer Werkstoff (Q1924900)",
+        "pattern": SUBTREE_KLASSEN_PATTERN.format(root=METALL_WERKSTOFF_QID),
+        "beschreibung": "Klassen unterhalb von metallischer Werkstoff (Q1924900)",
+        "gross": True,
     },
     "material": {
-        "pattern": SUBTREE_PATTERN.format(root=MATERIAL_QID),
-        "beschreibung": "unterhalb von material (Q214609)",
+        "pattern": SUBTREE_KLASSEN_PATTERN.format(root=MATERIAL_QID),
+        "beschreibung": "Klassen unterhalb von material (Q214609)",
+        "gross": True,
     },
     # Oxide - dieselbe Menge wie 'python -m lauf oxide' und der Benchmark:
     # OXID_PATTERN kommt woertlich aus materialswiki.gruppen, damit die drei
@@ -391,6 +402,38 @@ POPULATIONEN = {
                          f"Ordnungszahl bis {LETZTE_ORDNUNGSZAHL})"),
         "pruefungen": ["kennzahlen", "elementklasse", "redundant", "zyklus"],
         "bereichswurzel": ELEMENT_QID,
+    },
+    # Polymere/Kunststoffe und Magnetwerkstoffe. Wie bei 'oxide' der
+    # reduzierte Strukturkern: 'metaklasse', 'zusammensetzung',
+    # 'zu-allgemein' und 'ohne-einordnung' setzen den Legierungsbezug
+    # (Q37756, [[List of named alloys]]) voraus und finden hier nichts;
+    # 'elementklasse' braucht die Ordnungszahl.
+    #
+    # polymer prueft NUR die Klassen (P279*, ~206) - anders als der
+    # materialswiki-/Benchmark-Lauf, der ueber KUNSTSTOFF_PATTERN auch die
+    # Instanzen mitnimmt. Fuer eine Strukturpruefung sind die Instanzen
+    # (konkrete Kunststoffsorten, per P31 an ihrer Klasse) nur Rauschen:
+    # 'parallelzweig' meldete sonst ~580x "kein P279*-Pfad zu material",
+    # was fuer Instanzen normal ist. Gleiche Logik wie bei 'material' /
+    # 'metallischer-werkstoff' (SUBTREE_KLASSEN_PATTERN).
+    #
+    # magnetwerkstoffe ist mit dem Isotopenfilter ohnehin nur 10 Klassen -
+    # da schadet der Instanzzweig nicht, und MAGNET_PATTERN bleibt mit dem
+    # Benchmark identisch.
+    "polymer": {
+        "pattern": SUBTREE_KLASSEN_PATTERN.format(root=KUNSTSTOFF_QID),
+        "beschreibung": "Klassen der Polymere / Kunststoffe (Q11474)",
+        "pruefungen": ["kennzahlen", "redundant", "verkehrt",
+                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+        "bereichswurzel": KUNSTSTOFF_QID,
+    },
+    "magnetwerkstoffe": {
+        "pattern": MAGNET_PATTERN,
+        "beschreibung": ("Magnetwerkstoffe (Q949573, ohne Isotope) - wie "
+                         "'lauf magnetwerkstoffe'"),
+        "pruefungen": ["kennzahlen", "redundant", "verkehrt",
+                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+        "bereichswurzel": MAGNETWERKSTOFF_QID,
     },
 }
 
@@ -687,6 +730,15 @@ def hole_pruefliste(limit: Optional[int] = None) -> tuple:
 def hole_population(name: str, limit: Optional[int] = None) -> tuple:
     """(Items, Liste der Listennamen ohne Item)."""
     info = POPULATIONEN[name]
+    if info.get("gross") and not limit:
+        raise SystemExit(
+            f"Grundgesamtheit '{name}' ist zu gross fuer eine einzelne Abfrage "
+            f"(unter Q214609 haengen rund 936.000 Klassen) - der Query-Service "
+            f"laeuft ins Timeout.\n"
+            f"  Mit --limit N eine Stichprobe pruefen, z. B.\n"
+            f"    python -m lauf struktur {name} --limit 500\n"
+            f"  oder eine engere Grundgesamtheit waehlen (legierungen, oxide, "
+            f"periodensystem, benannte-legierungen).")
     if info["pattern"] is None:
         items, ohne_item = hole_pruefliste(limit)
     else:

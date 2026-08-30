@@ -41,23 +41,32 @@ _SPARQL_HEADERS = {**netz.HEADERS,
                    "Content-Type": "application/x-www-form-urlencoded"}
 
 
-def sparql_json(query: str) -> dict:
+# 120s statt der 60s von netz: der Query-Service braucht fuer die groesseren
+# Abfragen dieser Werkzeuge (P279-Huelle, Ebenen-Baum) laenger. So lief es
+# vor der Auslagerung in dieses Modul auch schon. Ein echtes Timeout darueber
+# hinaus ist kein transienter Fehler - dann ist die Abfrage zu gross und
+# gehoert gestueckelt oder mit LIMIT versehen (siehe hole_population_sparql).
+SPARQL_TIMEOUT = 120
+
+
+def sparql_json(query: str, timeout: int = SPARQL_TIMEOUT) -> dict:
     """Rohe SPARQL-Antwort per POST - GET reisst bei laengeren VALUES-Bloecken
     die URL. Fuer ASK-Abfragen, die den Schluessel 'boolean' brauchen."""
     resp = request_with_retry("POST", WIKIDATA_SPARQL, headers=_SPARQL_HEADERS,
-                              data={"query": query, "format": "json"})
+                              data={"query": query, "format": "json"},
+                              timeout=timeout)
     resp.raise_for_status()
     return resp.json()
 
 
-def sparql(query: str) -> list:
+def sparql(query: str, timeout: int = SPARQL_TIMEOUT) -> list:
     """Die Bindungen einer SELECT-Abfrage - der Normalfall."""
-    return sparql_json(query).get("results", {}).get("bindings", [])
+    return sparql_json(query, timeout).get("results", {}).get("bindings", [])
 
 
-def ask(query: str) -> bool:
+def ask(query: str, timeout: int = SPARQL_TIMEOUT) -> bool:
     """Das Ergebnis einer ASK-Abfrage."""
-    return sparql_json(query).get("boolean", False)
+    return sparql_json(query, timeout).get("boolean", False)
 
 
 def qid(binding: dict, feld: str) -> str:
