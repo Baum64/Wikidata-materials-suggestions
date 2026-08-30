@@ -3,8 +3,8 @@
 Erzeugt aus dem [Materials Project](https://next-gen.materialsproject.org) —
 und, für alles Fehlende, aus den Wikipedia-Infoboxen — Vorschlagslisten für
 Wikidata-Statements. Das Skript **legt keine neuen Wikidata-Items an und
-schreibt nichts automatisch nach Wikidata** — es liefert CSV-Kandidaten zur
-manuellen Prüfung.
+schreibt nichts automatisch nach Wikidata** — es liefert Kandidaten als
+Markdown-Tabelle zur manuellen Prüfung.
 
 ## Aufbau: welche Datei was tut
 
@@ -17,7 +17,7 @@ zerlegen will, braucht weder Netz noch Wikidata:
 | [netz.py](netz.py) | HTTP: Drosselung je Gegenstelle, Retry, **einziger** Einstiegspunkt | konfiguration |
 | [properties.py](properties.py) | Property-Tabellen, Einheiten, Plausibilitätsschranken, Feldkarten der Infoboxen | — |
 | [formeln.py](formeln.py) | Summenformeln zerlegen und schreiben (beide Parser, funktionale Gruppen) | — |
-| [ausgabe.py](ausgabe.py) | Referenzmodell, Vorschlagszeile, CSV, QuickStatements-Entwurf | properties |
+| [ausgabe.py](ausgabe.py) | Referenzmodell, Vorschlagszeile, Markdown-Tabelle, QuickStatements-Entwurf | properties |
 | [wikidata.py](wikidata.py) | Vokabular (Elemente, Raumgruppen) und Itemzustand (Aussagen, CAS, Siedepunkt) | netz, properties, formeln |
 | [gruppen.py](gruppen.py) | Werkstoffgruppen, Prüfliste, Legierungsprüfung | netz, wikidata |
 | [infobox.py](infobox.py) | die drei Wikipedia-Infoboxen samt Parsern | netz, wikidata, ausgabe |
@@ -168,7 +168,7 @@ Die Reihenfolge ist nicht beliebig: stünde der Beleg vor dem Qualifikator,
 hängte QuickStatements den Qualifikator an die Referenz statt an die Aussage.
 Ein Test hält das fest.
 
-In der CSV steht dasselbe lesbar in der Spalte `bestimmungsmethode`.
+In der Vorschlagstabelle steht dasselbe lesbar in der Spalte `bestimmungsmethode`.
 
 Verifiziert am 2026-08-15:
 
@@ -393,9 +393,9 @@ Entschieden über den Datentyp statt über einzelne P-Nummern: was Wikidata als
 `external-id` führt, ist per Definition ein Identifikator. Zurzeit betrifft
 das nur die CAS-Nummer.
 
-Die **Herkunft** bleibt in der CSV-Spalte `ref_note` und im Kommentar des
+Die **Herkunft** bleibt in der Tabellenspalte `ref_note` und im Kommentar des
 Entwurfs stehen (`ohne Beleg, Identifikator - Infobox-Feld 'CAS'`), damit die
-Zeile beim Durchsehen prüfbar ist. Die Belegspalten der CSV bleiben leer — ein
+Zeile beim Durchsehen prüfbar ist. Die Belegspalten der Tabelle bleiben leer — ein
 gefülltes `ref_url` würde suggerieren, dass ein Beleg mitgeschrieben wird.
 
 Zusätzlich trägt jede MP-Zeile den Vermerk `berechnet (DFT)` an erster Stelle
@@ -461,7 +461,7 @@ wie ein Schlüsselproblem aussieht und keines ist. Ein Test hält das fest.
 3. Prüfen, ob das jeweilige Statement dort bereits existiert.
 4. Für alles, was MP nicht liefert, die Wikipedia-Infoboxen heranziehen
    (siehe Quellenkaskade).
-5. Alle offenen Kandidaten als CSV-Vorschlagsliste schreiben, plus einen
+5. Alle offenen Kandidaten als Vorschlagsliste (Markdown-Tabelle) schreiben, plus einen
    QuickStatements-V1-**Entwurf**, der erst nach zeilenweiser manueller Prüfung
    eingespielt werden darf.
 
@@ -775,7 +775,7 @@ ab. Ein „importiert aus Wikidata" wäre zirkulär, und ein passendes
 Heuristik-Item für P887 existiert nicht. Die Aussagen gehen deshalb **ohne
 S-Beleg** raus — dieselbe Überlegung wie bei den Identifikatoren (siehe
 [Identifikatoren bekommen gar keinen Beleg](#identifikatoren-bekommen-gar-keinen-beleg)).
-Die Herkunft samt Formel bleibt in der CSV-Spalte `ref_note` nachprüfbar.
+Die Herkunft samt Formel bleibt in der Tabellenspalte `ref_note` nachprüfbar.
 Trägt ein Item bereits `P2670`, wird **nichts ergänzt** — wer die
 Zusammensetzung von Hand gepflegt hat, weiß mehr als diese Ableitung. Ein
 bestehendes `P527` blockiert dagegen nicht mehr: zeigt es auf Elemente,
@@ -1116,7 +1116,7 @@ Wikidata-Items durchgehen. Wie ergiebig das ist, hängt stark an der Gruppe
 | `legierungen` | 568 | 10 | 178 |
 | `oxide` | 154 | 154 | 108 |
 | `polymer` | ~795 | 8 | 113 |
-| `magnetwerkstoffe` | ~10 | 0 | wenige |
+| `magnetwerkstoffe` | ~17 | 0 | wenige |
 
 **`polymer`** ist der Subtree unter `Q11474` „Kunststoff" (nicht `Q81163`
 „polymer", das auch Biopolymere umfasst). Wie bei den Legierungen ist die
@@ -1124,8 +1124,12 @@ Summenformel die Ausnahme — der Ertrag liegt in Struktur und
 Infobox-Kennzahlen. **`magnetwerkstoffe`** (`Q949573`) ist winzig und trägt
 den Isotopenfilter `FILTER NOT EXISTS { ?i wdt:P1086 ?z }`: ohne ihn zieht ein
 schiefer Instanzpfad über Nickel ~40 Nickel-Isotope herein (dieselbe Fehlkante
-wie „Metalle unter Legierung", siehe unten). Der Lauf lohnt vor allem für die
-Strukturprüfung.
+wie „Metalle unter Legierung", siehe unten). `MAGNET_PATTERN` verankert neben
+`Q949573` auch `Q2554911` (weichmagnetische Werkstoffe) und `Q9259184`
+(ferromagnetic material) als eigene Wurzeln — so bleibt der ferromagnetische
+Zweig auch dann in der Grundgesamtheit, wenn die eine P279-Kante unter
+`Q949573` (die die `verkehrt`-Prüfung fälschlich zur Löschung meldet) fällt.
+Der Lauf lohnt vor allem für die Strukturprüfung.
 
 **`minerale`** ist mit Abstand die ergiebigste Gruppe: Instanzen von
 `Q12089225`, also die von der IMA geführten Arten — bewusst **nicht** der
@@ -1259,15 +1263,15 @@ beiden Einzelseiten — an Kupfer geprüft. Bei `Crawl-delay: 5` sind das
 **Was nicht umgesetzt ist:** echte Parallelität. Während der Lauf fünf
 Sekunden auf das WebBook wartet, liegen die sechs anderen Gegenstellen
 brach — ein kleiner Thread-Pool über die Items wäre der nächste große Hebel,
-verträgt sich aber nicht ohne Weiteres mit der zeilenweise geschriebenen CSV
-und der stabilen Reihenfolge der Chargen. Ebenso fehlt ein Antwort-Cache auf
+verträgt sich aber nicht ohne Weiteres mit der zeilenweise geschriebenen
+Vorschlagstabelle und der stabilen Reihenfolge der Chargen. Ebenso fehlt ein Antwort-Cache auf
 der Platte: ein abgebrochener Lauf holt beim Wiederholen alles neu.
 
 ### Chargenbetrieb (`--batch-size`)
 
 Bei 6301 Mineralen läuft ein Durchgang stundenlang, und ohne Zwischenstände
 gäbe es bis zum Schluss keine einspielbaren QuickStatements. Mit
-`--batch-size N` werden CSV und Entwurf nach **jeder** Charge geschrieben —
+`--batch-size N` werden Vorschlagstabelle und Entwurf nach **jeder** Charge geschrieben —
 man kann also einspielen, während der Rest noch läuft, und ein Abbruch kostet
 höchstens die angefangene Charge.
 
@@ -1358,18 +1362,18 @@ Wer die reinen Stoffe aufgreift, fängt bei jener Klärung an, nicht beim Code.
 
 Beide landen im aktuellen Arbeitsverzeichnis und sind gitignoriert (siehe
 [../README.md](../README.md#ausgabedateien)). Der Dateiname trägt
-standardmäßig einen Zeitstempel (`vorschlaege_2026-08-15_1102.csv`), für CSV
-und Entwurf denselben — so überschreibt kein Lauf den vorherigen, und die
-beiden Dateien sind als Paar erkennbar.
+standardmäßig einen Zeitstempel (`vorschlaege_2026-08-15_1102.md`), für
+Tabelle und Entwurf denselben — so überschreibt kein Lauf den vorherigen, und
+die beiden Dateien sind als Paar erkennbar.
 
 Wer feste Namen braucht, setzt `--out`/`--qs-out`. Dann wird der
 QuickStatements-Entwurf **vor** dem Lauf geleert: Er entsteht erst am Ende,
 und ohne das Leeren stünde nach einem Abbruch der vollständige Entwurf des
-letzten Laufs neben der frisch und nur teilweise geschriebenen CSV — zwei
-Dateien, die nicht zusammengehören. Nach einem Abbruch trägt der Entwurf
+letzten Laufs neben der frisch und nur teilweise geschriebenen
+Vorschlagstabelle — zwei Dateien, die nicht zusammengehören. Nach einem Abbruch trägt der Entwurf
 deshalb nur die Zeile `# Lauf noch nicht abgeschlossen …`.
 
-### Status in der CSV
+### Status in der Vorschlagstabelle
 
 | Status | Bedeutung |
 |---|---|
@@ -1527,7 +1531,7 @@ python "materialswiki/Werkstoff wikidata vorschläge.py" \
 | Materials Project | DOI der Referenzpublikation der Datenbank (Einträge haben keine eigene DOI) |
 | PubChem | `P854` + `P813`, da PubChem keine Eintrags-DOIs vergibt |
 
-Ausgabe: `werkstoffe_vorschlaege.csv` und
+Ausgabe: `werkstoffe_vorschlaege.md` und
 `werkstoffe_qs_entwurf.txt` (`--out` / `--qs-out`). Für die
 Materials-Project-Quelle ist ein eigener `MP_API_KEY` im Skript einzutragen
 (kostenloser Account auf

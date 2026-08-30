@@ -112,17 +112,29 @@ KUNSTSTOFF_PATTERN = (
 )
 
 # Magnetwerkstoffe: der Subtree unter Q949573 "Magnetwerkstoffe" (P279 ->
-# Q214609 Material). Winzig - mit dem Ordnungszahl-Filter bleiben 10 Klassen
+# Q214609 Material). Winzig - mit dem Ordnungszahl-Filter bleiben ~17 Klassen
 # (weich-/hartmagnetische Werkstoffe, Ferrite, ferromagnetisches Material,
-# Antiferromagnet ...). OHNE den Filter zieht Q949573 ueber einen schiefen
+# Antiferromagnet, Permalloy, Alnico ...). OHNE den Filter zieht Q949573 ueber einen schiefen
 # Instanzpfad (Nickel Q744 haengt darunter) rund 40 Nickel-Isotope herein -
 # dieselbe Art Fehlkante wie "Metalle unter Legierung". Der Filter ist hier
 # also Pflicht, nicht Kosmetik. Wegen der geringen Groesse ist der Ertrag an
 # Messwert-Vorschlaegen minimal; der Lauf lohnt vor allem fuer die Struktur.
 MAGNETWERKSTOFF_QID = "Q949573"
+
+# Zusaetzliche Anker neben Q949573: "Weichmagnetische Werkstoffe" (Q2554911)
+# und "ferromagnetic material" (Q9259184). Beide haengen per P279 direkt unter
+# Q949573 - aber genau diese Kante meldet die 'verkehrt'-Heuristik (Baum zu
+# duenn besetzt, 48:3) faelschlich zur Loeschung. Als eigene Wurzeln gefuehrt,
+# bleibt der ganze ferromagnetische Zweig (Ferrite, ferromagnetische
+# Kristalle/Minerale, Permalloy, Alnico ...) in der Grundgesamtheit, egal was
+# mit der einen Kante passiert. Kostet nichts, solange die Kanten stehen -
+# dann liefern alle drei Wurzeln dieselben Items.
+MAGNET_WURZELN = (MAGNETWERKSTOFF_QID, "Q2554911", "Q9259184")
+_MAGNET_WURZEL_VALUES = " ".join(f"wd:{q}" for q in MAGNET_WURZELN)
 MAGNET_PATTERN = (
-    f"{{ {{ ?i wdt:P31/wdt:P279* wd:{MAGNETWERKSTOFF_QID} }} UNION "
-    f"{{ ?i wdt:P279* wd:{MAGNETWERKSTOFF_QID} }} }} {LEGIERUNG_OHNE_ELEMENTE}"
+    f"VALUES ?magnetwurzel {{ {_MAGNET_WURZEL_VALUES} }} "
+    f"{{ {{ ?i wdt:P31/wdt:P279* ?magnetwurzel }} UNION "
+    f"{{ ?i wdt:P279* ?magnetwurzel }} }} {LEGIERUNG_OHNE_ELEMENTE}"
 )
 
 # ---------------------------------------------------------------------------

@@ -76,7 +76,7 @@ Wikidata auch hypothetische Elemente bis Z=184 fuehrt.
 Aufruf
 ------
   python -m benchmark.benchmark
-  python -m benchmark.benchmark --root Q11426 --csv abdeckung.csv
+  python -m benchmark.benchmark --root Q11426 --md abdeckung.md
   python -m benchmark.benchmark --population legierungen
   python -m benchmark.benchmark --population metalle
   python -m benchmark.benchmark --population periodensystem
@@ -84,7 +84,6 @@ Aufruf
 """
 
 import argparse
-import csv
 import json
 import os
 import re
@@ -623,12 +622,21 @@ def print_report(titel: str, population: dict, rows: list,
     print()
 
 
-def write_csv(rows: list, path: str) -> None:
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(rows[0].keys()))
-        writer.writeheader()
-        writer.writerows(rows)
-    print(f"CSV geschrieben nach: {path}", file=sys.stderr)
+def _md_zelle(wert) -> str:
+    return (str(wert if wert is not None else "")
+            .replace("\\", "\\\\").replace("|", "\\|")
+            .replace("\r\n", " ").replace("\n", "<br>").replace("\r", " "))
+
+
+def write_markdown(rows: list, path: str) -> None:
+    spalten = list(rows[0].keys())
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("| " + " | ".join(spalten) + " |\n")
+        f.write("|" + "|".join(["---"] * len(spalten)) + "|\n")
+        for row in rows:
+            f.write("| " + " | ".join(_md_zelle(row.get(s, "")) for s in spalten)
+                    + " |\n")
+    print(f"Markdown-Tabelle geschrieben nach: {path}", file=sys.stderr)
 
 
 def main(argv: Optional[list] = None) -> int:
@@ -643,7 +651,8 @@ def main(argv: Optional[list] = None) -> int:
                              f"(Default: {' '.join(DEFAULT_SECTIONS)})")
     parser.add_argument("--offline", action="store_true",
                         help="Property-Liste aus properties_snapshot.json")
-    parser.add_argument("--csv", default=None, help="Ergebnis zusaetzlich als CSV")
+    parser.add_argument("--md", default=None,
+                        help="Ergebnistabelle zusaetzlich als Markdown-Datei")
     parser.add_argument("--top", type=int, default=10,
                         help="Anzahl der am besten belegten Items (0 = aus)")
     parser.add_argument("--population",
@@ -720,8 +729,8 @@ def main(argv: Optional[list] = None) -> int:
                   f"{b['iLabel']['value']}")
         print()
 
-    if args.csv:
-        write_csv(rows, args.csv)
+    if args.md:
+        write_markdown(rows, args.md)
     return 0
 
 

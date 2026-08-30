@@ -11,8 +11,8 @@ QuickStatements zur manuellen Prüfung ab:
 | `P2079` (Herstellungsverfahren) | Werkstoff | „Osemund entsteht im Osemundverfahren" |
 
 Wie überall in diesem Repo wird **nichts automatisch geschrieben**. Ergebnis
-sind eine CSV und ein Entwurf, in dem nur Abschnitt 1 überhaupt
-QuickStatements-Syntax ist.
+sind ein Befundbericht als Markdown-Tabelle und ein Entwurf, in dem nur
+Abschnitt 1 überhaupt QuickStatements-Syntax ist.
 
 ## Woher das Wissen kommt
 
@@ -278,7 +278,7 @@ python "Anwendung/Anwendung.py" --vorsichtig    # nichts einspielbar
 | `--auch-werkstoffklassen` | auch für Items ohne `P31` entwerfen. Ohne den Schalter bekommen nur Instanzen einen einspielbaren Vorschlag. |
 | `--limit` | nur die ersten N Werkstoffe, für Probeläufe |
 | `--vorsichtig` | auch die abgeleiteten Zeilen auskommentieren — dann enthält die Datei keine ausführbare Zeile |
-| `--csv`, `--qs-out` | Ziel und Namen der Ausgabedateien |
+| `--md`, `--qs-out` | Ziel und Namen der Ausgabedateien |
 
 Die Grundgesamtheiten kommen per Import aus
 [materialswiki/cli.py](../materialswiki/cli.py) — nicht kopiert, damit die
@@ -291,8 +291,8 @@ Eigenheit dieser Anwendung.
 ## Ausgabe
 
 ```
-anwendungen_befunde_<Zeitstempel>.csv          alle Befunde, eine Zeile je Befund
-qs_anwendungen_<Zeitstempel>.txt  Entwurf, nur Abschnitt 1 einspielbar
+anwendungen_befunde_<Zeitstempel>.md   alle Befunde als Markdown-Tabelle, eine Zeile je Befund
+qs_anwendungen_<Zeitstempel>.txt       Entwurf, nur Abschnitt 1 einspielbar
 ```
 
 Die `P2079`-Zeilen aus der Wikipedia tragen einen Beleg (`S143`+`S4656`,

@@ -221,3 +221,23 @@ Gesammelt nach .claude/rules/periodic-table-conventions.md und CLAUDE.md ("Arbei
 - **Zinn (Z=50)** (https://www.wikidata.org/wiki/Q1096): Dichte 7.28 g/cm3, durchweg ueber 5 g/cm3 -> Schwermetall; aktuell am Item verwendete Property fuer dieses Ziel: keine. Ziel waere Q105789 (Schwermetalle), aber welche Property (P31/P279/P1552) dafuer richtig ist, steht noch nicht fest.
 - **Zirconium (Z=40)** (https://www.wikidata.org/wiki/Q1038): Dichte 6.51 g/cm3, durchweg ueber 5 g/cm3 -> Schwermetall; aktuell am Item verwendete Property fuer dieses Ziel: keine. Ziel waere Q105789 (Schwermetalle), aber welche Property (P31/P279/P1552) dafuer richtig ist, steht noch nicht fest.
 
+## Lauf 2026-08-30 (Unterthema: ferromagnetische Werkstoffe als Unterklassen von Magnetwerkstoff Q949573)
+
+Ausgangsliste: 12 weich-/hartmagnetische Werkstofffamilien. Vollstaendige Analyse in
+`proposals/ferromagnetika_pruefung_2026-08-30.md`, unstrittige Entwuerfe in
+`proposals/qs_class_ferromagnetika_2026-08-30.txt`. Hier nur die Faelle ohne
+verbindliche Entscheidung (CLAUDE.md "Arbeitsweise" Punkt 3, .claude/rules/ontology-p31-p279-p361.md "Nicht selbst entscheiden").
+
+- **Werkstoff-Ast vs. Objekt-Ast bei Dauermagneten.** Wikidata fuehrt zwei Baeume:
+  `Q214609 material -> Q949573 Magnetwerkstoff -> Q9259184 ferromagnetic material`
+  und `Q11421 magnet -> Q353743 permanent magnet -> Q428788 rare-earth magnet`.
+  Folgende Items haengen ausschliesslich im Objekt-Ast, obwohl die Ausgangsliste
+  sie als *Werkstoffe* fuehrt. Ob sie zusaetzlich/stattdessen P279 -> Q949573
+  (bzw. Q9259184) bekommen sollen, ist eine Grundsatzfrage (Bauteil vs. Werkstoff):
+  - **Samarium-Cobalt-Magnet** (https://www.wikidata.org/wiki/Q905246): P279 -> Q428788; de-Label lautet sogar "Legierung" -> in sich widerspruechlich.
+  - **Neodym-Magnet (NdFeB)** (https://www.wikidata.org/wiki/Q908880): P279 -> Q428788.
+  - **FeCoCr-Magnet** (https://www.wikidata.org/wiki/Q11649507): P279 -> Q11421; nur japanisches Label.
+  - **Praseodym-Magnet** (https://www.wikidata.org/wiki/Q11335455) und **rare-earth magnet** (https://www.wikidata.org/wiki/Q428788) sind vom selben Muster betroffen.
+- **martensitische Staehle** (Liste #11): Das vorhandene Item **martensitischer nichtrostender Stahl** (https://www.wikidata.org/wiki/Q4704771) ist eine Gefuegeklasse des nichtrostenden Stahls (P279 -> Q172587), kein Magnetwerkstoff - die meisten martensitischen Staehle werden nicht als Magnete verwendet. Ein P279 -> Magnetwerkstoff waere hier falsch. Der gemeinte Dauermagnet-Werkstoff hat kein eigenes Item. Offen: eigenes Item anlegen oder Listeneintrag streichen?
+- **amorphe / nanokristalline Legierungen** (Liste #2): **amorphes Metall** (https://www.wikidata.org/wiki/Q527601) und **nanokristallines Material** (https://www.wikidata.org/wiki/Q6964018) sind generische Struktur-/Zustandsklassen, kein magnetspezifisches Konzept. Ein P279 -> Magnetwerkstoff an diese Items waere falsch. Gemeint ist "amorphe/nanokristalline weichmagnetische Legierung" (Vitrovac, Finemet) - kein Item vorhanden. Offen: Item anlegen?
+- **Mu-Metall** (https://www.wikidata.org/wiki/Q307036): Grenzfall Instanz vs. Klasse - Markenname einer NiFe(CuMo)-Legierung. Im QS-Entwurf als Klasse (P279 -> Q2554911) angesetzt; falls als normierte Einzelsorte zu behandeln, waere P31 richtig. Am Item pruefen.

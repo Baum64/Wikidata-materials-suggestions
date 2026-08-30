@@ -3,9 +3,9 @@ Materials Project -> Wikidata: Vorschlagsgenerator (nur bestehende Items)
 =========================================================================
 
 Erstellt KEINE neuen Wikidata-Items und schreibt nichts automatisch nach
-Wikidata. Es entstehen eine CSV-Vorschlagsliste zur manuellen Pruefung und
-ein QuickStatements-Entwurf, in dem nur Zeilen mit Status "VORSCHLAG"
-ausfuehrbar sind.
+Wikidata. Es entstehen eine Vorschlagsliste als Markdown-Tabelle zur manuellen
+Pruefung und ein QuickStatements-Entwurf, in dem nur Zeilen mit Status
+"VORSCHLAG" ausfuehrbar sind.
 
 Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
 
@@ -58,7 +58,6 @@ Vor dem Einsatz
 
 import argparse
 import collections
-import csv
 import datetime as dt
 import html as htmlmodul
 import json
@@ -78,7 +77,7 @@ _REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, _REPO)
 import konfig  # noqa: E402
 
-# Alle Vorschlagsdateien (CSV, QuickStatements) gehoeren nach proposals/ -
+# Alle Vorschlagsdateien (Markdown-Tabelle, QuickStatements) gehoeren nach proposals/ -
 # CLAUDE.md, "Arbeitsweise" Punkt 2. Unabhaengig vom Arbeitsverzeichnis.
 PROPOSALS_DIR = os.path.join(_REPO, "proposals")
 
@@ -127,9 +126,9 @@ from .formeln import (  # noqa: E402,F401
 )
 from .wikidata import _ECHTES_ELEMENTSYMBOL  # noqa: E402,F401
 from .ausgabe import (  # noqa: E402,F401
-    CSV_FIELDS, Reference, WIKIPEDIA_EN_QID, clear_quickstatements_draft,
-    make_row, quickstatements_value, round_significant, write_csv,
-    write_csv_streaming, write_quickstatements_draft,
+    TABELLENSPALTEN, Reference, WIKIPEDIA_EN_QID, clear_quickstatements_draft,
+    make_row, quickstatements_value, round_significant, write_markdown,
+    write_markdown_streaming, write_quickstatements_draft,
 )
 from . import infobox  # noqa: E402
 from .infobox import (  # noqa: E402,F401
@@ -476,8 +475,9 @@ def build_proposals(elements: Optional[list], max_entries: int,
                 "kandidaten": "; ".join(wd_match["candidates"]),
                 "entry_id": material.get("material_id", ""),
                 # In die Belegspalte, nicht in ein eigenes Feld: sonst faellt
-                # die DOI beim CSV-Schreiben unter den Tisch (CSV_FIELDS kennt
-                # kein "doi") und die Zeile ist nicht mehr rueckverfolgbar.
+                # die DOI beim Tabellen-Schreiben unter den Tisch
+                # (TABELLENSPALTEN kennt kein "doi") und die Zeile ist nicht
+                # mehr rueckverfolgbar.
                 "ref_doi": MP_DOI,
             }
             continue
@@ -709,7 +709,7 @@ def build_periodic_table_proposals(
 # ---------------------------------------------------------------------------
 
 def _chargen_pfad(basis: str, nummer: int, endung: str) -> str:
-    """vorschlaege.csv -> vorschlaege_charge03.csv"""
+    """vorschlaege.md -> vorschlaege_charge03.md"""
     stamm, alt = os.path.splitext(basis)
     return f"{stamm}_charge{nummer:02d}{endung or alt}"
 
@@ -772,7 +772,7 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
         charge = offen[versatz:versatz + args.batch_size]
         nummer = erste_nummer + versatz // args.batch_size
         erstes = offset + versatz + 1
-        csv_pfad = _chargen_pfad(out, nummer, ".csv")
+        tabellen_pfad = _chargen_pfad(out, nummer, ".md")
         qs_pfad = _chargen_pfad(qs_out, nummer, ".txt")
 
         print(f"\n--- Charge {nummer}: Items {erstes} bis "
@@ -786,7 +786,7 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
             auch_vorhandene=args.auch_vorhandene,
         )
         try:
-            zeilen = write_csv_streaming(zeilen_gen, csv_pfad)
+            zeilen = write_markdown_streaming(zeilen_gen, tabellen_pfad)
         except MissingApiKey as fehler:
             print(f"\nFEHLER: {fehler}", file=sys.stderr)
             return 2
@@ -855,8 +855,8 @@ def main():
     parser.add_argument(
         "--batch-size", type=int, default=None, metavar="N",
         help="mit --group: in Chargen zu je N Items arbeiten. Nach JEDER "
-        "Charge werden CSV und QuickStatements geschrieben - man kann also "
-        "einspielen, waehrend der Rest noch laeuft, und ein Abbruch kostet "
+        "Charge werden Vorschlagstabelle und QuickStatements geschrieben - man "
+        "kann also einspielen, waehrend der Rest noch laeuft, und ein Abbruch kostet "
         "hoechstens die angefangene Charge. Der Stand landet in einer "
         "Fortschrittsdatei, --weiter macht dort weiter",
     )
@@ -978,19 +978,19 @@ def main():
         "gesperrt, weil die Haelfte von ihnen bei 20 C ein Gas ist",
     )
     parser.add_argument("--out", default=None,
-                        help="CSV-Ausgabe (Default: "
-                             "proposals/vorschlaege_<Zeitstempel>.csv)")
+                        help="Vorschlagstabelle als Markdown (Default: "
+                             "proposals/vorschlaege_<Zeitstempel>.md)")
     parser.add_argument("--qs-out", default=None,
                         help="QuickStatements-Entwurf (Default: "
                              "proposals/qs_<Zeitstempel>.txt)")
     args = parser.parse_args()
 
     # Zeitstempel im Dateinamen, fuer beide Dateien derselbe: so ueberschreibt
-    # kein Lauf den vorherigen, und CSV und Entwurf sind als Paar erkennbar.
+    # kein Lauf den vorherigen, und Tabelle und Entwurf sind als Paar erkennbar.
     # Ohne --out/--qs-out nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
     os.makedirs(PROPOSALS_DIR, exist_ok=True)
-    out = args.out or os.path.join(PROPOSALS_DIR, f"vorschlaege_{stempel}.csv")
+    out = args.out or os.path.join(PROPOSALS_DIR, f"vorschlaege_{stempel}.md")
     qs_out = args.qs_out or os.path.join(
         PROPOSALS_DIR, f"qs_{stempel}.txt")
 
@@ -1020,20 +1020,20 @@ def main():
     # Bei selbst gesetzten Pfaden kann eine Datei aus einem frueheren Lauf
     # dastehen. Den Entwurf deshalb VOR dem Lauf leeren - sonst laege nach
     # einem Abbruch der vollstaendige Entwurf von gestern neben der frisch
-    # und nur teilweise geschriebenen CSV von heute.
+    # und nur teilweise geschriebenen Vorschlagstabelle von heute.
     clear_quickstatements_draft(qs_out)
 
     print(f"Schreibe laufend nach: {os.path.abspath(out)}", file=sys.stderr)
     try:
-        proposals = write_csv_streaming(proposals, out)
+        proposals = write_markdown_streaming(proposals, out)
     except MissingApiKey as fehler:
         # Kein Traceback - das ist kein Programmfehler, sondern eine fehlende
         # Voraussetzung, und die Abhilfe steht in der Meldung.
         print(f"\nFEHLER: {fehler}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
-        # Die CSV ist durch das flush() bereits vollstaendig bis zur letzten
-        # verarbeiteten Zeile; nur der QuickStatements-Entwurf entfaellt.
+        # Die Vorschlagstabelle ist durch das flush() bereits vollstaendig bis
+        # zur letzten verarbeiteten Zeile; nur der QuickStatements-Entwurf entfaellt.
         print(
             f"\nAbgebrochen. Bereits geschriebene Zeilen stehen in "
             f"{os.path.abspath(out)}; {os.path.abspath(qs_out)} ist als "

@@ -31,36 +31,36 @@ output/
 #
 # Die Dateinamen tragen Gruppe und Zeitstempel und im Chargenbetrieb zusaetzlich
 # eine Chargennummer, z. B.
-#     vorschlaege_minerale_2026-08-16_1844_charge04.csv
+#     vorschlaege_minerale_2026-08-16_1844_charge04.md
 #     qs_minerale_2026-08-16_1844_charge04.txt
 #     qs_minerale_2026-08-16_1844.fortschritt.json
 # Die Muster sind deshalb bewusst weit gefasst - ein enges Muster wie
 # "qs_entwurf*.txt" hat die Chargendateien nicht mehr erfasst.
 # ---------------------------------------------------------------------------
-vorschlaege*.csv
+vorschlaege*.md
 vorschlaege*.log
 qs_*.txt
 qs_*.fortschritt.json
 
 # aeltere Multi-Source-Variante (--out / --qs-out)
-werkstoffe_vorschlaege.csv
+werkstoffe_vorschlaege.md
 werkstoffe_qs_entwurf.txt
 
-# benchmark/benchmark.py (--csv) und die Protokolle aus lauf.py.
+# benchmark/benchmark.py (--md) und die Protokolle aus lauf.py.
 # benchmark/properties_snapshot.json ist bewusst versioniert, damit --offline
 # reproduzierbar bleibt - kein Muster hier darf es treffen.
-abdeckung*.csv
+abdeckung*.md
 benchmark_*.log
 
 # Material class structure/ClassCheck.py: die gestaffelte Empfehlung (--out,
-# qs_class_*.txt faellt schon unter qs_*.txt weiter oben) und die optionale
-# Befund-CSV (--csv), die ein eigenes Muster braucht.
+# qs_class_*.txt faellt schon unter qs_*.txt weiter oben) und der optionale
+# Befundbericht (--md), der ein eigenes Muster braucht.
 qs_class*.log
-qs_class_befunde*.csv
+qs_class_befunde*.md
 
-# Anwendung/Anwendung.py (--csv; der Entwurf qs_anwendungen_*.txt faellt
+# Anwendung/Anwendung.py (--md; der Entwurf qs_anwendungen_*.txt faellt
 # schon unter das Muster qs_*.txt weiter oben)
-anwendungen_befunde*.csv
+anwendungen_befunde*.md
 
 # Altbestand vor der qs_-Umbenennung (quickstatements_* -> qs_*,
 # p279_empfehlung_* -> qs_class_*). Aeltere Laufdateien tragen noch die
@@ -71,13 +71,11 @@ p279_empfehlung*.txt
 p279_empfehlung*.log
 p279_befunde*.csv
 
-# Material class structure/visualisierung.py (CSV + Graphen)
-werkstoff_check.csv
-werkstoff_graph.png
+# Material class structure/visualisierung.py (Graphen)
 subclass_tree_material.png
 trace_*.png
 szenario_*.png
-szenario_*.csv
+szenario_*.md
 
 # Visualisierung/Diagramme.ipynb: die eigenstaendige Diagrammseite und der
 # Zwischenspeicher der SPARQL-Antwort. Beides ist reproduzierbar - das

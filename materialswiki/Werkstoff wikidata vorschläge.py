@@ -7,7 +7,8 @@ bleiben unveraendert:
 
   - Es werden NIEMALS neue Wikidata-Items angelegt, nur bestehende ergaenzt.
   - Es wird NICHTS automatisch nach Wikidata geschrieben, nur eine
-    Vorschlagsliste (CSV) + QuickStatements-Entwurf zur manuellen Pruefung.
+    Vorschlagsliste (Markdown-Tabelle) + QuickStatements-Entwurf zur
+    manuellen Pruefung.
   - Referenzierung: DOI wird bevorzugt. Ist keine DOI verfuegbar, wird
     "Referenz-URL" (P854) + "Abgerufen am" (P813) als Fallback verwendet.
 
@@ -37,7 +38,6 @@ Aufruf
 """
 
 import argparse
-import csv
 import datetime as dt
 import os
 import sys
@@ -100,7 +100,7 @@ class Reference:
     def mode(self) -> str:
         return "DOI" if self.doi else "URL+Datum"
 
-    def as_csv_fields(self) -> dict:
+    def as_table_fields(self) -> dict:
         return {
             "ref_mode": self.mode,
             "ref_doi": self.doi or "",
@@ -306,7 +306,7 @@ def build_proposals(raw_entries: list) -> list:
             "value": entry["value"],
             "formula": formula,
         }
-        row.update(entry["reference"].as_csv_fields())
+        row.update(entry["reference"].as_table_fields())
         row["_ref_obj"] = entry["reference"]
         row["_pid"] = pid
         proposals.append(row)
@@ -318,14 +318,22 @@ def build_proposals(raw_entries: list) -> list:
 # Ausgabe
 # ---------------------------------------------------------------------------
 
-def write_csv(proposals: list, path: str) -> None:
-    fieldnames = ["status", "source", "qid", "label", "property", "value", "formula",
-                  "ref_mode", "ref_doi", "ref_url", "ref_retrieved", "ref_note"]
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
+def _md_zelle(wert) -> str:
+    """Ein Wert als Markdown-Tabellenzelle: Pipe maskiert, Zeilenumbruch zu <br>."""
+    return (str(wert if wert is not None else "")
+            .replace("\\", "\\\\").replace("|", "\\|")
+            .replace("\r\n", " ").replace("\n", "<br>").replace("\r", " "))
+
+
+def write_markdown(proposals: list, path: str) -> None:
+    spalten = ["status", "source", "qid", "label", "property", "value", "formula",
+               "ref_mode", "ref_doi", "ref_url", "ref_retrieved", "ref_note"]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("| " + " | ".join(spalten) + " |\n")
+        f.write("|" + "|".join(["---"] * len(spalten)) + "|\n")
         for row in proposals:
-            writer.writerow(row)
+            f.write("| " + " | ".join(_md_zelle(row.get(s, "")) for s in spalten)
+                    + " |\n")
     print(f"Vorschlagsliste: {path}", file=sys.stderr)
 
 
@@ -354,7 +362,7 @@ def main():
     parser.add_argument("--formulas", nargs="+", required=True, help="z. B. --formulas TiO2 Fe2O3 NaCl")
     parser.add_argument("--sources", nargs="+", default=["materials_project", "pubchem"],
                          choices=["materials_project", "pubchem"])
-    parser.add_argument("--out", default="werkstoffe_vorschlaege.csv")
+    parser.add_argument("--out", default="werkstoffe_vorschlaege.md")
     parser.add_argument("--qs-out", default="werkstoffe_qs_entwurf.txt")
     args = parser.parse_args()
 
@@ -365,7 +373,7 @@ def main():
         raw_entries += fetch_pubchem(args.formulas)
 
     proposals = build_proposals(raw_entries)
-    write_csv(proposals, args.out)
+    write_markdown(proposals, args.out)
     write_quickstatements_draft(proposals, args.qs_out)
 
     n_vorschlag = sum(1 for p in proposals if p.get("status") == "VORSCHLAG")

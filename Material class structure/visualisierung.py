@@ -18,22 +18,18 @@ Property:P186 "made from material" abgeleitet):
   eingeordnet zu sein - sie haengt stattdessen an einer parallelen
   Klassenhierarchie (alloy/chemical compound/...).
 
-  Dieses Skript prueft genau das empirisch fuer eine Liste von Werkstoffen
-  und macht sichtbar, welche Werkstoffe tatsaechlich unter Q214609 haengen
-  und welche ueber einen parallelen Zweig laufen (was NICHT automatisch ein
-  Fehler ist, aber fuer deine Zwecke ueberraschend sein kann).
+  Dieses Skript macht das empirisch sichtbar: die Trace-Graphen zeigen fuer
+  feste Gruppen von Werkstoffen und Elementen, welche tatsaechlich unter
+  Q214609 haengen und welche ueber einen parallelen Zweig laufen (was NICHT
+  automatisch ein Fehler ist, aber fuer deine Zwecke ueberraschend sein kann).
 
 Ausgabe
 -------
-  - werkstoff_check.csv          : Tabelle je geprueftem Werkstoff
-  - werkstoff_graph.png          : Graph mit den geprueften Werkstoffen und
-                                    ihrer tatsaechlichen Anbindung (rot = kein
-                                    Pfad zu Q214609, gruen = Pfad vorhanden)
   - trace_<gruppe>_<achse>.png   : Pfade der Gruppen aus TRACE_GROUPS hinauf zu
                                     den Achsen aus TRACE_ROOTS
-  - szenario_*.png / .csv        : nur mit --szenario. Drei feste Ausschnitte
+  - szenario_*.png / .md         : nur mit --szenario. Drei feste Ausschnitte
                                     (periodensystem, legierungen, minerale) -
-                                    siehe Abschnitt 5.
+                                    siehe Abschnitt 4.
   - subclass_tree_material.png   : nur mit --tree. Der volle Baum umfasst rund
                                     936.000 Klassen; der zeichenbare Ausschnitt
                                     daraus ist willkuerlich und beantwortet die
@@ -42,8 +38,6 @@ Ausgabe
 Nutzung
 -------
   python "Material class structure/visualisierung.py"
-  # oder mit eigener Liste:
-  python "Material class structure/visualisierung.py" --materials Stahl Titan Beton Diamant PVC
   # oder eines der drei Szenarien:
   python "Material class structure/visualisierung.py" --szenario periodensystem
   python "Material class structure/visualisierung.py" --szenario legierungen minerale
@@ -51,7 +45,6 @@ Nutzung
 """
 
 import argparse
-import csv
 import os
 import sys
 import textwrap
@@ -66,10 +59,8 @@ import networkx as nx
 import matplotlib.pyplot as plt
 
 # Die Wikidata-Zugriffsschicht teilt sich dieses Skript mit
-# ClassCheck.py daneben - HTTP-Retry, SPARQL-POST, ASK.
-from wikidata_graph import (  # noqa: E402
-    WIKIDATA_API, ask, request_with_retry, sparql_json as sparql_query,
-)
+# ClassCheck.py daneben - HTTP-Retry, SPARQL-POST.
+from wikidata_graph import sparql_json as sparql_query  # noqa: E402
 
 # Die Soll-Zuordnung Ordnungszahl -> Elementkategorie/-Gruppe und die
 # QID-Tabellen kommen aus ClassCheck.py - importiert, nicht kopiert, damit
@@ -82,18 +73,6 @@ from ClassCheck import (  # noqa: E402
 
 ROOT_QID = "Q214609"  # material
 ROOT_LABEL = "material"
-
-DEFAULT_MATERIALS = [
-    "Stahl", "Edelstahl", "Titan", "Aluminium", "Beton", "Glas",
-    "Diamant", "Polyethylen", "PVC", "Siliciumcarbid", "Holz", "Kupfer",
-    # zweite Gruppe: bewusst so gewaehlt, dass moeglichst viele der
-    # parallelen P186-Werttypen abgedeckt sind - Legierungen (Messing,
-    # Bronze, Gusseisen), Elemente (Magnesium, Graphit als Modifikation),
-    # Verbindungen (Wolframcarbid), Polymere (Polyamid, Epoxidharz,
-    # Naturkautschuk) und ein Sammelbegriff (Keramik).
-    "Messing", "Bronze", "Gusseisen", "Keramik", "Graphit", "Magnesium",
-    "Wolframcarbid", "Polyamid", "Epoxidharz", "Naturkautschuk",
-]
 
 # Die trace_*.png-Graphen entstanden urspruenglich aus Hand-Aufrufen von
 # --trace/--trace-out; die QID-Listen dazu waren nirgends festgehalten, also
@@ -413,109 +392,8 @@ def fetch_direct_subclasses(root_qid: str) -> list:
 
 
 # ---------------------------------------------------------------------------
-# 2) Einzelne Werkstoffe aufloesen und pruefen
+# 2) Ausgabe: Graphen
 # ---------------------------------------------------------------------------
-
-def resolve_qid(label: str, lang: str = "de") -> Optional[dict]:
-    resp = request_with_retry(
-        "GET", WIKIDATA_API,
-        params={
-            "action": "wbsearchentities", "search": label, "language": lang,
-            "format": "json", "limit": 1, "type": "item",
-        },
-    )
-    hits = resp.json().get("search", [])
-    if not hits:
-        return None
-    return {"qid": hits[0]["id"], "label": hits[0].get("label", label)}
-
-
-# hint:Prior bezieht sich auf das UNMITTELBAR davor stehende Triple, muss also
-# HINTER das P279*-Pfadtriple. "forward" zwingt Blazegraph, vom gebundenen Item
-# nach oben zu laufen, statt die ~936.000 Klassen unter der Wurzel aufzuzaehlen.
-# Gemessen an Q11427 (Edelstahl): ohne Hint 42s, mit Hint 1,5s.
-GEARING_HINT = 'hint:Prior hint:gearing "forward" .'
-
-
-def path_via_subclass(qid: str, root_qid: str = ROOT_QID) -> bool:
-    """Ist item selbst (transitiv) eine Subklasse von root?"""
-    return ask(f'ASK {{ wd:{qid} wdt:P279* wd:{root_qid} . {GEARING_HINT} }}')
-
-
-def path_via_instance_of(qid: str, root_qid: str = ROOT_QID) -> bool:
-    """Ist item eine Instanz einer (transitiven) Subklasse von root?
-    (deckt den haeufigen Fall ab, dass ein konkreter Werkstoff per P31 an
-    einer Klasse haengt, die selbst unter Q214609 liegt.)
-
-    Der Pfad ist bewusst in zwei Triples aufgeteilt: an ein
-    P31/P279*-Pfadtriple laesst sich der Gearing-Hint nicht haengen, und
-    ohne ihn laeuft die Abfrage in den Timeout.
-    """
-    return ask(
-        f'ASK {{ wd:{qid} wdt:P31 ?c . ?c wdt:P279* wd:{root_qid} . {GEARING_HINT} }}'
-    )
-
-
-def get_direct_classes(qid: str) -> dict:
-    """Direkte P31- und P279-Werte mit Labels."""
-    sparql = f"""
-    SELECT ?p31 ?p31Label ?p279 ?p279Label WHERE {{
-      OPTIONAL {{ wd:{qid} wdt:P31 ?p31 . }}
-      OPTIONAL {{ wd:{qid} wdt:P279 ?p279 . }}
-      SERVICE wikibase:label {{ bd:serviceParam wikibase:language "de,en". }}
-    }}
-    """
-    p31, p279 = set(), set()
-    for b in sparql_query(sparql).get("results", {}).get("bindings", []):
-        if "p31" in b:
-            p31.add(b.get("p31Label", {}).get("value", b["p31"]["value"]))
-        if "p279" in b:
-            p279.add(b.get("p279Label", {}).get("value", b["p279"]["value"]))
-    return {"instance_of": sorted(p31), "subclass_of": sorted(p279)}
-
-
-def check_materials(labels: list) -> list:
-    rows = []
-    for label in labels:
-        # gedrosselt wird zentral in request_with_retry
-        resolved = resolve_qid(label)
-        if not resolved:
-            rows.append({"input": label, "status": "NICHT_GEFUNDEN"})
-            continue
-        qid = resolved["qid"]
-
-        via_subclass = path_via_subclass(qid)
-        via_instance = path_via_instance_of(qid)
-        classes = get_direct_classes(qid)
-
-        reachable = via_subclass or via_instance
-        rows.append({
-            "input": label,
-            "qid": qid,
-            "label": resolved["label"],
-            "status": "OK (Pfad zu material vorhanden)" if reachable else "AUFFAELLIG (kein Pfad zu material)",
-            "via_subclass_of": via_subclass,
-            "via_instance_of": via_instance,
-            "direct_instance_of": "; ".join(classes["instance_of"]) or "-",
-            "direct_subclass_of": "; ".join(classes["subclass_of"]) or "-",
-        })
-    return rows
-
-
-# ---------------------------------------------------------------------------
-# 3) Ausgabe: CSV + Graphen
-# ---------------------------------------------------------------------------
-
-def write_report_csv(rows: list, path: str = "werkstoff_check.csv") -> None:
-    fieldnames = ["input", "qid", "label", "status", "via_subclass_of",
-                  "via_instance_of", "direct_instance_of", "direct_subclass_of"]
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fieldnames, extrasaction="ignore")
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-    print(f"Bericht geschrieben: {path}", file=sys.stderr)
-
 
 def plot_subclass_tree(edges: list, path: str = "subclass_tree_material.png") -> None:
     g = nx.DiGraph()
@@ -542,45 +420,8 @@ def plot_subclass_tree(edges: list, path: str = "subclass_tree_material.png") ->
     print(f"Graph geschrieben: {path}", file=sys.stderr)
 
 
-def plot_material_check(rows: list, path: str = "werkstoff_graph.png") -> None:
-    g = nx.DiGraph()
-    g.add_node(ROOT_QID, label=ROOT_LABEL, color="gold")
-
-    for row in rows:
-        if row.get("status") == "NICHT_GEFUNDEN":
-            continue
-        node_id = row["qid"]
-        reachable = row["via_subclass_of"] or row["via_instance_of"]
-        g.add_node(node_id, label=row["label"], color="lightgreen" if reachable else "salmon")
-        # direkte Verbindung zur Wurzel nur zur Illustration einzeichnen,
-        # wenn tatsaechlich ein Pfad existiert
-        if reachable:
-            g.add_edge(ROOT_QID, node_id, style="reachable")
-        else:
-            # gestrichelte "fehlende" Verbindung visuell andeuten
-            g.add_edge(ROOT_QID, node_id, style="missing")
-
-    plt.figure(figsize=(12, 8))
-    pos = nx.spring_layout(g, k=0.8, seed=42)
-    colors = [g.nodes[n].get("color", "lightblue") for n in g.nodes]
-    solid_edges = [(u, v) for u, v, d in g.edges(data=True) if d.get("style") == "reachable"]
-    missing_edges = [(u, v) for u, v, d in g.edges(data=True) if d.get("style") == "missing"]
-
-    labels = nx.get_node_attributes(g, "label")
-    nx.draw_networkx_nodes(g, pos, node_color=colors, node_size=1200)
-    nx.draw_networkx_labels(g, pos, labels=labels, font_size=7)
-    nx.draw_networkx_edges(g, pos, edgelist=solid_edges, edge_color="green")
-    nx.draw_networkx_edges(g, pos, edgelist=missing_edges, edge_color="red", style="dashed")
-    plt.title("Grün = Pfad zu 'material' (Q214609) vorhanden | Rot = kein Pfad (paralleler Zweig)")
-    plt.axis("off")
-    plt.tight_layout()
-    plt.savefig(path, dpi=150)
-    plt.close()
-    print(f"Graph geschrieben: {path}", file=sys.stderr)
-
-
 # ---------------------------------------------------------------------------
-# 4) Trace-Laeufe
+# 3) Trace-Laeufe
 # ---------------------------------------------------------------------------
 
 def run_trace(qids: list, root: str, out_png: str, title: str = "") -> int:
@@ -635,7 +476,7 @@ def run_default_traces(out_dir: str = ".") -> None:
 
 
 # ---------------------------------------------------------------------------
-# 5) Szenarien: Periodensystem, Legierungen, Minerale
+# 4) Szenarien: Periodensystem, Legierungen, Minerale
 # ---------------------------------------------------------------------------
 #
 # Drei feste Ausschnitte der Klassenhierarchie, je einer pro --szenario. Sie
@@ -958,22 +799,29 @@ def plot_periodensystem(elemente: list, path_png: str) -> None:
     print(f"Graph geschrieben: {path_png}", file=sys.stderr)
 
 
-def write_elemente_csv(elemente: list, path: str) -> None:
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["ordnungszahl", "symbol", "label", "qid",
-                         "soll_kategorie", "kategorie_status",
-                         "kategorie_property", "soll_gruppe", "gruppe_status"])
+def _md_zelle(wert) -> str:
+    return (str(wert if wert is not None else "")
+            .replace("\\", "\\\\").replace("|", "\\|").replace("\n", "<br>"))
+
+
+def write_elemente_markdown(elemente: list, path: str) -> None:
+    spalten = ["ordnungszahl", "symbol", "label", "qid", "soll_kategorie",
+               "kategorie_status", "kategorie_property", "soll_gruppe",
+               "gruppe_status"]
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("| " + " | ".join(spalten) + " |\n")
+        f.write("|" + "|".join(["---"] * len(spalten)) + "|\n")
         for el in elemente:
             _, kstatus, kprop = kategorie_status(el)
             soll = KATEGORIE_NACH_Z.get(el["z"])
             gs = gruppe_status(el)
-            writer.writerow([
+            zeile = [
                 el["z"], el["symbol"], el["label"], el["qid"],
                 ELEMENTKATEGORIEN.get(soll, "") if soll else "",
                 kstatus, kprop,
                 gs[0] if gs else "", gs[1] if gs else "kein (f-Block)",
-            ])
+            ]
+            f.write("| " + " | ".join(_md_zelle(z) for z in zeile) + " |\n")
     print(f"Bericht geschrieben: {path}", file=sys.stderr)
 
 
@@ -1072,7 +920,7 @@ def szenario_periodensystem(out_dir: str) -> None:
           file=sys.stderr)
     elemente = fetch_elemente()
     print(f"  {len(elemente)} Elemente geladen.", file=sys.stderr)
-    write_elemente_csv(elemente, os.path.join(out_dir, "szenario_periodensystem.csv"))
+    write_elemente_markdown(elemente, os.path.join(out_dir, "szenario_periodensystem.md"))
     plot_periodensystem(elemente, os.path.join(out_dir, "szenario_periodensystem.png"))
 
     falsch = [el for el in elemente if kategorie_status(el)[1] == "falsch"]
@@ -1132,7 +980,6 @@ SZENARIEN = {
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--materials", nargs="+", default=DEFAULT_MATERIALS)
     parser.add_argument("--tree", action="store_true",
                          help="zusaetzlich subclass_tree_material.png zeichnen. "
                               "Standardmaessig AUS: der Ausschnitt, der sich aus "
@@ -1200,15 +1047,6 @@ def main():
                                     max_nodes=args.max_nodes)
         print(f"{len(edges)} Kanten gefunden.", file=sys.stderr)
         plot_subclass_tree(edges)
-
-    print("Pruefe einzelne Werkstoffe ...", file=sys.stderr)
-    rows = check_materials(args.materials)
-    write_report_csv(rows)
-    plot_material_check(rows)
-
-    print("\n--- Kurzuebersicht ---", file=sys.stderr)
-    for row in rows:
-        print(f"  {row['input']:20s} -> {row.get('status')}", file=sys.stderr)
 
     # frueher nur von Hand aufgerufen - dadurch veralteten die Bilder still
     if not args.skip_traces:

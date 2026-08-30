@@ -7,7 +7,7 @@ Zwei Werkzeuge zur **Wikidata-Klassenhierarchie der Werkstoffe** — wie
 | Skript | Was es tut | Ausgabe |
 |---|---|---|
 | **[ClassCheck.py](ClassCheck.py)** | prüft die Struktur auf zwölf Arten und schreibt **eine gestaffelte Empfehlung** — vier Stufen nach Beweiskraft | `proposals/qs_class_<Population>_<Zeitstempel>.txt` |
-| **[visualisierung.py](visualisierung.py)** | prüft und **zeichnet**, wie Werkstoffe an der Wurzel hängen und welche über einen parallelen Zweig laufen; mit `--szenario` zusätzlich Periodensystem, Legierungen und Minerale | `werkstoff_check.csv`, `*.png` |
+| **[visualisierung.py](visualisierung.py)** | **zeichnet**, wie Werkstoffe an der Wurzel hängen und welche über einen parallelen Zweig laufen; mit `--szenario` zusätzlich Periodensystem, Legierungen und Minerale | `*.png` (+ `szenario_periodensystem.md`) |
 
 Die beiden ergänzen sich: die Visualisierung beantwortet **ob und wie** ein
 Werkstoff an der Wurzel hängt, die Vorschlagsgenerierung, **was daran zu
@@ -54,8 +54,8 @@ python "Material class structure/ClassCheck.py" --tiefe 3 --beleg beides
 python "Material class structure/ClassCheck.py" --vorsichtig   # nichts einspielbar
 ```
 
-Es entsteht **eine** Datei: `proposals/qs_class_<Population>_<Zeitstempel>.txt`. Eine
-Befund-CSV gibt es nur auf Wunsch (`--csv`).
+Es entsteht **eine** Datei: `proposals/qs_class_<Population>_<Zeitstempel>.txt`. Einen
+Befundbericht als Markdown-Tabelle gibt es nur auf Wunsch (`--md`).
 
 ## Die Staffelung
 
@@ -126,7 +126,7 @@ klassifiziert, eine P361-Zeile ordnet ein Teil einem Ganzen zu.
 
 Trägt jeder Vorschlag einer Zielgruppe dieselbe Prüfanweisung, steht sie
 einmal im Gruppenkopf statt in jedem Eintrag. Der Kopf der Datei zählt die
-Befunde zusätzlich nach Eigenschaft auf, die `--csv` ist ebenso sortiert.
+Befunde zusätzlich nach Eigenschaft auf, die `--md`-Tabelle ist ebenso sortiert.
 
 ## Die zwölf Prüfungen
 
@@ -371,7 +371,7 @@ und Handelsprodukte, ein Treffer gegen die wäre fast immer Zufall.
 | `oxide` | Oxide mit Summenformel unter Q50690 — dieselbe Menge wie `python -m lauf oxide` und der Benchmark (`OXID_PATTERN` importiert, nicht kopiert). Bringt eine eigene Prüfungsauswahl mit (`kennzahlen`, `redundant`, `verkehrt`, `instanz-als-klasse`, `zyklus`, `parallelzweig`) und `--bereichswurzel Q50690` |
 | `periodensystem` | die 118 chemischen Elemente (`P31 = Q11344`, Ordnungszahl ≤ 118) |
 | `polymer` | **Klassen** der Polymere/Kunststoffe unter Q11474 (`P279*`, ~206) — dieselbe Wurzel wie `python -m lauf polymer` und der Benchmark, dort aber mitsamt Instanzen. Für die Strukturprüfung nur die Klassen, sonst meldet `parallelzweig` massenhaft „kein `P279*`-Pfad zu material" für konkrete Kunststoffsorten. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11474` |
-| `magnetwerkstoffe` | Magnetwerkstoffe unter Q949573, **ohne Isotope** (`FILTER NOT EXISTS { ?i wdt:P1086 ?z }`) — sonst zieht ein schiefer Instanzpfad über Nickel (Q744) ~40 Nickel-Isotope herein. Winzig (~10 Klassen), `MAGNET_PATTERN` mit dem Benchmark identisch, `--bereichswurzel Q949573` |
+| `magnetwerkstoffe` | Magnetwerkstoffe unter Q949573, **ohne Isotope** (`FILTER NOT EXISTS { ?i wdt:P1086 ?z }`) — sonst zieht ein schiefer Instanzpfad über Nickel (Q744) ~40 Nickel-Isotope herein. Winzig (~17 Klassen), `MAGNET_PATTERN` mit dem Benchmark identisch, `--bereichswurzel Q949573`. `MAGNET_PATTERN` verankert neben Q949573 auch **Q2554911** (weichmagnetische Werkstoffe) und **Q9259184** (ferromagnetic material) als eigene Wurzeln, damit der ganze ferromagnetische Zweig nicht an einer einzigen P279-Kante hängt |
 
 Die Muster kommen aus [materialswiki/cli.py](../materialswiki/cli.py) — sie
 werden importiert, nicht kopiert, damit dieses Werkzeug und der
@@ -524,12 +524,8 @@ tatsächlich modellierten Werkstoffen vorbei.
 ## Nutzung
 
 ```bash
-# Standardlauf: Werkstoff-Check der Default-Liste + Trace-Matrix
+# Standardlauf: Trace-Matrix aus TRACE_GROUPS × TRACE_ROOTS
 python "Material class structure/visualisierung.py"
-
-# eigene Werkstoffliste
-python "Material class structure/visualisierung.py" \
-    --materials Stahl Titan Beton Diamant PVC
 
 # Pfade einzelner QIDs nach oben verfolgen, alle in einem Graphen
 python "Material class structure/visualisierung.py" \
@@ -566,7 +562,7 @@ python "Material class structure/visualisierung.py" --szenario alle
 
 | Szenario | Was gezeichnet wird | Dateien |
 |---|---|---|
-| `periodensystem` | alle 118 Elemente im PSE-Raster. **Füllung** = die aus der Ordnungszahl folgende Elementkategorie; **Rand** = ob deren Zugehörigkeit als `part of` (P361, grün — so will es [periodic-table-conventions.md](../.claude/rules/periodic-table-conventions.md) Fall 2), als `P279`/`P31` (dick rot — falsche Property) oder gar nicht (rot gestrichelt) hängt. Unten in jeder Zelle das Gruppen-Ergebnis (`G8 ✓/!/–`). Die Kategorie/Gruppen-QIDs und die Soll-Tabelle kommen aus `ClassCheck.py` (importiert, nicht kopiert) | `szenario_periodensystem.png`, `szenario_periodensystem.csv` |
+| `periodensystem` | alle 118 Elemente im PSE-Raster. **Füllung** = die aus der Ordnungszahl folgende Elementkategorie; **Rand** = ob deren Zugehörigkeit als `part of` (P361, grün — so will es [periodic-table-conventions.md](../.claude/rules/periodic-table-conventions.md) Fall 2), als `P279`/`P31` (dick rot — falsche Property) oder gar nicht (rot gestrichelt) hängt. Unten in jeder Zelle das Gruppen-Ergebnis (`G8 ✓/!/–`). Die Kategorie/Gruppen-QIDs und die Soll-Tabelle kommen aus `ClassCheck.py` (importiert, nicht kopiert) | `szenario_periodensystem.png`, `szenario_periodensystem.md` |
 | `legierungen` | 10 Legierungsklassen (Stahl, rostfreier Stahl, Bronze, Messing, Gusseisen, Kupfer-, Aluminium-, Nickelbasis-, Titanlegierung, Superlegierung) mit ihren **direkten Subklassen** — der Blick nach unten statt nach oben | `szenario_legierungen.png` |
 | `minerale` | 10 Mineralarten (Quarz, Calcit, Pyrit, Hämatit, Magnetit, Halit, Gips, Korund, Fluorit, Diamant) mit ihren Pfaden hinauf zu `Mineral` (Q7946) | `szenario_minerale.png` |
 
@@ -600,7 +596,6 @@ Schiff und „Gips" auf einen Familiennamen auf.
 
 | Option | Bedeutung |
 |---|---|
-| `--materials` | zu prüfende Werkstoffe (Standard: 22 Stück — Stahl, Edelstahl, Titan, Aluminium, Beton, Glas, Diamant, Polyethylen, PVC, Siliciumcarbid, Holz, Kupfer, Messing, Bronze, Gusseisen, Keramik, Graphit, Magnesium, Wolframcarbid, Polyamid, Epoxidharz, Naturkautschuk) |
 | `--tree` | zusätzlich `subclass_tree_material.png` zeichnen (standardmäßig **aus**, siehe unten) |
 | `--skip-traces` | die `trace_<gruppe>_<achse>.png`-Matrix überspringen |
 | `--depth` | Tiefe des Subclass-Baums (Standard 1 = die 413 direkten Subklassen, vollständig) |
@@ -614,7 +609,8 @@ Schiff und „Gips" auf einen Familiennamen auf.
 
 **QIDs direkt angeben**, wo es auf Genauigkeit ankommt: die Labelsuche löst
 z.B. „Stahl" auf `Q1236029` (Familienname) auf statt auf den Werkstoff
-`Q11427`. Genau dieser Fall steht als `AUFFAELLIG` in der Beispiel-CSV.
+`Q11427`. Deshalb stehen `TRACE_GROUPS`, `SZENARIO_LEGIERUNGEN` und
+`SZENARIO_MINERALE` als QID-Listen im Skript.
 
 Der volle Baum unter Q214609 umfasst rund **936.000 Klassen** — weder in einer
 Abfrage holbar noch als Bild lesbar. Ab `--depth 2` liefert `--max-nodes`
@@ -625,9 +621,8 @@ seit jeher optional und wird nur noch mit `--tree` gezeichnet.
 
 ## Ausgabedateien
 
-Alle sind gitignoriert. `werkstoff_check.csv`, `werkstoff_graph.png` und (mit
-`--tree`) `subclass_tree_material.png` landen wie im übrigen Repo im
-**aktuellen Arbeitsverzeichnis**; die `trace_*.png` der Matrix schreibt der
+Alle sind gitignoriert. Mit `--tree` landet `subclass_tree_material.png` wie im
+übrigen Repo im **aktuellen Arbeitsverzeichnis**; die `trace_*.png` der Matrix schreibt der
 Standardlauf dagegen **neben das Skript**, damit genau die Dateien
 überschrieben werden, die dort schon liegen — sonst veralten sie wieder,
 sobald jemand aus dem Repo-Wurzelverzeichnis startet. `--trace` folgt
@@ -636,16 +631,10 @@ demselben Grund ebenfalls neben sich, `--szenario-out` verlegt sie.
 
 | Datei | Inhalt |
 |---|---|
-| `werkstoff_check.csv` | eine Zeile je geprüftem Werkstoff: `input`, `qid`, `label`, `status`, `via_subclass_of`, `via_instance_of`, `direct_instance_of`, `direct_subclass_of` |
-| `werkstoff_graph.png` | die geprüften Werkstoffe mit ihrer tatsächlichen Anbindung (rot = kein Pfad zu Q214609, grün = Pfad vorhanden) |
 | `subclass_tree_material.png` | nur mit `--tree`: Subclass-Hierarchie unter Q214609, begrenzt durch `--depth` / `--max-nodes` |
 | `trace_<gruppe>_<achse>.png` | Pfad-Graphen der Matrix `TRACE_GROUPS` × `TRACE_ROOTS` (Standardlauf) |
 | `trace_graph.png` | Pfad-Graph eines Einzelaufrufs mit `--trace` (Name über `--trace-out`) |
 | `szenario_periodensystem.png` | nur mit `--szenario`: PSE-Raster, Füllung = Kategorie aus der Ordnungszahl, Rand = P361-Zustand (siehe oben) |
-| `szenario_periodensystem.csv` | nur mit `--szenario`: je Element `ordnungszahl`, `symbol`, `label`, `qid`, `soll_kategorie`, `kategorie_status` (ok/falsch/fehlt/strittig), `kategorie_property` (P361 bzw. P279→P361), `soll_gruppe`, `gruppe_status` |
+| `szenario_periodensystem.md` | nur mit `--szenario`: Markdown-Tabelle, je Element `ordnungszahl`, `symbol`, `label`, `qid`, `soll_kategorie`, `kategorie_status` (ok/falsch/fehlt/strittig), `kategorie_property` (P361 bzw. P279→P361), `soll_gruppe`, `gruppe_status` |
 | `szenario_legierungen.png` | nur mit `--szenario`: 10 Legierungsklassen mit ihren direkten Subklassen |
 | `szenario_minerale.png` | nur mit `--szenario`: 10 Mineralarten mit ihren Pfaden zu Q7946 |
-
-Status in der CSV ist entweder `OK (Pfad zu material vorhanden)`,
-`AUFFAELLIG (kein Pfad zu material)` oder `NICHT_GEFUNDEN`, wenn die
-Labelsuche nichts liefert.

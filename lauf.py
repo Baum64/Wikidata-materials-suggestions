@@ -81,7 +81,7 @@ Alle erzeugten Dateien tragen denselben Zeitstempel und liegen in
 Chargen
 -------
 Die Gruppenlaeufe arbeiten in Chargen zu je --batch-size Items (Default 500).
-Nach JEDER Charge liegen CSV und QuickStatements fertig vor - man kann also
+Nach JEDER Charge liegen Vorschlagstabelle und QuickStatements fertig vor - man kann also
 einspielen, waehrend der Rest noch laeuft, und ein Abbruch kostet hoechstens
 die angefangene Charge. Bei 6301 Mineralen sind das 13 Chargen; der Stand
 steht in <qs>.fortschritt.json.
@@ -187,7 +187,7 @@ def struktur_befehl(population: str, verzeichnis: str, stempel: str,
     basis = os.path.join(verzeichnis, "{}_" + f"{population}_{stempel}")
     befehl = [sys.executable, STRUKTUR_SKRIPT, "--population", population,
               "--out", basis.format("qs_class") + ".txt",
-              "--csv", basis.format("qs_class_befunde") + ".csv",
+              "--md", basis.format("qs_class_befunde") + ".md",
               "--review-needed", os.path.join(PROPOSALS_DIR, "review-needed.md")]
     if limit is not None and population != "periodensystem":
         befehl += ["--limit", str(limit)]
@@ -269,15 +269,16 @@ def main(argv=None) -> int:
                         help="Werkstoffgruppe; ODER 'struktur <population>' als "
                              "Unterbefehl fuer die reine Strukturpruefung")
     parser.add_argument("--out-dir", default=PROPOSALS_DIR,
-                        help="gemeinsamer Zielordner fuer alle Schritte - CSV, "
-                             "Entwuerfe, Empfehlung, Protokolle "
-                             "(Default: proposals/ im Repo)")
+                        help="gemeinsamer Zielordner fuer alle Schritte - "
+                             "Vorschlagstabellen, Entwuerfe, Empfehlung, "
+                             "Protokolle (Default: proposals/ im Repo)")
     parser.add_argument("--limit", type=int, default=None,
                         help="nur die ersten N Items; wirkt nicht im "
                              "Periodensystem-Modus")
     parser.add_argument("--batch-size", type=int, default=500, metavar="N",
-                        help="Items je Charge; nach jeder Charge werden CSV "
-                             "und QuickStatements geschrieben (Default: 500). "
+                        help="Items je Charge; nach jeder Charge werden "
+                             "Vorschlagstabelle und QuickStatements geschrieben "
+                             "(Default: 500). "
                              "0 schaltet den Chargenbetrieb ab")
     parser.add_argument("--weiter", action="store_true",
                         help="die naechste Charge aus der Fortschrittsdatei "
@@ -345,7 +346,7 @@ def main(argv=None) -> int:
                 nr, "Benchmark - wie gut ist die Gruppe belegt?",
                 [sys.executable, "-m", "benchmark.benchmark",
                  "--population", gruppe["population"],
-                 "--csv", pfad("abdeckung") + ".csv"],
+                 "--md", pfad("abdeckung") + ".md"],
                 pfad("benchmark") + ".log")
             if code != 0:
                 print(f"\nBenchmark fehlgeschlagen (Code {code}) - Abbruch.",
@@ -354,7 +355,7 @@ def main(argv=None) -> int:
 
         elif name == "vorschlaege":
             befehl = [sys.executable, "-m", "materialswiki", *gruppe["cli"],
-                      "--out", pfad("vorschlaege") + ".csv",
+                      "--out", pfad("vorschlaege") + ".md",
                       "--qs-out", pfad("qs") + ".txt"]
             if args.limit is not None:
                 befehl += ["--limit", str(args.limit)]

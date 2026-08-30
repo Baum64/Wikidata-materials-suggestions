@@ -1,11 +1,13 @@
-"""Ausgabe: Referenzmodell, Vorschlagszeile, CSV und QuickStatements.
+"""Ausgabe: Referenzmodell, Vorschlagszeile, Markdown-Tabelle und QuickStatements.
 
 Alles, was aus den Befunden der Stufen eine PRUEFBARE Datei macht. Die
 Sicherheitseigenschaft des Entwurfs steht in write_quickstatements_draft:
 ausserhalb von Abschnitt 1 beginnt jede Zeile mit '#'.
+
+Die Vorschlagsliste ist eine Markdown-Tabelle (frueher CSV) - lesbar in jedem
+Editor und direkt in einem Pull Request, ohne Tabellenprogramm.
 """
 
-import csv
 import datetime as dt
 import os
 import re
@@ -76,7 +78,7 @@ class Reference:
             return "Wikimedia-Import"
         return "URL+Datum"
 
-    def as_csv_fields(self) -> dict:
+    def as_table_fields(self) -> dict:
         return {
             "ref_mode": self.mode,
             "ref_doi": "; ".join(self.dois),
@@ -123,7 +125,7 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
     qualifiers ist eine Liste (pid, quickstatements_wert, klartext). Der Wert
     steht bereits in QuickStatements-Schreibweise - "Q1048589" fuer eine
     itemwertige, "20U25267" fuer eine mengenwertige Angabe. Er landet sowohl
-    lesbar in der CSV-Spalte "bestimmungsmethode" als auch maschinenlesbar
+    lesbar in der Tabellenspalte "bestimmungsmethode" als auch maschinenlesbar
     im QuickStatements-Entwurf.
 
     ohne_beleg erzwingt den belegfreien Modus auch fuer Datentypen, die nicht
@@ -169,7 +171,7 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
             "ref_note": reference.note,
         })
     else:
-        row.update(reference.as_csv_fields())
+        row.update(reference.as_table_fields())
 
     row["_ref"] = reference
     row["_pid"] = prop_info["pid"]
@@ -188,7 +190,7 @@ def make_row(status, source, wd_match, prop_info, value, value_label,
 # Ausgabe
 # ---------------------------------------------------------------------------
 
-CSV_FIELDS = [
+TABELLENSPALTEN = [
     "status",
     "source",
     "qid",
@@ -216,21 +218,38 @@ CSV_FIELDS = [
 ]
 
 
-def write_csv_streaming(proposals, path: str = "vorschlaege.csv") -> list:
-    """Schreibt jede Zeile SOFORT und gibt sie zusaetzlich gesammelt zurueck.
+def _md_zelle(wert) -> str:
+    """Ein Wert als Markdown-Tabellenzelle: Pipe maskiert, Zeilenumbruch zu <br>.
+
+    Ohne das Maskieren wuerde ein '|' in einem Wert (z. B. in ref_note) die
+    Spaltenzahl der Zeile sprengen und die restliche Tabelle verschieben.
+    """
+    return (str(wert if wert is not None else "")
+            .replace("\\", "\\\\").replace("|", "\\|")
+            .replace("\r\n", " ").replace("\n", "<br>").replace("\r", " "))
+
+
+def write_markdown_streaming(proposals, path: str = "vorschlaege.md") -> list:
+    """Schreibt jede Zeile SOFORT als Markdown-Tabellenzeile und gibt sie
+    zusaetzlich gesammelt zurueck.
 
     Ein Periodensystem-Lauf dauert je nach Drosselung viele Minuten. Wuerde
     erst am Ende geschrieben, waere bei Abbruch (Ctrl-C, Netzfehler) alles
     verloren - genau das ist beim Lauf ueber 44 von 174 Elementen passiert.
     Deshalb Zeile fuer Zeile mit flush().
+
+    Die Tabellenzeile ist selbst bei einem Abbruch mitten im Schreiben noch
+    eine gueltige Markdown-Zeile - der Header samt Trennzeile steht davor.
     """
     gesammelt = []
-    with open(path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_FIELDS, extrasaction="ignore")
-        writer.writeheader()
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("| " + " | ".join(TABELLENSPALTEN) + " |\n")
+        f.write("|" + "|".join(["---"] * len(TABELLENSPALTEN)) + "|\n")
         f.flush()
         for row in proposals:
-            writer.writerow(row)
+            f.write("| " + " | ".join(
+                _md_zelle(row.get(spalte, "")) for spalte in TABELLENSPALTEN
+            ) + " |\n")
             f.flush()
             gesammelt.append(row)
     print(
@@ -240,8 +259,8 @@ def write_csv_streaming(proposals, path: str = "vorschlaege.csv") -> list:
     return gesammelt
 
 
-def write_csv(proposals: list, path: str = "vorschlaege.csv") -> None:
-    write_csv_streaming(proposals, path)
+def write_markdown(proposals: list, path: str = "vorschlaege.md") -> None:
+    write_markdown_streaming(proposals, path)
 
 
 def quickstatements_value(row: dict) -> str:
@@ -283,8 +302,8 @@ def clear_quickstatements_draft(path: str) -> None:
 
     Der Entwurf entsteht erst am Ende. Ohne dieses Leeren stuende nach einem
     Abbruch der vollstaendige Entwurf des VORIGEN Laufs neben der frisch und
-    nur teilweise geschriebenen CSV - zwei Dateien, die nicht zusammengehoeren
-    und deren Unterschied niemandem auffaellt.
+    nur teilweise geschriebenen Vorschlagstabelle - zwei Dateien, die nicht
+    zusammengehoeren und deren Unterschied niemandem auffaellt.
     """
     with open(path, "w", encoding="utf-8") as f:
         f.write("# Lauf noch nicht abgeschlossen - dieser Entwurf ist leer "

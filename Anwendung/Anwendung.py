@@ -128,7 +128,7 @@ Skript nichts tun; die Zahl sagt, wie gross die Luecke wirklich ist.
 
 Ausgabe (nach proposals/, siehe CLAUDE.md "Arbeitsweise" Punkt 2)
 ----------------------------------------------------------------
-  proposals/anwendungen_befunde_<Zeitstempel>.csv          alle Befunde
+  proposals/anwendungen_befunde_<Zeitstempel>.md   alle Befunde (Markdown-Tabelle)
   proposals/qs_anwendungen_<Zeitstempel>.txt  Entwurf,
                                                 Abschnitt 1 einspielbar
 
@@ -144,7 +144,6 @@ Aufruf
 
 import argparse
 import collections
-import csv
 import datetime as dt
 import os
 import re
@@ -1285,22 +1284,32 @@ def schreibe_quickstatements(befunde: list, pfad: str, population: str,
     print(f"QuickStatements-Entwurf geschrieben nach: {pfad}", file=sys.stderr)
 
 
-def schreibe_csv(befunde: list, pfad: str, labels: dict) -> None:
+def _md_zelle(wert) -> str:
+    """Ein Wert als Markdown-Tabellenzelle: Pipe maskiert, Zeilenumbruch zu <br>.
+
+    Ohne das Maskieren wuerde ein '|' im Wert - etwa aus dem zweizeiligen
+    Umbuchungsentwurf - die Spaltenzahl der Zeile sprengen.
+    """
+    return (str(wert if wert is not None else "")
+            .replace("\\", "\\\\").replace("|", "\\|")
+            .replace("\t", " ")
+            .replace("\r\n", "<br>").replace("\n", "<br>").replace("\r", "<br>"))
+
+
+def schreibe_markdown(befunde: list, pfad: str, labels: dict) -> None:
     felder = ["befund", "qid", "label", "ziel_qid", "ziel_label", "kennzahl",
               "quickstatements", "begruendung", "entscheidung"]
-    with open(pfad, "w", newline="", encoding="utf-8") as f:
-        schreiber = csv.DictWriter(f, fieldnames=felder)
-        schreiber.writeheader()
+    with open(pfad, "w", encoding="utf-8") as f:
+        f.write("| " + " | ".join(felder) + " |\n")
+        f.write("|" + "|".join(["---"] * len(felder)) + "|\n")
         for b in befunde:
-            schreiber.writerow({
+            zeile = {
                 **{k: b.get(k, "") for k in felder},
                 "label": labels.get(b["qid"], ""),
                 "ziel_label": labels.get(b["ziel_qid"], ""),
-                # Der Zeilenumbruch im zweizeiligen Umbuchungsentwurf wuerde
-                # die CSV-Zeile sprengen; im Tabellenblatt ist ' | ' lesbarer.
-                "quickstatements": (b["quickstatements"] or "").replace(
-                    "\n", " | ").replace("\t", " "),
-            })
+            }
+            f.write("| " + " | ".join(_md_zelle(zeile.get(k, "")) for k in felder)
+                    + " |\n")
     print(f"Befunde geschrieben nach: {pfad}", file=sys.stderr)
 
 
@@ -1385,21 +1394,22 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--vorsichtig", action="store_true",
                         help="auch die abgeleiteten Zeilen auskommentieren - "
                              "dann enthaelt die Datei keine ausfuehrbare Zeile")
-    parser.add_argument("--csv", default=None,
-                        help="Ziel der Befund-CSV (Default: "
-                             "proposals/anwendungen_befunde_<Zeitstempel>.csv)")
+    parser.add_argument("--md", default=None,
+                        help="Ziel des Befundberichts als Markdown-Tabelle "
+                             "(Default: "
+                             "proposals/anwendungen_befunde_<Zeitstempel>.md)")
     parser.add_argument("--qs-out", default=None,
                         help="Ziel des Entwurfs (Default: "
                              "proposals/qs_anwendungen_<Zeit>.txt)")
     args = parser.parse_args(argv)
 
-    # Ohne --csv/--qs-out nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
+    # Ohne --md/--qs-out nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
     _proposals = os.path.join(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "proposals")
     os.makedirs(_proposals, exist_ok=True)
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
-    csv_pfad = args.csv or os.path.join(
-        _proposals, f"anwendungen_befunde_{stempel}.csv")
+    md_pfad = args.md or os.path.join(
+        _proposals, f"anwendungen_befunde_{stempel}.md")
     qs_pfad = args.qs_out or os.path.join(
         _proposals, f"qs_anwendungen_{stempel}.txt")
 
@@ -1528,7 +1538,7 @@ def main(argv: Optional[list] = None) -> int:
 
     bericht(items, befunde, p366, objekte, p2079, taetigkeiten,
             args.min_belege)
-    schreibe_csv(befunde, csv_pfad, labels)
+    schreibe_markdown(befunde, md_pfad, labels)
     schreibe_quickstatements(befunde, qs_pfad, args.population,
                              args.min_belege, labels, args.vorsichtig)
     return 0

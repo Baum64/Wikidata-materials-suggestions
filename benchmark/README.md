@@ -14,7 +14,7 @@ Aus dem Repo-Wurzelverzeichnis (Installation siehe [../README.md](../README.md))
 
 ```bash
 python -m benchmark.benchmark
-python -m benchmark.benchmark --root Q11426 --csv abdeckung.csv
+python -m benchmark.benchmark --root Q11426 --md abdeckung.md
 python -m benchmark.benchmark --offline          # ohne Wiki-Abruf
 ```
 
@@ -23,7 +23,7 @@ python -m benchmark.benchmark --offline          # ohne Wiki-Abruf
 | `--root` | Wurzel-Item (Standard: `Q1924900`, Metallischer Werkstoff) |
 | `--sections` | Abschnitte der Projektseite (Standard: Physics, Mechanical, Thermal, Chemical, "Electric and Magnetic") |
 | `--offline` | Property-Liste aus [properties_snapshot.json](properties_snapshot.json) statt live |
-| `--csv` | Ergebnis zusätzlich als CSV schreiben (gitignoriert) |
+| `--md` | Ergebnistabelle zusätzlich als Markdown-Datei schreiben (gitignoriert) |
 | `--top` | Anzahl der am besten belegten Items in der Ausgabe (`0` = aus, Standard: 10) |
 
 ## Woher die Property-Liste kommt

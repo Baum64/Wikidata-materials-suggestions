@@ -173,7 +173,8 @@ faellt beim Bauen nicht auf, beim Einspielen schon:
 Ausgabe
 -------
   proposals/qs_class_<Population>_<Zeitstempel>.txt   die Empfehlung
-  --csv <pfad>                                       zusaetzlich, optional
+  --md <pfad>                                        Befundbericht als
+                                                     Markdown-Tabelle, optional
 Beide landen in proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2) - im selben
 Ordner wie alles, was "python -m lauf <gruppe>" schreibt. --out-dir stellt
 den Ordner um.
@@ -211,7 +212,6 @@ Grundgesamtheiten (--population)
 """
 
 import argparse
-import csv
 import datetime as dt
 import os
 import re
@@ -417,9 +417,12 @@ POPULATIONEN = {
     # was fuer Instanzen normal ist. Gleiche Logik wie bei 'material' /
     # 'metallischer-werkstoff' (SUBTREE_KLASSEN_PATTERN).
     #
-    # magnetwerkstoffe ist mit dem Isotopenfilter ohnehin nur 10 Klassen -
+    # magnetwerkstoffe ist mit dem Isotopenfilter ohnehin nur ~17 Klassen -
     # da schadet der Instanzzweig nicht, und MAGNET_PATTERN bleibt mit dem
-    # Benchmark identisch.
+    # Benchmark identisch. MAGNET_PATTERN verankert neben Q949573 auch
+    # Q2554911 und Q9259184 als eigene Wurzeln (siehe materialswiki.gruppen),
+    # damit der ferromagnetische Zweig nicht an einer einzigen P279-Kante
+    # haengt, die die 'verkehrt'-Pruefung faelschlich zur Loeschung meldet.
     "polymer": {
         "pattern": SUBTREE_KLASSEN_PATTERN.format(root=KUNSTSTOFF_QID),
         "beschreibung": "Klassen der Polymere / Kunststoffe (Q11474)",
@@ -2594,25 +2597,33 @@ def _schlussblock(luecken: dict, ohne_item: list) -> list:
     return zeilen
 
 
-def schreibe_csv(befunde: list, pfad: str) -> None:
+def _md_zelle(wert) -> str:
+    """Ein Wert als Markdown-Tabellenzelle: Pipe maskiert, Zeilenumbruch zu <br>.
+
+    Ohne das Maskieren wuerde ein '|' im Wert - etwa der Zeilenumbruch im
+    zweizeiligen P31->P279-Entwurf, hier als literales '|' - die Spaltenzahl
+    der Zeile sprengen und die restliche Tabelle verschieben.
+    """
+    return (str(wert if wert is not None else "")
+            .replace("\\", "\\\\").replace("|", "\\|").replace("\t", " ")
+            .replace("\r\n", "<br>").replace("\n", "<br>").replace("\r", "<br>"))
+
+
+def schreibe_markdown(befunde: list, pfad: str) -> None:
     felder = ["eigenschaft", "befund", "qid", "label", "ziel_qid",
               "ziel_label", "kennzahl", "quickstatements", "begruendung",
               "entscheidung"]
-    with open(pfad, "w", newline="", encoding="utf-8") as f:
-        schreiber = csv.DictWriter(f, fieldnames=felder)
-        schreiber.writeheader()
+    with open(pfad, "w", encoding="utf-8") as f:
+        f.write("| " + " | ".join(felder) + " |\n")
+        f.write("|" + "|".join(["---"] * len(felder)) + "|\n")
         # Dieselbe Ordnung wie in der Empfehlung: Eigenschaft, dann Ziel.
         # Eine Tabelle, die anders sortiert ist als die Datei daneben,
         # kostet beim Abgleich mehr Zeit, als sie spart.
         for b in sorted(befunde, key=lambda x: (_eigenschaft_rang(
                 x.get("eigenschaft", "")), x["befund"], _sortierschluessel(x))):
-            # Der Zeilenumbruch im zweizeiligen P31->P279-Entwurf wuerde die
-            # CSV-Zeile sprengen; im Tabellenblatt ist ' | ' lesbarer.
-            schreiber.writerow({**{k: b.get(k, "") for k in felder},
-                                "quickstatements":
-                                    (b["quickstatements"] or "")
-                                    .replace("\n", " | ")})
-    print(f"CSV geschrieben nach: {pfad}", file=sys.stderr)
+            f.write("| " + " | ".join(_md_zelle(b.get(k, "")) for k in felder)
+                    + " |\n")
+    print(f"Markdown-Tabelle geschrieben nach: {pfad}", file=sys.stderr)
 
 
 # Befundarten, fuer die es (noch) keine verbindliche Konvention gibt und die
@@ -2781,16 +2792,17 @@ def main(argv: Optional[list] = None) -> int:
                              "Konvention beruht (5 g/cm3) statt auf der "
                              "Ordnungszahl.")
     parser.add_argument("--out-dir", default=PROPOSALS_DIR,
-                        help="Zielordner fuer Empfehlung und --csv (Default: "
-                             "proposals/ im Repo). Relative --out/--csv werden "
+                        help="Zielordner fuer Empfehlung und --md (Default: "
+                             "proposals/ im Repo). Relative --out/--md werden "
                              "hierunter abgelegt, so landen die Dateien im "
                              "selben Ordner wie ein 'python -m lauf'-Lauf.")
     parser.add_argument("--out", default=None,
                         help="Ziel der Empfehlung (Default: "
                              "<out-dir>/qs_class_<Population>_<Zeit>.txt)")
-    parser.add_argument("--csv", default=None,
-                        help="zusaetzlich eine Befund-CSV schreiben. Ohne "
-                             "diese Angabe entsteht NUR die Empfehlung.")
+    parser.add_argument("--md", default=None,
+                        help="zusaetzlich einen Befundbericht als "
+                             "Markdown-Tabelle schreiben. Ohne diese Angabe "
+                             "entsteht NUR die Empfehlung.")
     parser.add_argument("--review-needed",
                         default=os.path.join(PROPOSALS_DIR, "review-needed.md"),
                         help="Ziel fuer offene Fragen ohne automatischen "
@@ -2827,7 +2839,7 @@ def main(argv: Optional[list] = None) -> int:
 
     empfehlung_pfad = im_ordner(
         args.out or f"qs_class_{args.population}_{stempel}.txt")
-    csv_pfad = im_ordner(args.csv) if args.csv else None
+    md_pfad = im_ordner(args.md) if args.md else None
 
     items, ohne_item = hole_population(args.population, args.limit)
     if not items:
@@ -3035,8 +3047,8 @@ def main(argv: Optional[list] = None) -> int:
     bericht(befunde, luecken, ohne_item, args.vorsichtig)
     schreibe_empfehlung(befunde, empfehlung_pfad, args.population,
                         luecken, ohne_item, args.vorsichtig, mengengeruest)
-    if csv_pfad:
-        schreibe_csv(befunde, csv_pfad)
+    if md_pfad:
+        schreibe_markdown(befunde, md_pfad)
     schreibe_review_needed(befunde, args.review_needed)
     return 0
 

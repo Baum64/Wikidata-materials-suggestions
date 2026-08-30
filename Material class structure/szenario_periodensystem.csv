@@ -1,0 +1,119 @@
+ordnungszahl,symbol,label,qid,soll_kategorie,kategorie_status,kategorie_property,soll_gruppe,gruppe_status
+1,H,Wasserstoff,Q556,Nichtmetalle,ok,P361,1,ok
+2,He,Helium,Q560,Edelgase (18. Gruppe),ok,P361,18,ok
+3,Li,Lithium,Q568,Alkalimetalle,ok,P361,1,ok
+4,Be,Beryllium,Q569,Erdalkalimetalle (2. Gruppe),ok,P361,2,ok
+5,B,Bor,Q618,Halbmetalle,ok,P361,13,ok
+6,C,Kohlenstoff,Q623,Nichtmetalle,ok,P361,14,ok
+7,N,Stickstoff,Q627,Nichtmetalle,ok,P361,15,ok
+8,O,Sauerstoff,Q629,Nichtmetalle,ok,P361,16,ok
+9,F,Fluor,Q650,Halogene (17. Gruppe),ok,P361,17,ok
+10,Ne,Neon,Q654,Edelgase (18. Gruppe),ok,P361,18,ok
+11,Na,Natrium,Q658,Alkalimetalle,ok,P361,1,ok
+12,Mg,Magnesium,Q660,Erdalkalimetalle (2. Gruppe),ok,P361,2,ok
+13,Al,Aluminium,Q663,Metalle des p-Blocks,ok,P361,13,ok
+14,Si,Silicium,Q670,Halbmetalle,ok,P361,14,ok
+15,P,Phosphor,Q674,Nichtmetalle,ok,P361,15,ok
+16,S,Schwefel,Q682,Nichtmetalle,ok,P361,16,ok
+17,Cl,Chlor,Q688,Halogene (17. Gruppe),ok,P361,17,ok
+18,Ar,Argon,Q696,Edelgase (18. Gruppe),ok,P361,18,ok
+19,K,Kalium,Q703,Alkalimetalle,ok,P361,1,ok
+20,Ca,Calcium,Q706,Erdalkalimetalle (2. Gruppe),ok,P361,2,ok
+21,Sc,Scandium,Q713,Uebergangsmetalle,ok,P361,3,ok
+22,Ti,Titan,Q716,Uebergangsmetalle,ok,P361,4,ok
+23,V,Vanadium,Q722,Uebergangsmetalle,ok,P361,5,ok
+24,Cr,Chrom,Q725,Uebergangsmetalle,ok,P361,6,ok
+25,Mn,Mangan,Q731,Uebergangsmetalle,ok,P361,7,ok
+26,Fe,Eisen,Q677,Uebergangsmetalle,ok,P361,8,ok
+27,Co,Cobalt,Q740,Uebergangsmetalle,ok,P361,9,ok
+28,Ni,Nickel,Q744,Uebergangsmetalle,ok,P361,10,ok
+29,Cu,Kupfer,Q753,Uebergangsmetalle,ok,P361,11,ok
+30,Zn,Zink,Q758,,strittig,,12,ok
+31,Ga,Gallium,Q861,Metalle des p-Blocks,ok,P361,13,ok
+32,Ge,Germanium,Q867,Halbmetalle,ok,P361,14,ok
+33,As,Arsen,Q871,Halbmetalle,ok,P361,15,ok
+34,Se,Selen,Q876,,strittig,,16,ok
+35,Br,Brom,Q879,Halogene (17. Gruppe),ok,P361,17,ok
+36,Kr,Krypton,Q888,Edelgase (18. Gruppe),ok,P361,18,ok
+37,Rb,Rubidium,Q895,Alkalimetalle,ok,P361,1,ok
+38,Sr,Strontium,Q938,Erdalkalimetalle (2. Gruppe),ok,P361,2,ok
+39,Y,Yttrium,Q941,Uebergangsmetalle,ok,P361,3,ok
+40,Zr,Zirconium,Q1038,Uebergangsmetalle,ok,P361,4,ok
+41,Nb,Niob,Q1046,Uebergangsmetalle,ok,P361,5,ok
+42,Mo,Molybdän,Q1053,Uebergangsmetalle,ok,P361,6,ok
+43,Tc,Technetium,Q1054,Uebergangsmetalle,ok,P361,7,ok
+44,Ru,Ruthenium,Q1086,Uebergangsmetalle,ok,P361,8,ok
+45,Rh,Rhodium,Q1087,Uebergangsmetalle,ok,P361,9,ok
+46,Pd,Palladium,Q1089,Uebergangsmetalle,ok,P361,10,ok
+47,Ag,Silber,Q1090,Uebergangsmetalle,ok,P361,11,ok
+48,Cd,Cadmium,Q1091,,strittig,,12,ok
+49,In,Indium,Q1094,Metalle des p-Blocks,ok,P361,13,ok
+50,Sn,Zinn,Q1096,Metalle des p-Blocks,ok,P361,14,ok
+51,Sb,Antimon,Q1099,Halbmetalle,ok,P361,15,ok
+52,Te,Tellur,Q1100,Halbmetalle,ok,P361,16,ok
+53,I,Iod,Q1103,Halogene (17. Gruppe),ok,P361,17,ok
+54,Xe,Xenon,Q1106,Edelgase (18. Gruppe),ok,P361,18,ok
+55,Cs,Caesium,Q1108,Alkalimetalle,ok,P361,1,ok
+56,Ba,Barium,Q1112,Erdalkalimetalle (2. Gruppe),ok,P361,2,ok
+57,La,Lanthan,Q1801,Lanthanoide,ok,P361,3,ok
+58,Ce,Cer,Q1385,Lanthanoide,ok,P361,,kein (f-Block)
+59,Pr,Praseodym,Q1386,Lanthanoide,ok,P361,,kein (f-Block)
+60,Nd,Neodym,Q1388,Lanthanoide,ok,P361,,kein (f-Block)
+61,Pm,Promethium,Q1809,Lanthanoide,ok,P361,,kein (f-Block)
+62,Sm,Samarium,Q1819,Lanthanoide,ok,P361,,kein (f-Block)
+63,Eu,Europium,Q1396,Lanthanoide,ok,P361,,kein (f-Block)
+64,Gd,Gadolinium,Q1832,Lanthanoide,ok,P361,,kein (f-Block)
+65,Tb,Terbium,Q1838,Lanthanoide,ok,P361,,kein (f-Block)
+66,Dy,Dysprosium,Q1843,Lanthanoide,ok,P361,,kein (f-Block)
+67,Ho,Holmium,Q1846,Lanthanoide,ok,P361,,kein (f-Block)
+68,Er,Erbium,Q1849,Lanthanoide,ok,P361,,kein (f-Block)
+69,Tm,Thulium,Q1853,Lanthanoide,ok,P361,,kein (f-Block)
+70,Yb,Ytterbium,Q1855,Lanthanoide,ok,P361,,kein (f-Block)
+71,Lu,Lutetium,Q1857,Lanthanoide,ok,P361,,kein (f-Block)
+72,Hf,Hafnium,Q1119,Uebergangsmetalle,ok,P361,4,ok
+73,Ta,Tantal,Q1123,Uebergangsmetalle,ok,P361,5,ok
+74,W,Wolfram,Q743,Uebergangsmetalle,ok,P361,6,ok
+75,Re,Rhenium,Q737,Uebergangsmetalle,ok,P361,7,ok
+76,Os,Osmium,Q751,Uebergangsmetalle,ok,P361,8,ok
+77,Ir,Iridium,Q877,Uebergangsmetalle,ok,P361,9,ok
+78,Pt,Platin,Q880,Uebergangsmetalle,ok,P361,10,ok
+79,Au,Gold,Q897,Uebergangsmetalle,ok,P361,11,ok
+80,Hg,Quecksilber,Q925,,strittig,,12,ok
+81,Tl,Thallium,Q932,Metalle des p-Blocks,ok,P361,13,ok
+82,Pb,Blei,Q708,Metalle des p-Blocks,ok,P361,14,ok
+83,Bi,Bismut,Q942,Metalle des p-Blocks,ok,P361,15,ok
+84,Po,Polonium,Q979,,strittig,,16,ok
+85,At,Astat,Q999,,strittig,,17,ok
+86,Rn,Radon,Q1133,Edelgase (18. Gruppe),ok,P361,18,ok
+87,Fr,Francium,Q671,Alkalimetalle,ok,P361,1,ok
+88,Ra,Radium,Q1128,Erdalkalimetalle (2. Gruppe),ok,P361,2,ok
+89,Ac,Actinium,Q1121,Actinoide,ok,P361,3,ok
+90,Th,Thorium,Q1115,Actinoide,ok,P361,,kein (f-Block)
+91,Pa,Protactinium,Q1109,Actinoide,ok,P361,,kein (f-Block)
+92,U,Uran,Q1098,Actinoide,ok,P361,,kein (f-Block)
+93,Np,Neptunium,Q1105,Actinoide,ok,P361,,kein (f-Block)
+94,Pu,Plutonium,Q1102,Actinoide,ok,P361,,kein (f-Block)
+95,Am,Americium,Q1872,Actinoide,ok,P361,,kein (f-Block)
+96,Cm,Curium,Q1876,Actinoide,ok,P361,,kein (f-Block)
+97,Bk,Berkelium,Q1882,Actinoide,ok,P361,,kein (f-Block)
+98,Cf,Californium,Q1888,Actinoide,ok,P361,,kein (f-Block)
+99,Es,Einsteinium,Q1892,Actinoide,ok,P361,,kein (f-Block)
+100,Fm,Fermium,Q1896,Actinoide,ok,P361,,kein (f-Block)
+101,Md,Mendelevium,Q1898,Actinoide,ok,P361,,kein (f-Block)
+102,No,Nobelium,Q1901,Actinoide,ok,P361,,kein (f-Block)
+103,Lr,Lawrencium,Q1905,Actinoide,ok,P361,,kein (f-Block)
+104,Rf,Rutherfordium,Q1226,Uebergangsmetalle,ok,P361,4,ok
+105,Db,Dubnium,Q1232,Uebergangsmetalle,ok,P361,5,ok
+106,Sg,Seaborgium,Q1234,Uebergangsmetalle,ok,P361,6,ok
+107,Bh,Bohrium,Q1249,Uebergangsmetalle,ok,P361,7,ok
+108,Hs,Hassium,Q1252,Uebergangsmetalle,ok,P361,8,ok
+109,Mt,Meitnerium,Q1258,Uebergangsmetalle,ok,P361,9,ok
+110,Ds,Darmstadtium,Q1266,Uebergangsmetalle,ok,P361,10,ok
+111,Rg,Roentgenium,Q1272,Uebergangsmetalle,ok,P361,11,ok
+112,Cn,Copernicium,Q1278,,strittig,,12,ok
+113,Nh,Nihonium,Q1301,,strittig,,13,ok
+114,Fl,Flerovium,Q1302,,strittig,,14,ok
+115,Mc,Moscovium,Q1303,,strittig,,15,ok
+116,Lv,Livermorium,Q1304,,strittig,,16,ok
+117,Ts,Tenness,Q1306,,strittig,,17,ok
+118,Og,Oganesson,Q1307,,strittig,,18,ok

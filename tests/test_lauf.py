@@ -55,9 +55,9 @@ def test_ausgabenamen_tragen_das_qs_schema():
     (frueher quickstatements_... bzw. p279_empfehlung_...)."""
     befehl, log = lauf.struktur_befehl("legierungen", "/tmp/x", "2026-01-01_0000")
     out = befehl[befehl.index("--out") + 1]
-    csv = befehl[befehl.index("--csv") + 1]
+    befund_md = befehl[befehl.index("--md") + 1]
     assert os.path.basename(out) == "qs_class_legierungen_2026-01-01_0000.txt"
-    assert os.path.basename(csv) == "qs_class_befunde_legierungen_2026-01-01_0000.csv"
+    assert os.path.basename(befund_md) == "qs_class_befunde_legierungen_2026-01-01_0000.md"
     assert os.path.basename(log) == "qs_class_legierungen_2026-01-01_0000.log"
 
 
@@ -65,3 +65,12 @@ def test_magnetwerkstoffe_filtern_die_isotope_aus():
     """Ohne den Ordnungszahl-Filter zieht Q949573 ueber einen schiefen
     Instanzpfad (Nickel) rund 40 Nickel-Isotope herein."""
     assert "P1086" in WERKSTOFFGRUPPEN["magnetwerkstoffe"]["pattern"]
+
+
+def test_magnetwerkstoffe_verankern_die_ferro_klassen():
+    """Q2554911 (weichmagnetisch) und Q9259184 (ferromagnetic material)
+    sind eigene Wurzeln - nicht nur ueber die eine, von der 'verkehrt'-
+    Heuristik bedrohte P279-Kante unter Q949573 erreichbar."""
+    pattern = WERKSTOFFGRUPPEN["magnetwerkstoffe"]["pattern"]
+    for qid in ("Q949573", "Q2554911", "Q9259184"):
+        assert f"wd:{qid}" in pattern, qid

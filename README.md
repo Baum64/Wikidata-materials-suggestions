@@ -8,7 +8,7 @@ Wikidata geschrieben.
 | Anwendung | Verzeichnis | Was sie macht |
 |---|---|---|
 | **Wikidata Knowledge Graph** | [wikikg/](wikikg/) | Vergleicht die ausgehenden Links eines Wikipedia-Artikels mit den Statements des zugehörigen Wikidata-Items und zeigt fehlende Beziehungen. Enthält zusätzlich den browserbasierten *Wortfeld-Explorer*. |
-| **Materials Wiki** | [materialswiki/](materialswiki/) | Holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (CSV + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
+| **Materials Wiki** | [materialswiki/](materialswiki/) | Holt Strukturdaten aus der Crystallography Open Database, kuratierte Materialdaten aus dem Materials Project und, für alles Fehlende, aus den Wikipedia-Infoboxen; schlägt daraus Wikidata-Statements für bereits existierende Items vor (Markdown-Tabelle + QuickStatements-Entwurf). **Braucht einen API-Schlüssel** (nur für das Materials Project, COD ist frei zugänglich). |
 | **Benchmark** | [benchmark/](benchmark/) | Misst, wie gut metallische Werkstoffe in Wikidata belegt sind — je Property aus dem WikiProject Materials. Zeigt, wo Vorschläge sich überhaupt lohnen. |
 | **Material class structure** | [Material%20class%20structure/](Material%20class%20structure/) | Zwei Werkzeuge zur Klassenhierarchie der Werkstoffe. *ClassCheck* prüft auf zwölf Arten, wie `P279` („Unterklasse von") verwendet wird — fehlende, doppelte, verkehrte und mit `P31` verwechselte Kanten, dazu die fehlende chemische Metaklasse der Legierungen — und schreibt **eine gestaffelte Empfehlung**: vier Stufen nach Beweiskraft, ausführbar ist nur die erste. *visualisierung* zeichnet, wie Werkstoffe unter `material` (Q214609) hängen und welche über einen parallelen Zweig laufen. |
 | **Anwendungen** | [Anwendung/](Anwendung/) | Leitet ab, **wozu** ein Werkstoff gebraucht wird: aggregiert die `P186`-Rückverweise der Objekte (21495 Items der Klasse „Münze" nennen Bronze) zu `P366`-Vorschlägen am Werkstoff und entwirft, wo es ohne Quantorensprung geht, die Rückkante `P186` am Anwendungsitem. Filtert dabei Verbundgegenstände (Wolkenkratzer, Fahrzeuge) und zu eng gefasste Klassen heraus. Für `P2079`, das in Wikidata fast leer ist, liest sie die Herstellungsabschnitte der deutschen und englischen Wikipedia aus und schlägt die dort verlinkten Verfahren mit Beleg auf die Artikelversion vor. |
@@ -93,21 +93,22 @@ im selben `proposals/`-Ordner.
 
 ## Ausgabedateien
 
-Vorschlagsdateien (CSV, QuickStatements, die gestaffelte Empfehlung) landen in
-**`proposals/`** (CLAUDE.md, „Arbeitsweise" Punkt 2) — `--out` / `--qs-out` /
-`--csv` / `--out-dir` verlegen sie. Graphen und `--output` bleiben im
-aktuellen Arbeitsverzeichnis. Alle diese Dateien sind Momentaufnahmen eines
-Laufs und stehen in [.gitignore](.gitignore) — sie gehören nicht ins Repo:
+Vorschlagsdateien (Markdown-Tabellen, QuickStatements, die gestaffelte
+Empfehlung) landen in **`proposals/`** (CLAUDE.md, „Arbeitsweise" Punkt 2) —
+`--out` / `--qs-out` / `--md` / `--out-dir` verlegen sie. Graphen und
+`--output` bleiben im aktuellen Arbeitsverzeichnis. Alle diese Dateien sind
+Momentaufnahmen eines Laufs und stehen in [.gitignore](.gitignore) — sie
+gehören nicht ins Repo:
 
 | Datei | Erzeugt von |
 |---|---|
-| `proposals/vorschlaege_<Zeitstempel>.csv`, `proposals/qs_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
-| `werkstoffe_vorschlaege.csv`, `werkstoffe_qs_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
-| `abdeckung.csv` (bzw. was `--csv` angibt) | [benchmark/benchmark.py](benchmark/benchmark.py) |
-| `proposals/qs_class_<Population>_<Zeitstempel>.txt` (und `qs_class_befunde_*.csv` nur mit `--csv`) | [Material class structure/ClassCheck.py](Material%20class%20structure/ClassCheck.py) |
+| `proposals/vorschlaege_<Zeitstempel>.md`, `proposals/qs_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
+| `werkstoffe_vorschlaege.md`, `werkstoffe_qs_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
+| `abdeckung.md` (nur mit `--md`) | [benchmark/benchmark.py](benchmark/benchmark.py) |
+| `proposals/qs_class_<Population>_<Zeitstempel>.txt` (und `qs_class_befunde_*.md` nur mit `--md`) | [Material class structure/ClassCheck.py](Material%20class%20structure/ClassCheck.py) |
 | alle drei Schritte (`abdeckung_*`, `qs_*`, `qs_class_*`) mit gemeinsamem Zeitstempel in `--out-dir` (Default `proposals/`) | [lauf.py](lauf.py) |
-| `proposals/anwendungen_befunde_<Zeitstempel>.csv`, `proposals/qs_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
-| `werkstoff_check.csv`, `werkstoff_graph.png`, `trace_*.png`, `subclass_tree_material.png` (nur `--tree`) | [Material class structure/visualisierung.py](Material%20class%20structure/visualisierung.py) |
+| `proposals/anwendungen_befunde_<Zeitstempel>.md`, `proposals/qs_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
+| `trace_*.png`, `szenario_*` (nur `--szenario`), `subclass_tree_material.png` (nur `--tree`) | [Material class structure/visualisierung.py](Material%20class%20structure/visualisierung.py) |
 | `output/…` (`--output`) | [wikikg/cli.py](wikikg/cli.py) |
 
 Einzige bewusst versionierte Ergebnisdatei ist
@@ -177,7 +178,7 @@ Alle Tests laufen offline und brauchen **keinen** API-Schlüssel.
 
 ## Datenquellen und deren Lizenzen
 
-Die Vorschlagslisten (`vorschlaege*.csv`, `qs_*.txt`)
+Die Vorschlagslisten (`vorschlaege*.md`, `qs_*.txt`)
 enthalten abgeleitete Daten aus fremden Datenbanken. Wer sie weitergibt, gibt
 diese Daten mit weiter — deshalb hier die Herkunft und die jeweiligen
 Bedingungen:
@@ -232,7 +233,7 @@ etwas liefert.
 Die Stufe „Formel" war von alledem nicht betroffen: sie leitet P527 und P2670
 aus der Summenformel ab, die am Wikidata-Item bereits steht. Es wird nichts von
 außen geholt und nichts weitergegeben — deshalb tragen diese Aussagen auch
-keinen Beleg, sondern nur die Herkunftsnotiz in der CSV-Spalte `ref_note`.
+keinen Beleg, sondern nur die Herkunftsnotiz in der Tabellenspalte `ref_note`.
 
 **Seit dem 27.08.2026 ist diese Stufe abgeschaltet**: P527 und P2670 sollen
 nicht mehr vorgeschlagen werden, und sie ist die einzige Stufe, die beide
