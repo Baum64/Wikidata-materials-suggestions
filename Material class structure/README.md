@@ -128,7 +128,7 @@ Trägt jeder Vorschlag einer Zielgruppe dieselbe Prüfanweisung, steht sie
 einmal im Gruppenkopf statt in jedem Eintrag. Der Kopf der Datei zählt die
 Befunde zusätzlich nach Eigenschaft auf, die `--md`-Tabelle ist ebenso sortiert.
 
-## Die zwölf Prüfungen
+## Die dreizehn Prüfungen
 
 | Prüfung | Findet | Stufe |
 |---|---|---|
@@ -139,6 +139,7 @@ Befunde zusätzlich nach Eigenschaft auf, die `--md`-Tabelle ist ebenso sortiert
 | `verkehrt` | Kante `n → p`, obwohl unter `n` mehr hängt als unter `p` ohne `n` | 2 |
 | `zyklus` | eine Klasse ist über P279 ihre eigene Oberklasse | 2 |
 | `zusammensetzung` | der Name nennt die Zusammensetzung — das Element mit dem größten Anteil ist das Basismetall | 3 |
+| `clad-taxonomie` | der Name nennt einen Schichtverbund (`clad`, `plated`, bimetallisch) — gehört unter `composite material` (Q181790), nicht unter Kern-/Mantelmetall; fehlende Zwischenklasse `clad metal` → `review-needed.md` | 3 / 4 |
 | `zu-allgemein` | Item hängt direkt unter einer sehr allgemeinen Klasse, obwohl seine Bezeichnung eine speziellere nennt | 3 |
 | `ohne-einordnung` | benannte Legierung ohne jeden Pfad zu `Legierung` (Q37756) — Entwurf nur, wenn das Item **keine** reine Instanz ist | 3 / 4 |
 | `p31-neben-p279` | Item direkt unter einer allgemeinen Klasse, zusätzlich mit P31 | 4 |
@@ -228,11 +229,49 @@ Drei Fälle bekommen **keinen** Vorschlag, nur eine Meldung:
 
 Ein vierter Fall bekommt einen Vorschlag **mit Warnung**: Schichtverbunde
 (`plated`, `clad`, `centre in … ring`). Die Prozente stimmen dort für den
-Körper, aber ein Verbund ist keine Legierung.
+Körper, aber ein Verbund ist keine Legierung — für dessen Einordnung ist
+`clad-taxonomie` zuständig (nächster Abschnitt).
 
 Bestandteile, die keine chemischen Elemente sind — `27.5% Steel`,
 `Other Metals 2%` — gehen nicht als Basismetall durch, verschwinden aber
 auch nicht: sie stehen als „Nicht zugeordnet" in der Begründung.
+
+## Clad-Werkstoffe als eigene Verbundklasse (`clad-taxonomie`)
+
+*Copper clad aluminium* ist weder „eine Art Kupfer" noch „eine Art
+Aluminium", sondern taxonomisch eine eigene Verbundwerkstoffklasse:
+
+```
+composite material (Q181790)
+  └─ subclass of ← clad metal            (Zwischenklasse — fehlt in Wikidata)
+        └─ subclass of ← copper clad aluminium
+              └─ subclass of ← copper clad steel, nickel clad copper, …
+```
+
+Erkannt wird ein Schichtverbund an der Bezeichnung (`clad`, `plated`,
+`plattiert`, `bimetallic`, `centre in … ring`). Für jedes so erkannte Item
+schlägt die Prüfung vor:
+
+- jede bestehende `P279`-Kante auf ein Bestandteil- oder Basismetall
+  (`Copper-clad steel → P279 → Stahl`) bzw. eine allgemeine Wurzel zu
+  **entfernen**,
+- ein bestehendes `P31` auf `P279` **umzustellen** — ein Clad-Werkstoff mit
+  Norm-Varianten (Kern-/Mantel-Verhältnisse, ASTM B566) ist eine Klasse,
+  kein Einzelding,
+- `P279 → composite material` (Q181790) zu setzen.
+
+Der Entwurf steht in **Stufe 3** und damit auskommentiert: der Name kann
+auch ein galvanisch veredeltes Einzelobjekt meinen. Eine bestehende Kante
+auf eine schon richtige Verbund-Oberklasse (`bimetal` Q746634,
+`bimetallic coin material` Q110983998) bleibt stehen.
+
+Gibt es überhaupt einen Fund, entsteht zusätzlich **eine reine Meldung**
+(`clad-klasse-fehlt`, Stufe 4): die Zwischenklasse `clad metal` zwischen
+`composite material` und den einzelnen Clad-Werkstoffen fehlt in Wikidata.
+Sie anzulegen ist Sache des Reviewers — der Fund landet in
+`proposals/review-needed.md`. Die Kern-/Mantel-Aussage über
+`object has role` (P3831) und die ganze Konvention stehen in
+[`.claude/rules/ontology-verbundwerkstoffe.md`](../.claude/rules/ontology-verbundwerkstoffe.md).
 
 ## Chemische Metaklasse (P31) für Legierungen
 
@@ -372,6 +411,8 @@ und Handelsprodukte, ein Treffer gegen die wäre fast immer Zufall.
 | `periodensystem` | die 118 chemischen Elemente (`P31 = Q11344`, Ordnungszahl ≤ 118) |
 | `polymer` | **Klassen** der Polymere/Kunststoffe unter Q11474 (`P279*`, ~206) — dieselbe Wurzel wie `python -m lauf polymer` und der Benchmark, dort aber mitsamt Instanzen. Für die Strukturprüfung nur die Klassen, sonst meldet `parallelzweig` massenhaft „kein `P279*`-Pfad zu material" für konkrete Kunststoffsorten. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11474` |
 | `magnetwerkstoffe` | Magnetwerkstoffe unter Q949573, **ohne Isotope** (`FILTER NOT EXISTS { ?i wdt:P1086 ?z }`) — sonst zieht ein schiefer Instanzpfad über Nickel (Q744) ~40 Nickel-Isotope herein. Winzig (~17 Klassen), `MAGNET_PATTERN` mit dem Benchmark identisch, `--bereichswurzel Q949573`. `MAGNET_PATTERN` verankert neben Q949573 auch **Q2554911** (weichmagnetische Werkstoffe) und **Q9259184** (ferromagnetic material) als eigene Wurzeln, damit der ganze ferromagnetische Zweig nicht an einer einzigen P279-Kante hängt |
+| `keramik` | **Klassen** der Keramik unter Q45621 (`P279*`, ~1021) — wie `python -m lauf keramik` und der Benchmark. Nur die Klassen, denn der Instanzzweig sind ~49.000 Museums-/Fundstücke (Objekte *aus* Keramik). Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q45621` |
+| `glas` | **Klassen** des Glases unter Q11469 (`P279*`, ~165) — dieselbe Wurzel wie `python -m lauf glas` und der Benchmark, dort aber mitsamt Instanzen (~1160). Für die Strukturprüfung nur die Klassen. Der Behälter-Ast `Q1207302` „jar" (de-Label „Glas") ist über `GLAS_AUSSCHLUSS_FILTER` ausgeschlossen — wie im Benchmark/materialswiki-Lauf. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11469` |
 
 Die Muster kommen aus [materialswiki/cli.py](../materialswiki/cli.py) — sie
 werden importiert, nicht kopiert, damit dieses Werkzeug und der

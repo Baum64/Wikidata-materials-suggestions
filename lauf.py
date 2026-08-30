@@ -28,7 +28,7 @@ Nur die Strukturpruefung, fuer JEDE ClassCheck-Grundgesamtheit
 Als Gruppenschalter (--struktur / --nur-struktur) gibt es die Strukturpruefung
 nur dort, wo Gruppe und ClassCheck-Grundgesamtheit zusammenfallen
 (legierungen, benannte-legierungen, oxide, periodensystem, polymer,
-magnetwerkstoffe). Der Unterbefehl
+magnetwerkstoffe, keramik, glas). Der Unterbefehl
 'struktur' nimmt daneben auch metallischer-werkstoff und material und braucht
 weder Benchmark noch materialswiki-Gegenstueck. Ausgabe wie sonst nach
 proposals/.
@@ -59,8 +59,15 @@ Gruppen
   polymer        Polymere/Kunststoffe unter Q11474 (~795 Items, 206 Klassen).
                  Nur 8 tragen eine Summenformel - der Ertrag liegt in Struktur
                  und Infobox-Kennzahlen, nicht in COD/MP
-  magnetwerkstoffe  Magnetwerkstoffe unter Q949573, ohne Isotope (~10 Klassen).
+  magnetwerkstoffe  Magnetwerkstoffe unter Q949573, ohne Isotope (~17 Klassen).
                  Sehr klein; vor allem fuer die Strukturpruefung gedacht
+  keramik        Keramik-Klassen unter Q45621 (~1021, KEINE Instanzen - der
+                 Instanzzweig sind ~49000 Museums-/Fundstuecke). Keine
+                 Summenformel, ~210 mit de-Artikel; Ertrag in Struktur und
+                 Infobox-Kennzahlen
+  glas           Glas/Glaswerkstoffe unter Q11469 (~1160 Items, ~165 Klassen,
+                 ~73 mit de-Artikel). Wie polymer Klassen samt Instanzen.
+                 Der Behaelter-Ast Q1207302 "jar" ist ausgeschlossen
 
 Aufruf
 ------
@@ -159,6 +166,18 @@ GRUPPEN = {
         "struktur": "magnetwerkstoffe",
         "beschreibung": "Magnetwerkstoffe (Q949573, ohne Isotope)",
     },
+    "keramik": {
+        "population": "keramik",
+        "cli": ["--group", "keramik"],
+        "struktur": "keramik",
+        "beschreibung": "Keramik-Klassen (Q45621, ohne Objekt-Instanzen)",
+    },
+    "glas": {
+        "population": "glas",
+        "cli": ["--group", "glas"],
+        "struktur": "glas",
+        "beschreibung": "Glas / Glaswerkstoffe (Q11469)",
+    },
 }
 
 # Alle Grundgesamtheiten von ClassCheck.py - fuer den Unterbefehl 'struktur'.
@@ -173,6 +192,8 @@ CLASSCHECK_POPULATIONEN = {
     "periodensystem": "die 118 chemischen Elemente",
     "polymer": "Polymere / Kunststoffe unter Q11474 - wie 'lauf polymer'",
     "magnetwerkstoffe": "Magnetwerkstoffe unter Q949573 (ohne Isotope)",
+    "keramik": "Klassen der Keramik unter Q45621 - wie 'lauf keramik'",
+    "glas": "Klassen des Glases unter Q11469 - wie 'lauf glas'",
 }
 
 
@@ -296,7 +317,8 @@ def main(argv=None) -> int:
                              "chemische Metaklasse) - schreibt "
                              "qs_class_<gruppe>_<stempel>.txt in denselben "
                              "Ordner. Nur legierungen, benannte-legierungen, "
-                             "oxide, periodensystem, polymer, magnetwerkstoffe.")
+                             "oxide, periodensystem, polymer, magnetwerkstoffe, "
+                             "keramik, glas.")
     parser.add_argument("--nur-struktur", action="store_true",
                         help="NUR die Strukturpruefung - ohne Benchmark und "
                              "materialswiki")

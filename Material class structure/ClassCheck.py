@@ -62,8 +62,8 @@ in der Regel zwei Zeilen. Was sich wiederholen wuerde - Zielklasse, Link,
 Pruefanweisung - steht einmal im Gruppenkopf. Fuer die 118 Elemente sind das
 rund 600 Zeilen statt rund 1130.
 
-Die zwoelf Pruefungen
---------------------
+Die dreizehn Pruefungen
+-----------------------
   1. kennzahlen        Wie wird P279 in der Grundgesamtheit ueberhaupt
                        benutzt: P279, P31, beides, keines; Mehrfacheltern;
                        Tiefe.
@@ -93,22 +93,32 @@ Die zwoelf Pruefungen
                        dem groessten Anteil IST das Basismetall, damit steht
                        die Legierungsklasse fest - hier Kupferlegierung.
                        Diese Auswertung raet nicht, sie rechnet.  [Stufe 3]
-  8. zu-allgemein      Item haengt direkt unter einer sehr allgemeinen
+  8. clad-taxonomie    Der Name nennt einen Schichtverbund ("copper clad
+                       aluminium", "... plated ...", bimetallisch). Der
+                       gehoert unter composite material (Q181790), nicht
+                       unter sein Kern- oder Mantelmetall; ein bestehendes
+                       P31 wird auf P279 umgestellt.              [Stufe 3]
+                       Die fehlende Zwischenklasse 'clad metal' geht als
+                       'clad-klasse-fehlt' nach review-needed.md. [Stufe 4]
+                       Siehe .claude/rules/ontology-verbundwerkstoffe.md.
+  9. zu-allgemein      Item haengt direkt unter einer sehr allgemeinen
                        Klasse, obwohl seine Bezeichnung eine speziellere
                        nennt. Aus material_subclass_check.py uebernommen,
                        mit drei Filtern, ohne die es nicht traegt - siehe
                        den Block bei ALLGEMEINE_WURZELN.         [Stufe 3]
-  9. ohne-einordnung   Benannte Legierung ohne jeden Pfad zu "Legierung".
+ 10. ohne-einordnung   Benannte Legierung ohne jeden Pfad zu "Legierung".
                        Wo es fuer das Basismetall eine Klasse GIBT, wird sie
                        vorgeschlagen.                            [Stufe 3]
- 10. p31-neben-p279    Item haengt direkt unter einer allgemeinen Klasse und
+ 11. p31-neben-p279    Item haengt direkt unter einer allgemeinen Klasse und
                        hat zusaetzlich P31. Nur Meldung - siehe
                        pruefe_p31_neben_p279() dazu, warum kein Entwurf
                        daraus wird.                              [Stufe 4]
- 11. parallelzweig     Item ohne P279*-Pfad zu "material" (Q214609). Kein
+ 12. parallelzweig     Item ohne P279*-Pfad zu "material" (Q214609). Kein
                        Fehler (P186 erlaubt mehrere gleichrangige Werttypen,
-                       siehe visualisierung.py daneben).        [Stufe 4]
- 12. elementklasse     NUR im Szenario 'periodensystem' (siehe unten). Drei
+                       siehe visualisierung.py daneben). P31-Instanzen einer
+                       Klasse (konkrete Sorten, selbst keine Klasse) werden
+                       gar nicht erst gemeldet.                  [Stufe 4]
+ 13. elementklasse     NUR im Szenario 'periodensystem' (siehe unten). Drei
                        Fragen an ein chemisches Element: fehlt die
                        Elementkategorie (Alkalimetall, Uebergangsmetall,
                        Halbmetall, ...), fehlt die Gruppe des
@@ -167,8 +177,9 @@ faellt beim Bauen nicht auf, beim Einspielen schon:
       an eine Werkstoffklasse schreibt dieses Werkzeug kein P31, und
       an eine Instanz kein P279.
     Wo die Klassenzugehoerigkeit aus dem Graphen nicht folgt, entsteht eine
-    Meldung statt eines Entwurfs. Das ist der Grund, warum Pruefung 4 und
-    Pruefung 9 seltener entwerfen als frueher.
+    Meldung statt eines Entwurfs. Das ist der Grund, warum Pruefung 4
+    (metaklasse) und Pruefung 10 (ohne-einordnung) seltener entwerfen als
+    frueher.
 
 Ausgabe
 -------
@@ -231,7 +242,8 @@ sys.path[:0] = [_HIER, _REPO]
 PROPOSALS_DIR = os.path.join(_REPO, "proposals")
 
 from materialswiki.cli import (  # noqa: E402
-    KUNSTSTOFF_QID, LEGIERUNG_PATTERN, LEGIERUNG_QID,
+    GLAS_AUSSCHLUSS_FILTER, GLAS_QID, KERAMIK_QID, KUNSTSTOFF_QID,
+    LEGIERUNG_PATTERN, LEGIERUNG_QID,
     MAGNET_PATTERN, MAGNETWERKSTOFF_QID, OXID_PATTERN, fetch_named_alloys,
 )
 
@@ -409,9 +421,11 @@ POPULATIONEN = {
     # (Q37756, [[List of named alloys]]) voraus und finden hier nichts;
     # 'elementklasse' braucht die Ordnungszahl.
     #
-    # polymer prueft NUR die Klassen (P279*, ~206) - anders als der
-    # materialswiki-/Benchmark-Lauf, der ueber KUNSTSTOFF_PATTERN auch die
-    # Instanzen mitnimmt. Fuer eine Strukturpruefung sind die Instanzen
+    # polymer, keramik und glas pruefen NUR die Klassen (P279*) - anders als
+    # der materialswiki-/Benchmark-Lauf, der bei polymer und glas ueber das
+    # jeweilige _PATTERN auch die Instanzen mitnimmt (bei keramik nicht, dort
+    # ist der Instanzzweig mit ~49.000 Fundstuecken ohnehin unbrauchbar).
+    # Fuer eine Strukturpruefung sind die Instanzen
     # (konkrete Kunststoffsorten, per P31 an ihrer Klasse) nur Rauschen:
     # 'parallelzweig' meldete sonst ~580x "kein P279*-Pfad zu material",
     # was fuer Instanzen normal ist. Gleiche Logik wie bei 'material' /
@@ -438,12 +452,30 @@ POPULATIONEN = {
                        "instanz-als-klasse", "zyklus", "parallelzweig"],
         "bereichswurzel": MAGNETWERKSTOFF_QID,
     },
+    "keramik": {
+        "pattern": SUBTREE_KLASSEN_PATTERN.format(root=KERAMIK_QID),
+        "beschreibung": "Klassen der Keramik (Q45621)",
+        "pruefungen": ["kennzahlen", "redundant", "verkehrt",
+                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+        "bereichswurzel": KERAMIK_QID,
+    },
+    "glas": {
+        # Q1207302 "jar" (de "Glas") ist ein Behaelter, kein Werkstoff -
+        # GLAS_AUSSCHLUSS_FILTER haelt ihn wie im Benchmark/materialswiki-Lauf
+        # heraus.
+        "pattern": (SUBTREE_KLASSEN_PATTERN.format(root=GLAS_QID)
+                    + GLAS_AUSSCHLUSS_FILTER),
+        "beschreibung": "Klassen des Glases (Q11469, ohne Q1207302 'jar')",
+        "pruefungen": ["kennzahlen", "redundant", "verkehrt",
+                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+        "bereichswurzel": GLAS_QID,
+    },
 }
 
 PRUEFUNGEN = ["kennzahlen", "zyklus", "redundant", "verkehrt",
               "instanz-als-klasse", "metaklasse", "zusammensetzung",
-              "zu-allgemein", "ohne-einordnung", "p31-neben-p279",
-              "parallelzweig", "elementklasse"]
+              "clad-taxonomie", "zu-allgemein", "ohne-einordnung",
+              "p31-neben-p279", "parallelzweig", "elementklasse"]
 
 # Pruefungen, die nur in der Grundgesamtheit 'periodensystem' etwas
 # bedeuten. Sie brauchen die Ordnungszahl - ausserhalb des Periodensystems
@@ -572,6 +604,51 @@ AUFLAGE_MARKER = ("plating:", "plating :", "coating:", "auflage:")
 # Kupferwerkstoff, auch wenn Kupfer den groesseren Anteil haette.
 VERBUND_MARKER = ("plated", "clad", "plattiert", "centre in", "center in",
                   "ring", "core")
+
+# ---------------------------------------------------------------------------
+# Clad-/Plattierwerkstoffe: eine eigene Verbundwerkstoffklasse
+# ---------------------------------------------------------------------------
+#
+# "Copper clad aluminium" ist NICHT eine Art Aluminium und NICHT eine Art
+# Kupfer, sondern taxonomisch eine eigene Klasse von Verbundwerkstoffen:
+#
+#   composite material (Q181790)
+#     -> clad metal                       (fehlt in Wikidata, siehe unten)
+#          -> copper clad aluminium
+#               -> copper clad steel, copper clad stainless steel,
+#                  nickel clad copper, ... (verschiedene Kern-/Mantel-Paare
+#                  und Norm-Verhaeltnisse, z. B. ASTM B566)
+#
+# Die einzelne Clad-Klasse traegt also P279, nicht P31 - ein konkretes,
+# normiertes Produkt (eine bestimmte Drahtsorte nach ASTM-Spezifikation)
+# waere P31 dieser Klasse. Dasselbe Muster wie Stahl -> Stahlsorte -> 1.4301.
+#
+# Ist-Zustand in Wikidata (geprueft 2026-08-30): die Clad-Werkstoffe haengen
+# mal direkt unter material (Q112310011 "Copper clad aluminium ..."), mal als
+# vermeintliche Unterklasse ihres Kernmetalls (Q3815254 "Copper-clad steel"
+# P279 -> Q11427 Stahl). Eine gemeinsame Klasse "clad metal" gibt es nicht -
+# der Vorschlag haengt sie deshalb direkt unter composite material und
+# vermerkt die fehlende Zwischenklasse als offene Aufgabe.
+COMPOSITE_MATERIAL_QID = "Q181790"   # composite material
+
+# Bezeichnungsmuster, die einen Schichtverbund anzeigen. Wortgrenzen, damit
+# "clad" nicht in "cladogram" trifft und "plated" ein Metall hinter sich hat.
+CLAD_PATTERN = re.compile(
+    r"(?:^|[\s\-])clad(?:ding|\b)"
+    r"|[\s\-]plated\b"
+    r"|\bplattiert"
+    r"|\bbimetall"
+    r"|\bbi-?metal"
+    r"|\bcentre in\b|\bcenter in\b"
+    r"|\bsandwich(?:ed)?\b", re.I)
+
+# Oberklassen, die fuer einen Clad-Werkstoff bereits richtig sind - eine
+# bestehende P279-Kante dorthin wird nicht entfernt.
+CLAD_OBERKLASSEN_OK = {
+    COMPOSITE_MATERIAL_QID,   # composite material
+    "Q110983998",             # bimetallic coin material
+    "Q746634",                # bimetal
+}
 
 # Ab welchem Abstand zum Zweitplatzierten das Basismetall als eindeutig gilt
 # (in Prozentpunkten). Bei "48% Copper, 52% Aluminium" ist die Zuordnung
@@ -1191,6 +1268,100 @@ def pruefe_zusammensetzung(kandidaten: dict, elementnamen: dict,
     return treffer
 
 
+def pruefe_clad_taxonomie(kandidaten: dict, graph, p31_werte: dict,
+                          labels: dict) -> list:
+    """Clad-/Plattierwerkstoffe als eigene Verbundwerkstoffklasse einordnen.
+
+    Erkennung ueber die Bezeichnung (CLAD_PATTERN): "clad", "plated",
+    "plattiert", "bimetallisch", "centre in ... ring". Fuer jedes so
+    erkannte Item wird vorgeschlagen:
+
+      * jede bestehende P279-Kante auf etwas anderes als eine schon richtige
+        Verbund-Oberklasse (CLAD_OBERKLASSEN_OK) zu entfernen - "eine Art
+        Stahl" / "eine Art Aluminium" ist fuer einen Schichtverbund falsch;
+      * ein bestehendes P31 auf P279 umzustellen - ein Clad-Werkstoff mit
+        Norm-Varianten (Kern-/Mantel-Verhaeltnisse, ASTM B566) ist eine
+        Klasse, kein Einzelding;
+      * P279 -> composite material (Q181790) zu setzen.
+
+    Der Entwurf steht in Stufe 3 (aus der Bezeichnung, nicht aus dem Graphen)
+    und damit auskommentiert: der Name kann auch ein galvanisch veredeltes
+    Einzelobjekt meinen, kein Schichtverbund. Wo das Item ueber P279* ohnehin
+    schon bei composite material landet, entsteht kein Befund.
+
+    Gibt es ueberhaupt einen Fund, wird zusaetzlich EINE reine Meldung
+    ('clad-klasse-fehlt', Stufe 4) erzeugt: zwischen composite material und
+    den einzelnen Clad-Werkstoffen fehlt in Wikidata die Zwischenklasse
+    "clad metal". Sie anzulegen ist Sache des Reviewers - dieses Werkzeug
+    legt keine Items an. Der Fund landet ueber schreibe_review_needed() auch
+    in proposals/review-needed.md.
+    """
+    treffer, hatte_fund = [], False
+    for qid, eintrag in sorted(kandidaten.items()):
+        anzeige = (eintrag.get("label_de") or eintrag.get("label_en")
+                   or labels.get(qid, qid))
+        text = " ".join(filter(None, (eintrag.get("label_de"),
+                                      eintrag.get("label_en"))))
+        if not CLAD_PATTERN.search(text):
+            continue
+
+        if qid in graph and COMPOSITE_MATERIAL_QID in graph:
+            try:
+                if nx.has_path(graph, qid, COMPOSITE_MATERIAL_QID):
+                    continue   # laengst als Verbundwerkstoff eingeordnet
+            except nx.NodeNotFound:
+                pass
+
+        entfernen = []
+        for p in (graph.successors(qid) if qid in graph else []):
+            if p not in CLAD_OBERKLASSEN_OK:
+                entfernen.append(("P279", p))
+        for k in p31_werte.get(qid, []):
+            entfernen.append(("P31", k))
+
+        zeilen = [f"-{qid}\t{prop}\t{ziel}" for prop, ziel in entfernen]
+        zeilen.append(f"{qid}\tP279\t{COMPOSITE_MATERIAL_QID}")
+
+        alt = (", ".join(f"{prop} {ziel} ({labels.get(ziel, ziel)})"
+                         for prop, ziel in entfernen) or "keine Einordnung")
+        hat_p31 = any(prop == "P31" for prop, _ in entfernen)
+        treffer.append(befund(
+            "clad-taxonomie", qid, anzeige, "\n".join(zeilen),
+            f"Der Name deutet auf einen Schichtverbund (clad/plattiert/"
+            f"bimetallisch). Ein Clad-Werkstoff ist taxonomisch eine eigene "
+            f"Verbundwerkstoffklasse, nicht eine Art seiner Bestandteile. "
+            f"Bisher: {alt}."
+            + (" Steht als P31 - mit Norm-Varianten (Kern-/Mantel-Verhaeltnis, "
+               "ASTM B566) ist der Clad-Werkstoff aber eine Klasse (P279)."
+               if hat_p31 else ""),
+            "GERATEN aus dem Namen. PRUEFEN: wirklich ein Schichtverbund "
+            "(Kern + Mantel), kein galvanisch veredeltes Einzelobjekt? "
+            "Zielklasse Q181790 (composite material) - die feinere "
+            "Zwischenklasse 'clad metal' fehlt in Wikidata (siehe "
+            "proposals/review-needed.md).",
+            ziel_qid=COMPOSITE_MATERIAL_QID,
+            ziel_label=labels.get(COMPOSITE_MATERIAL_QID, "composite material")))
+        hatte_fund = True
+
+    if hatte_fund:
+        treffer.append(befund(
+            "clad-klasse-fehlt", COMPOSITE_MATERIAL_QID,
+            "clad metal (fehlende Zwischenklasse)", "",
+            "Zwischen Q181790 (composite material) und den einzelnen "
+            "Clad-Werkstoffen (copper clad aluminium, copper clad steel, "
+            "copper clad stainless steel, nickel clad copper ...) fehlt in "
+            "Wikidata eine gemeinsame Klasse 'clad metal' / 'Plattierwerkstoff'. "
+            "Solange sie fehlt, haengen die Clad-Werkstoffe im Entwurf direkt "
+            "unter composite material.",
+            "Zwischenklasse in Wikidata anlegen (composite material -> clad "
+            "metal -> copper clad aluminium -> copper clad steel ...). Dieses "
+            "Werkzeug legt keine Items an - offene Aufgabe fuer den Reviewer.",
+            eigenschaft="P279",
+            ziel_qid=COMPOSITE_MATERIAL_QID,
+            ziel_label=labels.get(COMPOSITE_MATERIAL_QID, "composite material")))
+    return treffer
+
+
 def pruefe_p31_neben_p279(p31_kanten: list, kinder: dict, direkt_allgemein: set,
                           labels: dict) -> list:
     """Item haengt direkt unter einer allgemeinen Klasse UND hat P31.
@@ -1775,8 +1946,15 @@ def pruefe_ohne_einordnung(items: dict, eingeordnet: set, labels: dict,
 
 
 def pruefe_parallelzweig(items: dict, unter_material: set,
-                         labels: dict) -> list:
+                         labels: dict, p31_werte: dict | None = None,
+                         ist_klasse: set | None = None) -> list:
     """Items ohne P279*-Pfad zu material (Q214609).
+
+    Uebersprungen werden Items, die per P31 Instanz einer Klasse sind und
+    selbst keine Klasse (kein P279, keine Unterklassen): eine konkrete,
+    normierte Sorte haengt korrekt per P31 an ihrer Klasse und braucht
+    keinen eigenen P279-Pfad zu material - das ist kein meldenswerter
+    Zustand, sondern der Regelfall (siehe .claude/rules/).
 
     Ausdruecklich KEIN Fehler: P279 erlaubt (und P186 verlangt) mehrere
     gleichrangige Werttypen nebeneinander - alloy, chemical compound,
@@ -1787,13 +1965,21 @@ def pruefe_parallelzweig(items: dict, unter_material: set,
     Gemeldet wird trotzdem, weil die Zahl die Frage beantwortet, ob sich eine
     Vereinheitlichung ueberhaupt lohnt.
     """
+    p31_werte = p31_werte or {}
+    ist_klasse = ist_klasse or set()
+
+    def nur_instanz(qid: str) -> bool:
+        """P31-Instanz einer Klasse und selbst keine Klasse -> kein Befund."""
+        return bool(p31_werte.get(qid)) and qid not in ist_klasse
+
     return [befund(
         "parallelzweig", qid, labels.get(qid, eintrag.get("label", qid)), "",
         "kein P279*-Pfad zu material (Q214609) - laeuft ueber einen "
         "parallelen Zweig (alloy, chemical compound, ...).",
         "Kein Fehler. Nur relevant, wenn die Hierarchie unter Q214609 "
         "vereinheitlicht werden soll.", eigenschaft="P279")
-        for qid, eintrag in items.items() if qid not in unter_material]
+        for qid, eintrag in items.items()
+        if qid not in unter_material and not nur_instanz(qid)]
 
 
 def kennzahlen(items: dict, graph, p31_kanten: list, kinder: dict,
@@ -2209,6 +2395,7 @@ STUFEN = [
       "falsche Aussage weg, P361 mit demselben Ziel hin) - trotzdem PRUEFEN,",
       "ob das Ziel selbst noch stimmt."]),
     (3, "GERECHNET ODER GERATEN", ["zusammensetzung",
+                                   "clad-taxonomie",
                                    "zu-allgemein",
                                    "ohne-einordnung"], False,
      "aus einer Bezeichnung oder einem Messwert gegen eine Konvention",
@@ -2220,6 +2407,7 @@ STUFEN = [
     (4, "NUR MELDUNG - KEIN ENTWURF", ["element-kategorie-umstritten",
                                        "element-kategorie-konflikt",
                                        "element-dichteklasse-review",
+                                       "clad-klasse-fehlt",
                                        "metaklasse-klasse",
                                        "ohne-einordnung-instanz",
                                        "p31-neben-p279", "parallelzweig"],
@@ -2255,6 +2443,13 @@ ART_TITEL = {
     "zusammensetzung": ("Basismetall aus der Zusammensetzung",
                         "GERECHNET: der Anteil steht im Namen, das groesste "
                         "Element ist das Basismetall"),
+    "clad-taxonomie": ("Clad-Werkstoff als eigene Verbundklasse",
+                       "GERATEN: der Name nennt einen Schichtverbund - der "
+                       "gehoert unter composite material, nicht unter sein "
+                       "Kern- oder Mantelmetall"),
+    "clad-klasse-fehlt": ("Zwischenklasse 'clad metal' fehlt in Wikidata",
+                          "nur Meldung: anlegen kann dieses Werkzeug nichts - "
+                          "siehe proposals/review-needed.md"),
     "zu-allgemein": ("Zu allgemein eingehaengt",
                      "GERATEN: die Bezeichnung nennt eine speziellere "
                      "Klasse - hier sind Fehltreffer die Regel"),
@@ -2629,9 +2824,14 @@ def schreibe_markdown(befunde: list, pfad: str) -> None:
 # Befundarten, fuer die es (noch) keine verbindliche Konvention gibt und die
 # deshalb nach CLAUDE.md ("Arbeitsweise", Punkt 3) als offene Frage in
 # proposals/review-needed.md gehoeren statt in einen automatischen Entwurf.
-# Aktuell nur Fall 3 aus periodic-table-conventions.md; weitere Arten kommen
-# hierher, sobald ein anderer Fall ohne Konvention entsteht.
-REVIEW_NEEDED_ARTEN = {"element-dichteklasse-review"}
+# Fall 3 aus periodic-table-conventions.md und die fehlende Clad-Zwischenklasse;
+# weitere Arten kommen hierher, sobald ein anderer Fall ohne Konvention bzw.
+# ohne moeglichen Entwurf entsteht. Wert: die Ueberschrift des Abschnitts.
+REVIEW_NEEDED_ARTEN = {
+    "element-dichteklasse-review": "Fall 3: Leicht-/Schwermetall",
+    "clad-klasse-fehlt": "Verbund-/Clad-Werkstoffe: fehlende Zwischenklasse "
+                         "'clad metal'",
+}
 
 
 def schreibe_review_needed(befunde: list, pfad: str) -> None:
@@ -2652,17 +2852,29 @@ def schreibe_review_needed(befunde: list, pfad: str) -> None:
     with open(pfad, "a", encoding="utf-8") as f:
         if neu:
             f.write("# Offene Fragen ohne verbindliche Konvention\n\n"
-                    "Gesammelt nach .claude/rules/periodic-table-conventions.md "
-                    "und CLAUDE.md (\"Arbeitsweise\", Punkt 3): hier steht "
-                    "NICHTS, das dieses Projekt automatisch entscheidet.\n\n")
+                    "Gesammelt nach .claude/rules/periodic-table-conventions.md, "
+                    ".claude/rules/ontology-verbundwerkstoffe.md und CLAUDE.md "
+                    "(\"Arbeitsweise\", Punkt 3): hier steht NICHTS, das dieses "
+                    "Projekt automatisch entscheidet.\n\n")
         f.write(f"## Lauf {dt.datetime.now():%Y-%m-%d %H:%M} "
-                f"({len(zeilen)} Fund(e), Fall 3: Leicht-/Schwermetall)\n\n")
-        for b in sorted(zeilen, key=lambda b: b["label"]):
-            f.write(f"- **{b['label']}** ({WD}{b['qid']}): {b['begruendung']} "
-                    f"Ziel waere {b['ziel_qid']} ({b['ziel_label']}), aber "
-                    f"welche Property (P31/P279/P1552) dafuer richtig ist, "
-                    f"steht noch nicht fest.\n")
-        f.write("\n")
+                f"({len(zeilen)} Fund(e))\n\n")
+        for art, ueberschrift in REVIEW_NEEDED_ARTEN.items():
+            teil = sorted((b for b in zeilen if b["befund"] == art),
+                          key=lambda b: b["label"])
+            if not teil:
+                continue
+            f.write(f"### {ueberschrift}\n\n")
+            for b in teil:
+                if art == "element-dichteklasse-review":
+                    f.write(f"- **{b['label']}** ({WD}{b['qid']}): "
+                            f"{b['begruendung']} Ziel waere {b['ziel_qid']} "
+                            f"({b['ziel_label']}), aber welche Property "
+                            f"(P31/P279/P1552) dafuer richtig ist, steht noch "
+                            f"nicht fest.\n")
+                else:
+                    f.write(f"- **{b['label']}** ({WD}{b['qid']}): "
+                            f"{b['begruendung']} {b['entscheidung']}\n")
+            f.write("\n")
     print(f"{len(zeilen)} offene Frage(n) angehaengt an: {pfad}",
           file=sys.stderr)
 
@@ -2853,7 +3065,8 @@ def main(argv: Optional[list] = None) -> int:
     # Die gehoeren mit in die Huelle: nur so laesst sich spaeter feststellen,
     # ob ein Vorschlag laengst erfuellt ist (pruefe_zu_allgemein).
     direkt_allgemein, allgemein_baum = {}, {}
-    if {"zu-allgemein", "p31-neben-p279", "zusammensetzung"} & set(args.pruefungen):
+    if {"zu-allgemein", "p31-neben-p279", "zusammensetzung",
+            "clad-taxonomie"} & set(args.pruefungen):
         print(f"Hole Kandidatenpool bis Tiefe {args.tiefe} unter "
               f"{', '.join(ALLGEMEINE_WURZELN)} ...", file=sys.stderr)
         allgemein_baum, ebene1 = hole_ebenen_baum(
@@ -2901,7 +3114,8 @@ def main(argv: Optional[list] = None) -> int:
     im_bereich = unter_material | unter_legierung | set(qids)
 
     braucht_p31 = {"instanz-als-klasse", "kennzahlen", "ohne-einordnung",
-                   "p31-neben-p279", "metaklasse"}
+                   "p31-neben-p279", "metaklasse", "parallelzweig",
+                   "clad-taxonomie"}
     p31_kanten = (hole_p31_kanten(sorted(set(qids) | set(direkt_allgemein)))
                   if braucht_p31 & set(args.pruefungen) else [])
     # Ueber P31 eingeordnet zaehlt genauso: "X ist ein/e Legierung".
@@ -2913,7 +3127,7 @@ def main(argv: Optional[list] = None) -> int:
     # Merkmal einer Klasse, eigene Unterklassen das andere. Ohne die
     # Kinderabfrage waere der Test halb.
     braucht_kinder = {"instanz-als-klasse", "kennzahlen", "p31-neben-p279",
-                      "metaklasse", "ohne-einordnung"}
+                      "metaklasse", "ohne-einordnung", "parallelzweig"}
     kinder = (hole_kinder(sorted(set(qids) | set(direkt_allgemein)))
               if braucht_kinder & set(args.pruefungen) else {})
 
@@ -2963,6 +3177,8 @@ def main(argv: Optional[list] = None) -> int:
     if elementdaten:
         zu_beschriften |= (set(ELEMENTKATEGORIEN) | set(GRUPPEN_QID.values())
                            | {LEICHTMETALL_QID, SCHWERMETALL_QID})
+    if "clad-taxonomie" in args.pruefungen:
+        zu_beschriften.add(COMPOSITE_MATERIAL_QID)
     print(f"Hole {len(zu_beschriften)} Bezeichnungen ...", file=sys.stderr)
     labels = hole_labels(sorted(zu_beschriften))
 
@@ -3019,6 +3235,10 @@ def main(argv: Optional[list] = None) -> int:
             befunde += pruefe_zusammensetzung(direkt_allgemein, elementnamen,
                                               klassen, graph, labels)
 
+    if "clad-taxonomie" in args.pruefungen:
+        befunde += pruefe_clad_taxonomie(direkt_allgemein, graph, p31_werte,
+                                         labels)
+
     if "zu-allgemein" in args.pruefungen:
         elemente = hole_elemente(sorted(allgemein_baum))
         begriffe = baue_suchbegriffe(allgemein_baum, elemente)
@@ -3032,7 +3252,8 @@ def main(argv: Optional[list] = None) -> int:
         befunde += pruefe_p31_neben_p279(p31_kanten, kinder,
                                          set(direkt_allgemein), labels)
     if "parallelzweig" in args.pruefungen:
-        befunde += pruefe_parallelzweig(items, unter_material, labels)
+        befunde += pruefe_parallelzweig(items, unter_material, labels,
+                                        p31_werte, ist_klasse)
     if "elementklasse" in args.pruefungen:
         befunde += pruefe_elementklasse(items, elementdaten, labels,
                                         mit_dichte=not args.ohne_dichte)

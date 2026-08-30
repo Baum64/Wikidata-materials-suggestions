@@ -137,6 +137,43 @@ MAGNET_PATTERN = (
     f"{{ ?i wdt:P279* ?magnetwurzel }} }} {LEGIERUNG_OHNE_ELEMENTE}"
 )
 
+# Keramik: der Subtree unter Q45621 "Keramik" (P279 -> Q214609 Material).
+# NUR die Klassen (P279*, ~1021), nicht die Instanzen: allein unter "fine
+# ceramic" (Q13464614) haengen rund 49.000 Museums- und Fundstuecke - konkrete
+# Objekte AUS Keramik, keine Werkstoffsorten. Die volle Grundgesamtheit ist
+# damit unbrauchbar. Die Klassen tragen keine Summenformel (0 von 1021), aber
+# ~210 einen de-Wikipedia-Artikel; der Ertrag liegt wie bei den Polymeren in
+# Struktur und Infobox-Kennzahlen, nicht in der Kristallografie.
+KERAMIK_QID = "Q45621"
+KERAMIK_PATTERN = f"?i wdt:P279* wd:{KERAMIK_QID} ."
+
+# Glas: der Subtree unter Q11469 "Glas" (P279 -> Q214609 Material). Anders als
+# bei der Keramik ist der Instanzzweig hier handhabbar (~3870 Items, davon
+# ~250 Klassen und ~94 mit de-Artikel), deshalb wie bei den Polymeren die
+# volle Grundgesamtheit aus Klassen und Instanzen. Kein Element haengt unter
+# Q11469, ein Isotopenfilter ist also nicht noetig.
+#
+# Ausgeschlossen wird Q1207302 "jar" (de-Label ebenfalls "Glas") MITSAMT
+# seinem Ast: das ist ein BEHAELTER, kein Werkstoff, und haengt nur ueber die
+# schiefe P279-Kante Q1207302 -> Q5164895 "Hohlglas" im Glas-Werkstoffbaum.
+# Der Filter wirkt so, als waere diese Kante entfernt - er nimmt Q1207302
+# selbst, seine Unterklassen (Tonkrug, decorative jar ...) und deren Instanzen
+# heraus. Nach unten gerichtet (?i wdt:P279* wd:Q1207302), damit die
+# Auswertung billig bleibt. Gilt fuer alle Glas-Laeufe (Benchmark,
+# materialswiki, ClassCheck) - GLAS_AUSSCHLUSS_FILTER wird auch von
+# "Material class structure/ClassCheck.py" importiert.
+GLAS_QID = "Q11469"
+GLAS_AUSSCHLUSS_QIDS = ("Q1207302",)
+GLAS_AUSSCHLUSS_FILTER = "".join(
+    f" FILTER NOT EXISTS {{ ?i wdt:P279* wd:{q} }}"
+    f" FILTER NOT EXISTS {{ ?i wdt:P31/wdt:P279* wd:{q} }}"
+    for q in GLAS_AUSSCHLUSS_QIDS)
+GLAS_PATTERN = (
+    f"{{ ?i wdt:P31/wdt:P279* wd:{GLAS_QID} }} UNION "
+    f"{{ ?i wdt:P279* wd:{GLAS_QID} }}"
+    f"{GLAS_AUSSCHLUSS_FILTER}"
+)
+
 # ---------------------------------------------------------------------------
 # Benannte Legierungen aus der Wikipedia-Liste
 # ---------------------------------------------------------------------------
@@ -262,6 +299,14 @@ WERKSTOFFGRUPPEN = {
     "magnetwerkstoffe": {
         "pattern": MAGNET_PATTERN,
         "beschreibung": "Magnetwerkstoffe (Q949573, ohne Isotope)",
+    },
+    "keramik": {
+        "pattern": KERAMIK_PATTERN,
+        "beschreibung": "Keramik-Klassen (Q45621, ohne Objekt-Instanzen)",
+    },
+    "glas": {
+        "pattern": GLAS_PATTERN,
+        "beschreibung": "Glas / Glaswerkstoffe (Q11469)",
     },
 }
 

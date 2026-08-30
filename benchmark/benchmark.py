@@ -249,6 +249,8 @@ WP_JE_POPULATION = {
     "carbide": ["de-chemikalie", "en-chembox"],
     "polymer": ["de-chemikalie", "en-chembox"],
     "magnetwerkstoffe": ["de-chemikalie", "en-chembox"],
+    "keramik": ["de-chemikalie", "en-chembox"],
+    "glas": ["de-chemikalie", "en-chembox"],
     "legierungen": ["de-chemikalie", "de-mineral", "en-chembox"],
     "benannte-legierungen": ["de-chemikalie", "de-mineral", "en-chembox"],
     "metalle": ["de-element", "en-element"],

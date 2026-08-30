@@ -78,6 +78,8 @@ python -m lauf legierungen                  # Benchmark + materialswiki
 python -m lauf legierungen --struktur        # zusätzlich die Klassenstruktur
 python -m lauf polymer --struktur            # Polymere/Kunststoffe (Q11474)
 python -m lauf magnetwerkstoffe --struktur   # Magnetwerkstoffe (Q949573)
+python -m lauf keramik --struktur            # Keramik-Klassen (Q45621)
+python -m lauf glas --struktur               # Glas/Glaswerkstoffe (Q11469)
 
 # nur die Strukturprüfung (ClassCheck.py), für JEDE Grundgesamtheit:
 python -m lauf struktur benannte-legierungen

@@ -1117,6 +1117,8 @@ Wikidata-Items durchgehen. Wie ergiebig das ist, hängt stark an der Gruppe
 | `oxide` | 154 | 154 | 108 |
 | `polymer` | ~795 | 8 | 113 |
 | `magnetwerkstoffe` | ~17 | 0 | wenige |
+| `keramik` | ~1021 | 0 | ~210 |
+| `glas` | ~1160 | wenige | ~73 |
 
 **`polymer`** ist der Subtree unter `Q11474` „Kunststoff" (nicht `Q81163`
 „polymer", das auch Biopolymere umfasst). Wie bei den Legierungen ist die
@@ -1130,6 +1132,21 @@ wie „Metalle unter Legierung", siehe unten). `MAGNET_PATTERN` verankert neben
 Zweig auch dann in der Grundgesamtheit, wenn die eine P279-Kante unter
 `Q949573` (die die `verkehrt`-Prüfung fälschlich zur Löschung meldet) fällt.
 Der Lauf lohnt vor allem für die Strukturprüfung.
+
+**`keramik`** (`Q45621`) nimmt **nur die Klassen** (`P279*`, ~1021), nicht die
+Instanzen: allein unter „fine ceramic" (`Q13464614`) hängen ~49.000 Museums-
+und Fundstücke — konkrete Objekte *aus* Keramik, keine Werkstoffsorten. Keine
+Summenformel, aber ~210 mit de-Artikel; der Ertrag liegt in Struktur und
+Infobox-Kennzahlen. **`glas`** (`Q11469`) ist mit ~1160 Items (davon ~165
+Klassen) handhabbar und läuft wie `polymer` mitsamt Instanzen; kein Element
+hängt unter `Q11469`, ein Isotopenfilter ist nicht nötig. Ausgeschlossen wird
+`Q1207302` „jar" (de-Label ebenfalls „Glas") **mitsamt seinem Ast** (Tonkrug,
+decorative jar, Glas-Gefäße …) — Behälter, keine Werkstoffe. Sie hingen nur
+über die schiefe Kette `Q1207302 → Q5164895` „Hohlglas" im Glas-Baum; diese
+Kette ist auf Wikidata inzwischen gekappt, `GLAS_AUSSCHLUSS_FILTER`
+(`FILTER NOT EXISTS { ?i wdt:P279*/… wd:Q1207302 }`, gilt für Benchmark,
+materialswiki und ClassCheck) hält den Ast auch dann draußen, wenn die Kante
+zurückkehrt.
 
 **`minerale`** ist mit Abstand die ergiebigste Gruppe: Instanzen von
 `Q12089225`, also die von der IMA geführten Arten — bewusst **nicht** der

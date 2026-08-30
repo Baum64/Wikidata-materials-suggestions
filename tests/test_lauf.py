@@ -43,11 +43,18 @@ def test_benchmark_kennt_jede_gruppen_grundgesamtheit():
 
 
 def test_neue_populationen_laufen_die_volle_kette():
-    for name in ("polymer", "magnetwerkstoffe"):
+    for name in ("polymer", "magnetwerkstoffe", "keramik", "glas"):
         assert name in WERKSTOFFGRUPPEN
         assert name in classcheck.POPULATIONEN
         assert name in lauf.GRUPPEN
         assert lauf.GRUPPEN[name]["struktur"] == name
+
+
+def test_glas_schliesst_den_behaelter_jar_aus():
+    """Q1207302 'jar' (de-Label 'Glas') ist ein Behaelter, kein Werkstoff -
+    er darf in keinem Glas-Lauf auftauchen."""
+    assert "Q1207302" in WERKSTOFFGRUPPEN["glas"]["pattern"]
+    assert "Q1207302" in classcheck.POPULATIONEN["glas"]["pattern"]
 
 
 def test_ausgabenamen_tragen_das_qs_schema():
