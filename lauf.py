@@ -423,6 +423,26 @@ def fuehre_aus(name: str, schritte: list, groesse) -> int:
 # Der Dialog
 # ---------------------------------------------------------------------------
 
+def _pruefe_umgebung() -> None:
+    """Bricht mit klarer Ansage ab, wenn die eine Abhaengigkeit fehlt.
+
+    lauf.py selbst braucht nur die Standardbibliothek, ruft aber JEDEN Schritt
+    als Unterprozess mit demselben Interpreter (sys.executable) auf - und
+    dessen erste Zeile ist `import requests`. Fehlt das Modul, liefe sonst der
+    ganze Dialog durch und Schritt 1 stuerzte mit einem Traceback ab.
+    """
+    try:
+        import requests  # noqa: F401
+    except ImportError:
+        raise SystemExit(
+            f"Das Modul 'requests' fehlt in diesem Python ({sys.executable}) - "
+            f"ohne es kann kein Schritt laufen.\n"
+            f"  Abhilfe (aus dem Repo-Wurzelverzeichnis):\n"
+            f"    {sys.executable} -m pip install -r requirements.txt\n"
+            f"  oder den venv-Interpreter nehmen, z. B.\n"
+            f"    .venv/bin/python -m lauf")
+
+
 def main(argv=None) -> int:
     if argv is None:
         argv = sys.argv[1:]
@@ -433,6 +453,8 @@ def main(argv=None) -> int:
               "python \"Material class structure/ClassCheck.py\" ..., "
               "python \"Anwendung/Anwendung.py\" ...", file=sys.stderr)
         return 2
+
+    _pruefe_umgebung()
 
     print("=" * 72)
     print("lauf - Benchmark, Vorschlaege, Klassenstruktur, Anwendungen")

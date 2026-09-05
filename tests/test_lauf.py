@@ -198,6 +198,21 @@ def test_main_lehnt_argumente_ab(capsys):
     assert lauf.main(["legierungen"]) == 2
 
 
+def test_pruefe_umgebung_meldet_fehlendes_requests(monkeypatch):
+    """Fehlt 'requests', bricht der Dialog SOFORT ab - nicht erst in Schritt 1."""
+    import builtins
+    echt = builtins.__import__
+
+    def ohne_requests(name, *a, **k):
+        if name == "requests":
+            raise ImportError("No module named 'requests'")
+        return echt(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", ohne_requests)
+    with pytest.raises(SystemExit, match="requests"):
+        lauf._pruefe_umgebung()
+
+
 def test_unterbrochene_laeufe_liest_die_fortschrittsdatei(tmp_path, monkeypatch):
     import json
     monkeypatch.setattr(lauf, "PROPOSALS_DIR", str(tmp_path))
