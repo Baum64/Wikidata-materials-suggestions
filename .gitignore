@@ -8,12 +8,12 @@ venv/
 
 # ---------------------------------------------------------------------------
 # Zugangsdaten - NIEMALS committen
-# API-Schluessel und Kontaktadressen stehen in .env. Die Vorlage
-# .env.beispiel ist bewusst versioniert und enthaelt nur Platzhalter.
+# API-Schluessel und Kontaktadresse stehen in .env.api-keys im
+# Repo-Wurzelverzeichnis. konfig.py spiegelt die Datei beim Import in die
+# Umgebung; committet wird sie nie.
 # ---------------------------------------------------------------------------
 .env
 .env.*
-!.env.beispiel
 
 # ---------------------------------------------------------------------------
 # Generierte Ergebnisdateien
@@ -59,8 +59,9 @@ qs_class*.log
 qs_class_befunde*.md
 
 # Anwendung/Anwendung.py (--md; der Entwurf qs_anwendungen_*.txt faellt
-# schon unter das Muster qs_*.txt weiter oben)
+# schon unter das Muster qs_*.txt weiter oben) und das Protokoll aus lauf.py.
 anwendungen_befunde*.md
+anwendungen_*.log
 
 # Altbestand vor der qs_-Umbenennung (quickstatements_* -> qs_*,
 # p279_empfehlung_* -> qs_class_*). Aeltere Laufdateien tragen noch die

@@ -85,7 +85,7 @@ gewinnt die zuerst laufende, hier werden alle ausgewiesen.
 
 ### Nicht jeder Lauf fährt jede Stufe
 
-Die Spalte richtet sich nach `--population`, weil
+Die Spalte richtet sich nach `--population`, weil der Dialog
 [../lauf.py](../lauf.py) Grundgesamtheit und Vorschlagslauf aneinander
 koppelt — sonst verspricht der Benchmark Vorschläge, die nie kommen:
 

@@ -165,7 +165,7 @@ from materialswiki.cli import (  # noqa: E402
 )
 
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
-# Kontaktadresse aus .env - siehe .env.beispiel.
+# Kontaktadresse aus der Umgebung (konfig spiegelt .env.api-keys hinein).
 USER_AGENT = ("MaterialsWikidataApplicationBot/0.1 "
               f'(mailto:{konfig.wert("CONTACT_EMAIL", "DEINE-ADRESSE@example.org")})')
 HEADERS = {"User-Agent": USER_AGENT}

@@ -47,6 +47,7 @@ def kein_netz(monkeypatch):
     # Tests beeinflussen.
     wikidata._CLAIM_CACHE.clear()
     wikidata._SIEDEPUNKT_CACHE.clear()
+    wikidata._MERKMAL_CACHE.clear()
     wikidata._UEBERSPRUNGEN.clear()
     ableitungen._METAKLASSE_CACHE.clear()
     ableitungen._P527_CACHE.clear()

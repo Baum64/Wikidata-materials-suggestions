@@ -13,7 +13,7 @@ zerlegen will, braucht weder Netz noch Wikidata:
 
 | Datei | Inhalt | haengt ab von |
 |---|---|---|
-| [konfiguration.py](konfiguration.py) | Kennungen, Endpunkte, Schlüssel aus `.env` | — |
+| [konfiguration.py](konfiguration.py) | Kennungen, Endpunkte, Schlüssel aus der Umgebung | — |
 | [netz.py](netz.py) | HTTP: Drosselung je Gegenstelle, Retry, **einziger** Einstiegspunkt | konfiguration |
 | [properties.py](properties.py) | Property-Tabellen, Einheiten, Plausibilitätsschranken, Feldkarten der Infoboxen | — |
 | [formeln.py](formeln.py) | Summenformeln zerlegen und schreiben (beide Parser, funktionale Gruppen) | — |
@@ -64,17 +64,18 @@ Endpunkt mit HTTP 401, mit einem falschen Schlüssel mit HTTP 403. Beides fängt
 das Skript mit einer verständlichen Meldung ab (Exit-Code 2) statt mit einem
 Traceback.
 
-Kostenlos anlegen unter <https://next-gen.materialsproject.org/api>, dann in
-die gitignorierte `.env` im Repo-Wurzelverzeichnis eintragen:
+Kostenlos anlegen unter <https://next-gen.materialsproject.org/api>. `konfig.py`
+liest den Schlüssel **nur aus der Umgebung**; die gitignorierte
+`.env.api-keys` im Repo-Wurzelverzeichnis wird beim Start dort hineingespiegelt:
 
 ```bash
-cp ../.env.beispiel ../.env && chmod 600 ../.env
+chmod 600 ../.env.api-keys
 # darin: MP_API_KEY=...
 ```
 
-Details siehe [../README.md](../README.md#zugangsdaten-env). Für einen
-einzelnen Lauf lässt sich der Schlüssel auch über die Umgebung setzen, sie hat
-Vorrang vor der Datei:
+Details siehe [../README.md](../README.md#zugangsdaten-umgebung). Für einen
+einzelnen Lauf lässt sich der Schlüssel auch direkt exportieren, die echte
+Umgebungsvariable hat Vorrang vor der Datei:
 
 ```bash
 MP_API_KEY=zweitschluessel python -m materialswiki --periodic-table
@@ -1080,6 +1081,32 @@ Elementinfobox — ein richtiger Wert, den `P1088` wegen seines
 Bereichs-Constraints trotzdem nicht annimmt. Das ist eine Entscheidung für
 den Menschen, kein Fall für den Papierkorb.
 
+**Das Feld „Magnetismus" wird zu `P1552`.** `{{Infobox Chemisches Element}}`
+führt die magnetische Ordnung als eigenes Feld:
+
+| Beispiel | Was daraus wird |
+|---|---|
+| `[[Ferromagnetismus\|ferromagnetisch]]` | `P1552` → `Q184207` (Ferromagnetismus) |
+| `ferromagnetisch` | ebenso — der Wikilink ist optional |
+| `[[Paramagnetismus\|paramagnetisch]] (''χ<sub>m</sub>'' = 2,1 · 10<sup>−5</sup>)<ref …/>` | `P1552` → `Q188479` — der Suszeptibilitäts-Zusatz fällt weg |
+| `[[Ferromagnetismus\|ferromagnetisch]] ([[Curie-Temperatur\|Curie-Temp.]] 292,5 K)` | `P1552` → `Q184207` — die Curie-Temperatur fällt weg |
+| `antiferromagnetisch,<br />paramagnetisch` (Chrom) | **verworfen** — mehrere Ordnungen |
+
+Die fünf Stichworte (`ferro`, `ferri`, `antiferro`, `para`, `dia`) bilden über
+die `value_map` von `P1552` auf die Phänomen-Items ab
+(`Q184207`/`Q217121`/`Q575224`/`Q188479`/`Q201048`). Warum `P1552`
+„has characteristic" und **nicht** eine `P279`/`P31`-Kante auf eine
+Magnetwerkstoff-Klasse: das magnetische Verhalten ist ein Merkmal, das quer zu
+mehreren Taxonomie-Ästen auftritt — Begründung in
+[../proposals/ferromagnetika_pruefung_2026-08-30.md](../proposals/ferromagnetika_pruefung_2026-08-30.md).
+
+`P1552` steht an einem Item oft mehrfach (Farbe, Kristallform, magnetische
+Ordnung — Sauerstoff `Q629` trägt drei). Die Prüfung „schon vorhanden?" geht
+deshalb bei dieser Property auf den **Wert** (`Q184207` …), nicht bloß auf die
+PID: Eisen (`Q677`) und Nickel (`Q744`) tragen `P1552` → `Q184207` bereits und
+werden als `BEREITS_VORHANDEN` geführt, während Sauerstoffs drei fremde
+`P1552`-Werte den Paramagnetismus-Vorschlag nicht unterdrücken.
+
 **2. `Template:Infobox <element>` (en).** Je Element eine eigene Vorlagenseite.
 Angenehm: `melting point K` / `boiling point K` stehen bereits in Kelvin, also
 in der Wikidata-Einheit; `Mohs hardness` steht dort ebenfalls (`|Mohs
@@ -1438,7 +1465,7 @@ warnt das Skript auf stderr — ohne Einheit stünde in Wikidata eine nackte Zah
 ## Abgedeckte Properties
 
 `PROPERTY_MAP` in [properties.py](properties.py) enthält nur auf wikidata.org
-verifizierte Properties. **Bedient** werden davon die 22 unten — sie haben
+verifizierte Properties. **Bedient** werden davon die 23 unten — sie haben
 einen MP-Feldpfad, eine Infobox-Feldkarte oder eine Ableitung hinter sich:
 
 | Größe | Property | Einheit / Typ |
@@ -1447,6 +1474,7 @@ einen MP-Feldpfad, eine Infobox-Feldkarte oder eine Ableitung hinter sich:
 | Schmelzpunkt | `P2101` | Kelvin |
 | Siedepunkt | `P2102` | Kelvin |
 | Kristallsystem | `P556` | Item (7 Werte, 1:1 zum MP-Vokabular) |
+| magnetische Ordnung | `P1552` | Item (5 Werte: ferro/ferri/antiferro/para/dia); Feld „Magnetismus" der de-Elementinfobox |
 | Kompressionsmodul | `P5668` | Gigapascal |
 | Schubmodul | `P5673` | Gigapascal |
 | Wärmeleitfähigkeit | `P2068` | W/(m·K) |
@@ -1502,8 +1530,9 @@ polykristalline Werkstoffe — nicht als `voigt` oder `reuss`.
 `P527` und `P2670` entstehen ohne externe Quelle aus dem Item selbst, `P690`
 und `P9824` liefert die COD, `P589` beide Wege. Alles Übrige stammt aus den
 Wikipedia-Infoboxen:
-bei Elementen alle 14 Kennwerte der Tabelle oben, bei Verbindungen Dichte,
-Schmelz- und Siedepunkt sowie die CAS-Nummer.
+bei Elementen alle 15 Kennwerte der Tabelle oben (einschließlich der
+magnetischen Ordnung `P1552`), bei Verbindungen Dichte, Schmelz- und
+Siedepunkt sowie die CAS-Nummer.
 
 Feldnamen und Einheiten stammen aus dem öffentlichen OpenAPI-Schema
 (<https://api.materialsproject.org/openapi.json>, `SummaryDoc`, 69 Felder,
@@ -1550,8 +1579,8 @@ python "materialswiki/Werkstoff wikidata vorschläge.py" \
 
 Ausgabe: `werkstoffe_vorschlaege.md` und
 `werkstoffe_qs_entwurf.txt` (`--out` / `--qs-out`). Für die
-Materials-Project-Quelle ist ein eigener `MP_API_KEY` im Skript einzutragen
-(kostenloser Account auf
+Materials-Project-Quelle nimmt das Skript `MP_API_KEY_WERKSTOFFE` aus der
+Umgebung, sonst `MP_API_KEY` (kostenloser Account auf
 <https://next-gen.materialsproject.org/api>). Die `PROPERTY_MAP` dieses
 Skripts ist bewusst auf Dichte, Schmelz- und Siedepunkt beschränkt.
 

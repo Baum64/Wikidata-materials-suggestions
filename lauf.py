@@ -1,212 +1,328 @@
 """
-Sammelbefehl: messen, vorschlagen, Struktur pruefen
-==================================================
+Sammelbefehl: ein Dialog fuer alle vier Werkzeuge dieses Repos
+=============================================================
 
-EIN Einstiegspunkt fuer alle Werkzeuge dieses Repos, mit kurzer Eingabe und
-einem gemeinsamen Ausgabeordner. Je Werkstoffgruppe koennen bis zu drei
-Schritte laufen:
+`python -m lauf` startet KEINEN Lauf mit Schaltern mehr, sondern einen
+mehrschichtigen Dialog. Die Fragen kommen in dieser Reihenfolge:
 
-  1. benchmark      - wie gut ist die Gruppe in Wikidata belegt?
-  2. materialswiki  - Messwert-Vorschlaege fuer genau diese Gruppe
-  3. struktur       - Klassenhierarchie pruefen (P279/P31, chemische
-                      Metaklasse) -> gestaffelte Empfehlung
-                      ("Material class structure/ClassCheck.py")
+  1. Grundgesamtheit    - welche Population wird bearbeitet?
+     -> danach die Ausgabe, wie viele Items das betrifft
+  2. Batchgroesse        - nur wenn mehr als 200 Items betroffen sind
+     (mind. 100). Der Vorschlagslauf arbeitet dann in Chargen und laesst
+     sich fortsetzen
+  3. Umfang              - Mehrfachauswahl aus den fuer diese Population
+     verfuegbaren Schritten:
+         benchmark      wie gut ist die Gruppe in Wikidata belegt?
+         vorschlaege    Messwert-Vorschlaege je Item (materialswiki)
+         struktur       Klassenhierarchie pruefen (ClassCheck.py)
+         anwendungen    P366/P186/P2079 aus den Rueckverweisen (Anwendung.py)
 
-Ohne Schalter laufen 1 und 2; --struktur haengt 3 an, --nur-struktur macht
-nur 3. Alle Schritte benutzen DIESELBE Grundgesamtheit; die Muster kommen
-aus materialswiki.cli und werden importiert, nicht kopiert. Ohne das misst
-der Benchmark leicht etwas anderes, als der Vorschlagslauf beackert.
+Alle gewaehlten Schritte laufen nacheinander, tragen denselben Zeitstempel
+und landen zusammen in proposals/. Bricht ein Schritt ab, startet der
+naechste nicht mehr. Gibt es einen unterbrochenen Chargenlauf, bietet der
+Dialog vor der ersten Frage an, ihn fortzusetzen.
 
-Die Reihenfolge ist Absicht: der Benchmark laeuft in Minuten und zeigt, ob
-sich der Vorschlagslauf (Stunden) ueberhaupt lohnt. Bricht ein Schritt ab,
-startet der naechste gar nicht erst.
-
-Nur die Strukturpruefung, fuer JEDE ClassCheck-Grundgesamtheit
---------------------------------------------------------------
-  python -m lauf struktur <population> [--limit N] [--stempel S] [-- ...]
-
-Als Gruppenschalter (--struktur / --nur-struktur) gibt es die Strukturpruefung
-nur dort, wo Gruppe und ClassCheck-Grundgesamtheit zusammenfallen
-(legierungen, benannte-legierungen, oxide, periodensystem, polymer,
-magnetwerkstoffe, keramik, glas). Der Unterbefehl
-'struktur' nimmt daneben auch metallischer-werkstoff und material und braucht
-weder Benchmark noch materialswiki-Gegenstueck. Ausgabe wie sonst nach
-proposals/.
-
-  python -m lauf struktur benannte-legierungen
-  python -m lauf struktur oxide
-  python -m lauf struktur material --limit 500
-  python -m lauf struktur periodensystem -- --ohne-dichte
-
-Gruppen
--------
-  legierungen    568 Legierungen unter Q37756, ohne den falsch modellierten
-                 Metalle-Zweig (Wikidata fuehrt "Metalle" als Unterklasse von
-                 "Legierung"; ohne Filter waeren es 3718 Items samt Isotopen).
-                 Magere Ausbeute: nur 10 tragen eine Summenformel
-  minerale       6301 IMA-Mineralarten. Die ergiebigste Gruppe: 5694 mit
-                 Summenformel, aber KEINE EINZIGE mit COD-ID, und 3916 ohne
-                 Raumgruppe. Ein voller Lauf dauert Stunden - mit --limit
-                 anfangen
-  oxide          die 154 Oxide mit Summenformel. Der volle Subtree unter
-                 Q50690 hat 27670 Items, ist aber fast nur labelloser
-                 Massenimport
-  carbide        die 27 Carbide unter Q241906 - technische Hartstoffe wie
-                 SiC, WC, TiC und B4C. Die kleinste Gruppe, in Minuten durch;
-                 10 tragen noch keine Summenformel
-  metalle        98 metallische und halbmetallische Elemente
-  periodensystem alle 118 chemischen Elemente
-  polymer        Polymere/Kunststoffe unter Q11474 (~795 Items, 206 Klassen).
-                 Nur 8 tragen eine Summenformel - der Ertrag liegt in Struktur
-                 und Infobox-Kennzahlen, nicht in COD/MP
-  magnetwerkstoffe  Magnetwerkstoffe unter Q949573, ohne Isotope (~17 Klassen).
-                 Sehr klein; vor allem fuer die Strukturpruefung gedacht
-  keramik        Keramik-Klassen unter Q45621 (~1021, KEINE Instanzen - der
-                 Instanzzweig sind ~49000 Museums-/Fundstuecke). Keine
-                 Summenformel, ~210 mit de-Artikel; Ertrag in Struktur und
-                 Infobox-Kennzahlen
-  glas           Glas/Glaswerkstoffe unter Q11469 (~1160 Items, ~165 Klassen,
-                 ~73 mit de-Artikel). Wie polymer Klassen samt Instanzen.
-                 Der Behaelter-Ast Q1207302 "jar" ist ausgeschlossen
-
-Aufruf
-------
-  python -m lauf minerale                    # Chargen zu je 500 Items
-  python -m lauf minerale --weiter --stempel 2026-08-16_1830 --nur-vorschlaege
-  python -m lauf minerale --limit 50
-  python -m lauf oxide
-  python -m lauf legierungen --nur-benchmark
-  python -m lauf legierungen --struktur            # 1+2+3 in einem Ordner
-  python -m lauf struktur benannte-legierungen     # nur die Strukturpruefung
-  python -m lauf struktur material --limit 500
-  python -m lauf legierungen -- --no-wikipedia     # nach -- an materialswiki
-  python -m lauf struktur legierungen -- --pruefungen metaklasse   # nach --
-                                                     an ClassCheck.py
-Alle erzeugten Dateien tragen denselben Zeitstempel und liegen in
---out-dir (Default: proposals/ - CLAUDE.md, "Arbeitsweise" Punkt 2).
-
-Chargen
--------
-Die Gruppenlaeufe arbeiten in Chargen zu je --batch-size Items (Default 500).
-Nach JEDER Charge liegen Vorschlagstabelle und QuickStatements fertig vor - man kann also
-einspielen, waehrend der Rest noch laeuft, und ein Abbruch kostet hoechstens
-die angefangene Charge. Bei 6301 Mineralen sind das 13 Chargen; der Stand
-steht in <qs>.fortschritt.json.
+Welche Schritte eine Population kennt, steht in POPULATIONEN unten:
+'benchmark', 'vorschlaege' und 'struktur' gibt es fuer jede, 'anwendungen'
+nur fuer 'legierungen'.
 """
 
-import argparse
 import datetime as dt
+import glob
+import json
 import os
+import re
 import subprocess
 import sys
 
 REPO = os.path.dirname(os.path.abspath(__file__))
+PY = sys.executable
 STRUKTUR_SKRIPT = os.path.join(REPO, "Material class structure", "ClassCheck.py")
+ANWENDUNG_SKRIPT = os.path.join(REPO, "Anwendung", "Anwendung.py")
 # Alle Vorschlagsdateien nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
 PROPOSALS_DIR = os.path.join(REPO, "proposals")
 
-# Je Gruppe:
-#   population   Grundgesamtheit fuer benchmark.benchmark
-#   cli          Schalter fuer 'python -m materialswiki'
-#   struktur     Grundgesamtheit fuer die Strukturpruefung
-#                ("Material class structure/ClassCheck.py"),
-#                oder None, wenn es dort keine Entsprechung gibt
-GRUPPEN = {
+# ---------------------------------------------------------------------------
+# Die Grundgesamtheiten und was sich mit ihnen anstellen laesst
+# ---------------------------------------------------------------------------
+#
+# Je Population:
+#   beschreibung  einzeilig fuer die Auswahlliste
+#   zaehl         wie die Itemzahl ermittelt wird:
+#                   "gruppe"  -> materialswiki.gruppen.gruppen_qids(name)
+#                   sonst der Schluessel in _zaehl_sparql_muster() unten
+#   schritte      {name: konfig} - nur die hier genannten Schritte werden
+#                 fuer diese Population angeboten:
+#                   benchmark    {"population": <benchmark --population>}
+#                   vorschlaege  {"cli": [<schalter fuer python -m materialswiki>]}
+#                   struktur     {"population": <ClassCheck --population>}
+#                   anwendungen  {"population": <Anwendung --population>}
+POPULATIONEN = {
     "legierungen": {
-        "population": "legierungen",
-        "cli": ["--group", "legierungen"],
-        "struktur": "legierungen",
-        "beschreibung": "Legierungen (Q37756, ohne Metalle-Zweig)",
-    },
-    "benannte-legierungen": {
-        "population": "legierungen",
-        "cli": ["--group", "benannte-legierungen"],
-        "struktur": "benannte-legierungen",
-        "beschreibung": "benannte Legierungen aus [[en:List of named alloys]]",
+        "beschreibung": "Legierungen (Q37756, ohne Elemente/Isotope) - kaum eine traegt eine Summenformel",
+        "zaehl": "gruppe",
+        "schritte": {
+            "benchmark": {"population": "legierungen"},
+            "vorschlaege": {"cli": ["--group", "legierungen"]},
+            "struktur": {"population": "legierungen"},
+            "anwendungen": {"population": "legierungen"},
+        },
     },
     "minerale": {
-        "population": "minerale",
-        "cli": ["--group", "minerale"],
-        "struktur": None,
-        "beschreibung": "Mineralarten (Q12089225, IMA-gefuehrt)",
+        "beschreibung": "Mineralarten (Q12089225, IMA-gefuehrt) - ergiebigste Gruppe, fast alle mit Summenformel",
+        "zaehl": "gruppe",
+        "schritte": {
+            "benchmark": {"population": "minerale"},
+            "vorschlaege": {"cli": ["--group", "minerale"]},
+            "struktur": {"population": "minerale"},
+        },
     },
     "oxide": {
-        "population": "oxide",
-        "cli": ["--group", "oxide"],
-        "struktur": "oxide",
         "beschreibung": "Oxide mit Summenformel (Q50690)",
+        "zaehl": "gruppe",
+        "schritte": {
+            "benchmark": {"population": "oxide"},
+            "vorschlaege": {"cli": ["--group", "oxide"]},
+            "struktur": {"population": "oxide"},
+        },
     },
     "carbide": {
-        "population": "carbide",
-        "cli": ["--group", "carbide"],
-        "struktur": None,
-        "beschreibung": "Carbide (Q241906)",
-    },
-    "metalle": {
-        "population": "metalle",
-        "cli": ["--periodic-table", "--nur-metalle"],
-        "struktur": None,
-        "beschreibung": "metallische und halbmetallische Elemente",
+        "beschreibung": "Carbide (Q241906) - technische Hartstoffe wie SiC, WC, TiC, B4C; ~27 Items",
+        "zaehl": "gruppe",
+        "schritte": {
+            "benchmark": {"population": "carbide"},
+            "vorschlaege": {"cli": ["--group", "carbide"]},
+            "struktur": {"population": "carbide"},
+        },
     },
     "periodensystem": {
-        "population": "periodensystem",
-        "cli": ["--periodic-table", "--no-nur-metalle"],
-        "struktur": "periodensystem",
-        "beschreibung": "alle chemischen Elemente",
+        "beschreibung": "alle 118 chemischen Elemente",
+        "zaehl": "periodensystem",
+        "schritte": {
+            "benchmark": {"population": "periodensystem"},
+            "vorschlaege": {"cli": ["--periodic-table", "--no-nur-metalle"]},
+            "struktur": {"population": "periodensystem"},
+        },
     },
     "polymer": {
-        "population": "polymer",
-        "cli": ["--group", "polymer"],
-        "struktur": "polymer",
-        "beschreibung": "Polymere / Kunststoffe (Q11474)",
+        "beschreibung": "Polymere / Kunststoffe (Q11474) - ~795 Items, 206 Klassen",
+        "zaehl": "gruppe",
+        "schritte": {
+            "benchmark": {"population": "polymer"},
+            "vorschlaege": {"cli": ["--group", "polymer"]},
+            "struktur": {"population": "polymer"},
+        },
     },
     "magnetwerkstoffe": {
-        "population": "magnetwerkstoffe",
-        "cli": ["--group", "magnetwerkstoffe"],
-        "struktur": "magnetwerkstoffe",
-        "beschreibung": "Magnetwerkstoffe (Q949573, ohne Isotope)",
+        "beschreibung": "Magnetwerkstoffe (Q949573, ohne Isotope) - ~17 Klassen",
+        "zaehl": "gruppe",
+        "schritte": {
+            "benchmark": {"population": "magnetwerkstoffe"},
+            "vorschlaege": {"cli": ["--group", "magnetwerkstoffe"]},
+            "struktur": {"population": "magnetwerkstoffe"},
+        },
     },
     "keramik": {
-        "population": "keramik",
-        "cli": ["--group", "keramik"],
-        "struktur": "keramik",
-        "beschreibung": "Keramik-Klassen (Q45621, ohne Objekt-Instanzen)",
+        "beschreibung": "Keramik-Klassen (Q45621, ohne Objekt-Instanzen) - ~1021 Klassen",
+        "zaehl": "gruppe",
+        "schritte": {
+            "benchmark": {"population": "keramik"},
+            "vorschlaege": {"cli": ["--group", "keramik"]},
+            "struktur": {"population": "keramik"},
+        },
     },
     "glas": {
-        "population": "glas",
-        "cli": ["--group", "glas"],
-        "struktur": "glas",
-        "beschreibung": "Glas / Glaswerkstoffe (Q11469)",
+        "beschreibung": "Glas / Glaswerkstoffe (Q11469) - ~1160 Items, ~165 Klassen",
+        "zaehl": "gruppe",
+        "schritte": {
+            "benchmark": {"population": "glas"},
+            "vorschlaege": {"cli": ["--group", "glas"]},
+            "struktur": {"population": "glas"},
+        },
     },
 }
 
-# Alle Grundgesamtheiten von ClassCheck.py - fuer den Unterbefehl 'struktur'.
-# Mehr als die GRUPPEN oben kennen: material und metallischer-werkstoff haben
-# kein Benchmark- oder materialswiki-Gegenstueck.
-CLASSCHECK_POPULATIONEN = {
-    "benannte-legierungen": "Prueferliste aus [[en:List of named alloys]]",
-    "legierungen": "Legierungen unter Q37756 (ohne Elemente/Isotope)",
-    "metallischer-werkstoff": "Klassen unter Q1924900 - braucht --limit N",
-    "material": "Klassen unter Q214609 - braucht --limit N (~936.000 gesamt)",
-    "oxide": "Oxide mit Summenformel (Q50690) - wie 'lauf oxide'",
-    "periodensystem": "die 118 chemischen Elemente",
-    "polymer": "Polymere / Kunststoffe unter Q11474 - wie 'lauf polymer'",
-    "magnetwerkstoffe": "Magnetwerkstoffe unter Q949573 (ohne Isotope)",
-    "keramik": "Klassen der Keramik unter Q45621 - wie 'lauf keramik'",
-    "glas": "Klassen des Glases unter Q11469 - wie 'lauf glas'",
+# Reihenfolge, in der die Schritte laufen: erst der schnelle Benchmark (er
+# zeigt, ob sich der stundenlange Vorschlagslauf lohnt), dann die Vorschlaege,
+# dann die beiden Analysen.
+SCHRITT_REIHENFOLGE = ["benchmark", "vorschlaege", "struktur", "anwendungen"]
+
+SCHRITT_TEXT = {
+    "benchmark": "Benchmark - wie gut ist die Gruppe in Wikidata belegt? (Minuten)",
+    "vorschlaege": "Vorschlaege - Messwert-Vorschlaege je Item aus COD/MP/NIST/Wikipedia (Stunden)",
+    "struktur": "Klassenstruktur - P279/P31, chemische Metaklasse (ClassCheck.py)",
+    "anwendungen": "Anwendungen - P366/P186/P2079 aus den Rueckverweisen (Anwendung.py)",
 }
+
+
+# ---------------------------------------------------------------------------
+# Wie viele Items betrifft eine Population?
+# ---------------------------------------------------------------------------
+
+def _zaehl_sparql_muster() -> dict:
+    """Zaehl-Muster fuer die Populationen, die keine materialswiki-Gruppe sind.
+
+    Lazy, weil der Import von benchmark.benchmark den ganzen Apparat
+    mitzieht - und der Dialog laeuft auch ohne den Elementlauf.
+    """
+    from benchmark.benchmark import DEFAULT_MAX_Z, PERIODENSYSTEM_PATTERN
+
+    return {"periodensystem": PERIODENSYSTEM_PATTERN.format(max_z=DEFAULT_MAX_Z)}
+
+
+def _sparql_count(muster: str) -> int:
+    from materialswiki import netz
+    from materialswiki.konfiguration import WIKIDATA_SPARQL
+
+    resp = netz.get_with_retry(WIKIDATA_SPARQL, {
+        "query": f"SELECT (COUNT(DISTINCT ?i) AS ?n) WHERE {{ {muster} }}",
+        "format": "json",
+    })
+    return int(resp.json()["results"]["bindings"][0]["n"]["value"])
+
+
+def anzahl_items(name: str) -> int:
+    """Wie viele Wikidata-Items die Population `name` umfasst."""
+    if POPULATIONEN[name]["zaehl"] == "gruppe":
+        from materialswiki.gruppen import gruppen_qids
+        return len(gruppen_qids(name))
+    return _sparql_count(_zaehl_sparql_muster()[POPULATIONEN[name]["zaehl"]])
+
+
+# ---------------------------------------------------------------------------
+# Die Fragen
+# ---------------------------------------------------------------------------
+
+def _frage(text: str) -> str:
+    """input() mit sauberem Abbruch bei Ctrl-D / Ctrl-C."""
+    try:
+        return input(text).strip()
+    except (EOFError, KeyboardInterrupt):
+        print()
+        raise SystemExit(1)
+
+
+def frage_population() -> str:
+    namen = list(POPULATIONEN)
+    print("\nWelche Grundgesamtheit?\n")
+    for i, nm in enumerate(namen, 1):
+        print(f"  {i:2d}) {nm}\n      {POPULATIONEN[nm]['beschreibung']}")
+    while True:
+        wahl = _frage("\nNummer oder Name (q = Abbruch): ")
+        if wahl.lower() in ("q", "quit", "exit", ""):
+            raise SystemExit(0)
+        if wahl.isdigit() and 1 <= int(wahl) <= len(namen):
+            return namen[int(wahl) - 1]
+        if wahl in POPULATIONEN:
+            return wahl
+        print("  Bitte eine der Nummern oder einen der Namen oben.")
+
+
+def frage_groesse(anzahl, vorgabe: int = 500) -> int:
+    """Batchgroesse fuer den Vorschlagslauf, mindestens 100."""
+    if anzahl is not None:
+        print(f"\n{anzahl} Eintraege - der Vorschlagslauf arbeitet dann in "
+              f"Chargen (und laesst sich fortsetzen).")
+    while True:
+        roh = _frage(f"Batchgroesse (mind. 100, Enter fuer {vorgabe}, "
+                     f"q = Abbruch): ")
+        if roh.lower() in ("q", "quit", "exit"):
+            raise SystemExit(0)
+        if not roh:
+            return vorgabe
+        if roh.isdigit() and int(roh) >= 100:
+            return int(roh)
+        print("  Bitte eine ganze Zahl >= 100.")
+
+
+def frage_umfang(name: str) -> list:
+    verfuegbar = [s for s in SCHRITT_REIHENFOLGE
+                  if s in POPULATIONEN[name]["schritte"]]
+    print("\nUmfang? Mehrfachauswahl - Nummern mit Komma oder Leerzeichen "
+          "trennen, 'a' = alle.\n")
+    for i, s in enumerate(verfuegbar, 1):
+        print(f"  {i}) {SCHRITT_TEXT[s]}")
+    while True:
+        roh = _frage("\nAuswahl (q = Abbruch): ").lower()
+        if roh in ("q", "quit", "exit"):
+            raise SystemExit(0)
+        if roh in ("a", "alle", "all"):
+            return verfuegbar
+        teile = [t for t in re.split(r"[,\s]+", roh) if t]
+        if teile and all(t.isdigit() and 1 <= int(t) <= len(verfuegbar)
+                         for t in teile):
+            gewaehlt = {verfuegbar[int(t) - 1] for t in teile}
+            return [s for s in verfuegbar if s in gewaehlt]
+        print("  Bitte mindestens eine der Nummern oben.")
+
+
+# ---------------------------------------------------------------------------
+# Einen unterbrochenen Chargenlauf fortsetzen
+# ---------------------------------------------------------------------------
+
+def unterbrochene_laeufe() -> list:
+    """Alle Fortschrittsdateien in proposals/, deren Lauf nicht fertig ist.
+
+    Der Chargenbetrieb von materialswiki schreibt nach jeder Charge
+    qs_<gruppe>_<stempel>.fortschritt.json. Steht dort erledigt < gesamt,
+    laesst sich der Lauf mit --weiter genau dort fortsetzen.
+    """
+    offen = []
+    muster = os.path.join(PROPOSALS_DIR, "qs_*_*.fortschritt.json")
+    for pfad in sorted(glob.glob(muster)):
+        try:
+            with open(pfad, encoding="utf-8") as f:
+                stand = json.load(f)
+        except (OSError, ValueError):
+            continue
+        gruppe = stand.get("gruppe")
+        if gruppe not in POPULATIONEN:
+            continue
+        if stand.get("erledigt", 0) >= stand.get("gesamt", 0):
+            continue
+        basis = os.path.basename(pfad)[:-len(".fortschritt.json")]
+        stempel = basis[len(f"qs_{gruppe}_"):]
+        offen.append({"gruppe": gruppe, "stempel": stempel, "stand": stand})
+    return offen
+
+
+def charge_fortsetzen(eintrag: dict) -> int:
+    gruppe, stempel, stand = (eintrag["gruppe"], eintrag["stempel"],
+                              eintrag["stand"])
+    batch = stand.get("batch_size") or 500
+    pfad = _pfad_fabrik(gruppe, stempel)
+    befehl = [PY, "-m", "materialswiki", "--group", gruppe, "--weiter",
+              "--batch-size", str(batch),
+              "--out", pfad("vorschlaege", ".md"),
+              "--qs-out", pfad("qs", ".txt")]
+    print(f"\nSetze '{gruppe}' fort bei Item {stand.get('erledigt', 0) + 1} "
+          f"von {stand.get('gesamt', '?')} (Charge {stand.get('letzte_charge', '?')} "
+          f"war die letzte fertige).")
+    code = schritt("VORSCHLAEGE - fortgesetzt", befehl,
+                   pfad("vorschlaege", ".log"))
+    if code == 0:
+        _fertig(PROPOSALS_DIR, f"_{gruppe}_{stempel}")
+    return code
+
+
+# ---------------------------------------------------------------------------
+# Die Schritte ausfuehren
+# ---------------------------------------------------------------------------
+
+def _pfad_fabrik(name: str, stempel: str):
+    return lambda stamm, endung: os.path.join(
+        PROPOSALS_DIR, f"{stamm}_{name}_{stempel}{endung}")
 
 
 def struktur_befehl(population: str, verzeichnis: str, stempel: str,
                     limit=None, extra=()) -> tuple:
     """(befehl, log-pfad) fuer einen ClassCheck-Lauf.
 
-    Eine Stelle fuer beide Aufrufwege - den Gruppenschalter --struktur und
-    den Unterbefehl 'struktur'. Die Dateinamen tragen die Population, nicht
-    die Gruppe: fuer die drei Gruppen mit Strukturpruefung sind beide gleich.
+    Die Dateinamen tragen die Population; --limit wirkt nicht im
+    Periodensystem-Modus (dort ist die Grundgesamtheit abgeschlossen).
     """
     basis = os.path.join(verzeichnis, "{}_" + f"{population}_{stempel}")
-    befehl = [sys.executable, STRUKTUR_SKRIPT, "--population", population,
+    befehl = [PY, STRUKTUR_SKRIPT, "--population", population,
               "--out", basis.format("qs_class") + ".txt",
               "--md", basis.format("qs_class_befunde") + ".md",
               "--review-needed", os.path.join(PROPOSALS_DIR, "review-needed.md")]
@@ -215,47 +331,38 @@ def struktur_befehl(population: str, verzeichnis: str, stempel: str,
     return befehl + list(extra), basis.format("qs_class") + ".log"
 
 
-def _fertig(verzeichnis: str, muster: str) -> None:
-    print(f"\n{'=' * 72}\nFertig. Dateien in {verzeichnis}:")
-    for datei in sorted(os.listdir(verzeichnis)):
-        if muster in datei:
-            print(f"  {datei}")
+def schritt_befehl(stufe: str, name: str, stempel: str, groesse) -> tuple:
+    """(befehl, log-pfad) fuer einen der vier Schritte."""
+    info = POPULATIONEN[name]
+    konfig = info["schritte"][stufe]
+    pfad = _pfad_fabrik(name, stempel)
 
+    if stufe == "benchmark":
+        return ([PY, "-m", "benchmark.benchmark",
+                 "--population", konfig["population"],
+                 "--md", pfad("abdeckung", ".md")],
+                pfad("benchmark", ".log"))
 
-def struktur_main(argv) -> int:
-    """Unterbefehl 'struktur': nur ClassCheck.py, fuer jede Grundgesamtheit."""
-    p = argparse.ArgumentParser(
-        prog="lauf struktur",
-        description="Nur die Strukturpruefung (ClassCheck.py) - P279/P31, "
-                    "chemische Metaklasse -> gestaffelte Empfehlung nach "
-                    "proposals/.")
-    p.add_argument("population", choices=sorted(CLASSCHECK_POPULATIONEN),
-                   help="; ".join(f"{k}: {v}"
-                                  for k, v in CLASSCHECK_POPULATIONEN.items()))
-    p.add_argument("--out-dir", default=PROPOSALS_DIR,
-                   help="Zielordner (Default: proposals/ im Repo)")
-    p.add_argument("--limit", type=int, default=None,
-                   help="nur die ersten N Items; wirkt nicht im "
-                        "Periodensystem-Modus")
-    p.add_argument("--stempel", default=None,
-                   help="Zeitstempel der Dateinamen vorgeben")
-    p.add_argument("cli_args", nargs="*",
-                   help="alles nach -- geht an ClassCheck.py "
-                        "(z. B. -- --pruefungen metaklasse)")
-    a = p.parse_args(argv)
+    if stufe == "vorschlaege":
+        befehl = [PY, "-m", "materialswiki", *konfig["cli"],
+                  "--out", pfad("vorschlaege", ".md"),
+                  "--qs-out", pfad("qs", ".txt")]
+        # Chargenbetrieb gibt es nur im Gruppenmodus - der Periodensystem-
+        # Modus kennt weder --batch-size noch mehr als 118 Items.
+        if konfig["cli"][0] == "--group" and groesse:
+            befehl += ["--batch-size", str(groesse)]
+        return befehl, pfad("vorschlaege", ".log")
 
-    verzeichnis = os.path.abspath(a.out_dir)
-    os.makedirs(verzeichnis, exist_ok=True)
-    stempel = a.stempel or dt.datetime.now().strftime("%Y-%m-%d_%H%M")
-    befehl, log = struktur_befehl(a.population, verzeichnis, stempel,
-                                  a.limit, a.cli_args)
+    if stufe == "struktur":
+        # ClassCheck laeuft ueber die volle Grundgesamtheit - die Batchgroesse
+        # betrifft nur den Vorschlagslauf.
+        return struktur_befehl(konfig["population"], PROPOSALS_DIR, stempel)
 
-    print(f"Grundgesamtheit: {CLASSCHECK_POPULATIONEN[a.population]}")
-    print(f"Zeitstempel:     {stempel}")
-    code = schritt("STRUKTURPRUEFUNG - Klassenhierarchie", befehl, log)
-    if code == 0:
-        _fertig(verzeichnis, f"_{a.population}_{stempel}")
-    return code
+    # anwendungen
+    return ([PY, ANWENDUNG_SKRIPT, "--population", konfig["population"],
+             "--md", pfad("anwendungen_befunde", ".md"),
+             "--qs-out", pfad("qs_anwendungen", ".txt")],
+            pfad("anwendungen", ".log"))
 
 
 def schritt(titel: str, befehl: list, protokoll: str) -> int:
@@ -276,139 +383,95 @@ def schritt(titel: str, befehl: list, protokoll: str) -> int:
         return prozess.wait()
 
 
-def main(argv=None) -> int:
-    argv = list(sys.argv[1:] if argv is None else argv)
-    # Unterbefehl 'struktur' vor dem Hauptparser abfangen - so bleibt
-    # 'python -m lauf <gruppe>' unveraendert.
-    if argv and argv[0] == "struktur":
-        return struktur_main(argv[1:])
+def _fertig(verzeichnis: str, muster: str) -> None:
+    print(f"\n{'=' * 72}\nFertig. Dateien in {verzeichnis}:")
+    for datei in sorted(os.listdir(verzeichnis)):
+        if muster in datei:
+            print(f"  {datei}")
 
-    parser = argparse.ArgumentParser(
-        description=__doc__,
-        formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("gruppe", choices=sorted(GRUPPEN),
-                        help="Werkstoffgruppe; ODER 'struktur <population>' als "
-                             "Unterbefehl fuer die reine Strukturpruefung")
-    parser.add_argument("--out-dir", default=PROPOSALS_DIR,
-                        help="gemeinsamer Zielordner fuer alle Schritte - "
-                             "Vorschlagstabellen, Entwuerfe, Empfehlung, "
-                             "Protokolle (Default: proposals/ im Repo)")
-    parser.add_argument("--limit", type=int, default=None,
-                        help="nur die ersten N Items; wirkt nicht im "
-                             "Periodensystem-Modus")
-    parser.add_argument("--batch-size", type=int, default=500, metavar="N",
-                        help="Items je Charge; nach jeder Charge werden "
-                             "Vorschlagstabelle und QuickStatements geschrieben "
-                             "(Default: 500). "
-                             "0 schaltet den Chargenbetrieb ab")
-    parser.add_argument("--weiter", action="store_true",
-                        help="die naechste Charge aus der Fortschrittsdatei "
-                             "fortsetzen. Achtung: dann --out-dir und "
-                             "--stempel wie beim ersten Lauf angeben")
-    parser.add_argument("--stempel", default=None,
-                        help="Zeitstempel der Dateinamen vorgeben, noetig zum "
-                             "Fortsetzen eines frueheren Laufs")
-    parser.add_argument("--nur-benchmark", action="store_true",
-                        help="nach dem Benchmark anhalten")
-    parser.add_argument("--nur-vorschlaege", action="store_true",
-                        help="nur materialswiki (kein Benchmark, keine Struktur)")
-    parser.add_argument("--struktur", action="store_true",
-                        help="zusaetzlich die Klassenstruktur pruefen (P279/P31, "
-                             "chemische Metaklasse) - schreibt "
-                             "qs_class_<gruppe>_<stempel>.txt in denselben "
-                             "Ordner. Nur legierungen, benannte-legierungen, "
-                             "oxide, periodensystem, polymer, magnetwerkstoffe, "
-                             "keramik, glas.")
-    parser.add_argument("--nur-struktur", action="store_true",
-                        help="NUR die Strukturpruefung - ohne Benchmark und "
-                             "materialswiki")
-    parser.add_argument("cli_args", nargs="*",
-                        help="alles nach -- wird durchgereicht: an materialswiki, "
-                             "bei --nur-struktur an die Strukturpruefung "
-                             "(z. B. -- --no-wikipedia bzw. -- --vorsichtig)")
-    args = parser.parse_args(argv)
 
-    gruppe = GRUPPEN[args.gruppe]
-    verzeichnis = os.path.abspath(args.out_dir)
-    os.makedirs(verzeichnis, exist_ok=True)
-    stempel = args.stempel or dt.datetime.now().strftime("%Y-%m-%d_%H%M")
-    pfad = lambda name: os.path.join(verzeichnis, f"{name}_{args.gruppe}_{stempel}")
+def fuehre_aus(name: str, schritte: list, groesse) -> int:
+    os.makedirs(PROPOSALS_DIR, exist_ok=True)
+    stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
 
-    # Welche Schritte, in welcher Reihenfolge? Ein --nur-* schaltet auf genau
-    # diesen einen; ohne sie laufen Benchmark und materialswiki, und --struktur
-    # haengt die Strukturpruefung an.
-    if args.nur_benchmark:
-        schritte = ["benchmark"]
-    elif args.nur_vorschlaege:
-        schritte = ["vorschlaege"]
-    elif args.nur_struktur:
-        schritte = ["struktur"]
-    else:
-        schritte = ["benchmark", "vorschlaege"]
-        if args.struktur:
-            schritte.append("struktur")
-
-    if "struktur" in schritte and not gruppe.get("struktur"):
-        moeglich = ", ".join(g for g, i in GRUPPEN.items() if i.get("struktur"))
-        parser.error(f"--struktur/--nur-struktur gibt es fuer '{args.gruppe}' "
-                     f"nicht - nur fuer {moeglich}. Fuer die uebrigen "
-                     f"ClassCheck-Grundgesamtheiten: python -m lauf struktur "
-                     f"<population>")
-
-    print(f"Werkstoffgruppe: {gruppe['beschreibung']}")
+    print(f"\n{'=' * 72}")
+    print(f"Grundgesamtheit: {name} - {POPULATIONEN[name]['beschreibung']}")
     print(f"Zeitstempel:     {stempel}")
     print(f"Schritte:        {', '.join(schritte)}")
+    if groesse:
+        print(f"Batchgroesse:    {groesse}")
+    print("=" * 72)
 
-    def lauf_schritt(nr: int, titel: str, befehl: list, log: str) -> int:
-        return schritt(f"SCHRITT {nr}/{len(schritte)}  {titel}", befehl, log)
+    for nr, stufe in enumerate(schritte, 1):
+        befehl, log = schritt_befehl(stufe, name, stempel, groesse)
+        code = schritt(f"SCHRITT {nr}/{len(schritte)}  {stufe.upper()}",
+                       befehl, log)
+        if code != 0:
+            print(f"\n{stufe} fehlgeschlagen (Code {code}) - Abbruch, die "
+                  f"folgenden Schritte laufen nicht mehr.", file=sys.stderr)
+            return code
 
-    for nr, name in enumerate(schritte, 1):
-        if name == "benchmark":
-            code = lauf_schritt(
-                nr, "Benchmark - wie gut ist die Gruppe belegt?",
-                [sys.executable, "-m", "benchmark.benchmark",
-                 "--population", gruppe["population"],
-                 "--md", pfad("abdeckung") + ".md"],
-                pfad("benchmark") + ".log")
-            if code != 0:
-                print(f"\nBenchmark fehlgeschlagen (Code {code}) - Abbruch.",
-                      file=sys.stderr)
-                return code
-
-        elif name == "vorschlaege":
-            befehl = [sys.executable, "-m", "materialswiki", *gruppe["cli"],
-                      "--out", pfad("vorschlaege") + ".md",
-                      "--qs-out", pfad("qs") + ".txt"]
-            if args.limit is not None:
-                befehl += ["--limit", str(args.limit)]
-            # Chargenbetrieb nur fuer die Gruppenmodi - der Periodensystem-
-            # Modus kennt weder --batch-size noch --limit.
-            if gruppe["cli"][0] == "--group":
-                if args.batch_size:
-                    befehl += ["--batch-size", str(args.batch_size)]
-                if args.weiter:
-                    befehl += ["--weiter"]
-            befehl += args.cli_args
-            code = lauf_schritt(nr, "materialswiki - Vorschlaege erzeugen",
-                                befehl, pfad("vorschlaege") + ".log")
-            if code != 0:
-                return code
-
-        else:  # struktur
-            befehl, log = struktur_befehl(
-                gruppe["struktur"], verzeichnis, stempel, args.limit,
-                args.cli_args if args.nur_struktur else ())
-            code = lauf_schritt(nr, "Strukturpruefung - Klassenhierarchie",
-                                befehl, log)
-            if code != 0:
-                return code
-
-    _fertig(verzeichnis, f"_{args.gruppe}_{stempel}")
-    if "vorschlaege" in schritte and args.batch_size \
-            and gruppe["cli"][0] == "--group":
-        print(f"\nNaechste Charge: python -m lauf {args.gruppe} --weiter "
-              f"--stempel {stempel} --out-dir {args.out_dir} --nur-vorschlaege")
+    _fertig(PROPOSALS_DIR, f"_{name}_{stempel}")
+    if "vorschlaege" in schritte and groesse \
+            and POPULATIONEN[name]["schritte"]["vorschlaege"]["cli"][0] == "--group":
+        print("\nWurde der Vorschlagslauf unterbrochen: 'python -m lauf' erneut "
+              "starten - der Dialog bietet die Fortsetzung an.")
     return 0
+
+
+# ---------------------------------------------------------------------------
+# Der Dialog
+# ---------------------------------------------------------------------------
+
+def main(argv=None) -> int:
+    if argv is None:
+        argv = sys.argv[1:]
+    if argv:
+        print("`python -m lauf` nimmt keine Argumente mehr - es fuehrt durch "
+              "einen Dialog.\nDie einzelnen Werkzeuge behalten ihre Schalter: "
+              "python -m materialswiki ..., python -m benchmark.benchmark ..., "
+              "python \"Material class structure/ClassCheck.py\" ..., "
+              "python \"Anwendung/Anwendung.py\" ...", file=sys.stderr)
+        return 2
+
+    print("=" * 72)
+    print("lauf - Benchmark, Vorschlaege, Klassenstruktur, Anwendungen")
+    print("=" * 72)
+
+    offen = unterbrochene_laeufe()
+    if offen:
+        print("\nUnterbrochene Vorschlagslaeufe gefunden:\n")
+        for i, e in enumerate(offen, 1):
+            st = e["stand"]
+            print(f"  {i}) {e['gruppe']:22} {st.get('erledigt', 0)}/"
+                  f"{st.get('gesamt', '?')} erledigt  (Stand "
+                  f"{st.get('zeitpunkt', '?')})")
+        wahl = _frage("\nEinen davon fortsetzen? Nummer, oder Enter fuer einen "
+                      "neuen Lauf: ")
+        if wahl.isdigit() and 1 <= int(wahl) <= len(offen):
+            return charge_fortsetzen(offen[int(wahl) - 1])
+
+    name = frage_population()
+
+    try:
+        anzahl = anzahl_items(name)
+    except Exception as fehler:  # Netz-, SPARQL-, Importfehler
+        print(f"\nItemzahl nicht ermittelbar ({fehler}) - es geht ohne "
+              f"Zaehl-Angabe weiter.", file=sys.stderr)
+        anzahl = None
+    else:
+        print(f"\n-> Grundgesamtheit '{name}': {anzahl} Eintraege betroffen.")
+
+    groesse = None
+    if anzahl is not None and anzahl > 200:
+        groesse = frage_groesse(anzahl)
+
+    schritte = frage_umfang(name)
+    if not schritte:
+        print("Kein Schritt gewaehlt - Abbruch.")
+        return 1
+
+    return fuehre_aus(name, schritte, groesse)
 
 
 if __name__ == "__main__":

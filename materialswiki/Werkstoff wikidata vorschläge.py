@@ -54,7 +54,8 @@ import requests
 # Konfiguration
 # ---------------------------------------------------------------------------
 
-# Kontaktadresse und Schluessel aus .env - siehe .env.beispiel.
+# Kontaktadresse und Schluessel aus der Umgebung (konfig spiegelt
+# .env.api-keys hinein).
 USER_AGENT = ("MaterialsWikidataSuggestBot/0.2 "
               f'(mailto:{konfig.wert("CONTACT_EMAIL", "DEINE-ADRESSE@example.org")})')
 HEADERS = {"User-Agent": USER_AGENT}

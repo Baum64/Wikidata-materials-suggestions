@@ -215,11 +215,21 @@ Grundgesamtheiten (--population)
 -------------------------------
   benannte-legierungen   die Prueferliste aus [[en:List of named alloys]] (Vorgabe)
   legierungen            Legierungen unter Q37756, ohne Elemente/Isotope
-  metallischer-werkstoff unterhalb von Q1924900
-  material               unterhalb von Q214609
-  oxide                  Oxide mit Summenformel (Q50690) - dieselbe Menge wie
-                         'python -m lauf oxide'; eigene Pruefungsauswahl
+  metallischer-werkstoff Klassen unterhalb von Q1924900 (braucht --limit)
+  material               Klassen unterhalb von Q214609 (braucht --limit)
+  oxide                  Oxide mit Summenformel (Q50690)
+  carbide                Carbide unter Q241906
+  minerale               Mineralarten (P31 Q12089225, IMA-gefuehrt)
+  polymer                Klassen der Polymere / Kunststoffe (Q11474)
+  magnetwerkstoffe       Magnetwerkstoffe (Q949573, ohne Isotope)
+  keramik                Klassen der Keramik (Q45621)
+  glas                   Klassen des Glases (Q11469)
   periodensystem         die 118 chemischen Elemente (P31 Q11344)
+
+  oxide, carbide, minerale, polymer, magnetwerkstoffe, keramik und glas
+  bringen eine reduzierte Pruefungsauswahl mit (der Legierungsbezug und die
+  Ordnungszahl fehlen dort); minerale zusaetzlich ohne 'parallelzweig' und
+  'verkehrt', weil es Instanzen sind, keine Klassen.
 """
 
 import argparse
@@ -242,9 +252,11 @@ sys.path[:0] = [_HIER, _REPO]
 PROPOSALS_DIR = os.path.join(_REPO, "proposals")
 
 from materialswiki.cli import (  # noqa: E402
+    CARBID_PATTERN, CARBID_QID,
     GLAS_AUSSCHLUSS_FILTER, GLAS_QID, KERAMIK_QID, KUNSTSTOFF_QID,
     LEGIERUNG_PATTERN, LEGIERUNG_QID,
-    MAGNET_PATTERN, MAGNETWERKSTOFF_QID, OXID_PATTERN, fetch_named_alloys,
+    MAGNET_PATTERN, MAGNETWERKSTOFF_QID, MINERAL_PATTERN, OXID_PATTERN,
+    fetch_named_alloys,
 )
 
 # Die Wikidata-Zugriffsschicht teilt sich dieses Skript mit visualisierung.py
@@ -263,6 +275,7 @@ except ImportError:  # pragma: no cover - Hinweis ist hilfreicher als Traceback
 MATERIAL_QID = "Q214609"        # material
 METALL_WERKSTOFF_QID = "Q1924900"  # metallischer Werkstoff
 OXID_QID = "Q50690"             # Oxid - Bereichswurzel der Grundgesamtheit 'oxide'
+MINERALART_QID = "Q12089225"    # Mineralart (IMA) - Bereichswurzel 'minerale'
 
 SUBTREE_PATTERN = (
     "{{ ?i wdt:P31/wdt:P279* wd:{root} }} UNION {{ ?i wdt:P279* wd:{root} }}"
@@ -403,6 +416,32 @@ POPULATIONEN = {
                        "instanz-als-klasse", "zyklus", "parallelzweig"],
         "bereichswurzel": OXID_QID,
     },
+    # Carbide - der Subtree unter Q241906 (Instanzen und Klassen, wie bei den
+    # Oxiden), aber OHNE Formelzwang: die Gruppe ist mit ~27 Items winzig und
+    # sauber (SiC, WC, TiC, B4C ...). CARBID_PATTERN kommt woertlich aus
+    # materialswiki.gruppen. Reduzierter Strukturkern wie bei 'oxide' - der
+    # Legierungsbezug (metaklasse, zusammensetzung, ohne-einordnung) und die
+    # Ordnungszahl (elementklasse) fehlen hier.
+    "carbide": {
+        "pattern": CARBID_PATTERN,
+        "beschreibung": "Carbide (Q241906) - wie 'lauf carbide'",
+        "pruefungen": ["kennzahlen", "redundant", "verkehrt",
+                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+        "bereichswurzel": CARBID_QID,
+    },
+    # Mineralarten - die von der IMA gefuehrten Arten (P31 Q12089225), dieselbe
+    # Menge wie 'lauf minerale' und der Benchmark. Es sind ~6300 INSTANZEN,
+    # keine Klassen: 'parallelzweig' ("kein P279*-Pfad zu material") und
+    # 'verkehrt' (Klassenbaum unter der Bereichswurzel) haetten daran nichts zu
+    # tun bzw. meldeten es tausendfach. Bleibt der Strukturkern, der auch an
+    # den wenigen Mineralen mit P279 (Varietaeten, Untergruppen) noch greift.
+    "minerale": {
+        "pattern": MINERAL_PATTERN,
+        "beschreibung": "Mineralarten (Q12089225, IMA-gefuehrt) - wie 'lauf minerale'",
+        "pruefungen": ["kennzahlen", "redundant", "instanz-als-klasse",
+                       "zyklus"],
+        "bereichswurzel": MINERALART_QID,
+    },
     # Das Szenario Periodensystem. Es teilt sich mit den uebrigen nur den
     # Rahmen (Graph, Staffelung, Ausgabe) - die Pruefungen sind andere,
     # deshalb bringt es seine eigene Voreinstellung mit. Wer '--pruefungen'
@@ -522,10 +561,10 @@ CHEMIE_METAKLASSEN = {
     "Q74892521": "unpraezise Klasse chemischer Substanzen",
 }
 
-# Mineralarten bleiben aussen vor: sie sind ueber die IMA modelliert
-# (P31 = Q12089225), und ob ein Mineral zusaetzlich eine Chemie-Metaklasse
-# tragen soll, ist eine Frage an das Mineralprojekt, nicht an dieses Werkzeug.
-MINERALART_QID = "Q12089225"
+# Die Pruefung 'metaklasse' laesst Mineralarten aussen vor: sie sind ueber die
+# IMA modelliert (P31 = MINERALART_QID), und ob ein Mineral zusaetzlich eine
+# Chemie-Metaklasse tragen soll, ist eine Frage an das Mineralprojekt, nicht an
+# dieses Werkzeug. (MINERALART_QID steht oben bei den Bereichswurzeln.)
 
 # Wikidata fuehrt Q11426 "Metall" als Unterklasse von Q37756 "Legierung" -
 # dieselbe schiefe Kante, an der sich die Pruefung 'verkehrt' abarbeitet.
@@ -816,9 +855,12 @@ def hole_population(name: str, limit: Optional[int] = None) -> tuple:
             f"(unter Q214609 haengen rund 936.000 Klassen) - der Query-Service "
             f"laeuft ins Timeout.\n"
             f"  Mit --limit N eine Stichprobe pruefen, z. B.\n"
-            f"    python -m lauf struktur {name} --limit 500\n"
+            f"    python \"Material class structure/ClassCheck.py\" "
+            f"--population {name} --limit 500\n"
             f"  oder eine engere Grundgesamtheit waehlen (legierungen, oxide, "
-            f"periodensystem, benannte-legierungen).")
+            f"periodensystem, benannte-legierungen). Der Dialog 'python -m lauf' "
+            f"fragt bei diesen beiden Wurzeln von sich aus nach einer "
+            f"Stichprobengroesse.")
     if info["pattern"] is None:
         items, ohne_item = hole_pruefliste(limit)
     else:

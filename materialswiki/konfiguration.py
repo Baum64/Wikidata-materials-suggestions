@@ -1,4 +1,4 @@
-"""Kennungen, Endpunkte und Drosselung - alles, was aus .env kommt.
+"""Kennungen, Endpunkte und Drosselung - alles, was aus der Umgebung kommt.
 
 Eigene Datei, weil es JEDES andere Modul braucht und nichts davon Logik ist.
 """
@@ -10,9 +10,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import konfig  # noqa: E402
 
-# Kontaktadresse und Schluessel kommen aus .env im Repo-Wurzelverzeichnis
-# (Vorlage: .env.beispiel). Diese Datei ist gitignoriert - so steht kein
-# Zugangsdatum im Quelltext und damit auch keines auf GitHub.
+# Kontaktadresse und Schluessel kommen aus der Umgebung; konfig.py spiegelt
+# dafuer beim Import .env.api-keys im Repo-Wurzelverzeichnis hinein. Diese
+# Datei ist gitignoriert - so steht kein Zugangsdatum im Quelltext und damit
+# auch keines auf GitHub.
 CONTACT_EMAIL = konfig.wert("CONTACT_EMAIL", "DEINE-ADRESSE@example.org")
 CONTACT = f"mailto:{CONTACT_EMAIL}"
 
@@ -36,8 +37,8 @@ HEADERS = {"User-Agent": USER_AGENT, "Content-Type": "application/json"}
 
 MP_API = "https://api.materialsproject.org"
 # Die API verlangt einen Schluessel; ohne ihn antwortet jeder Endpunkt mit
-# HTTP 401. Aus .env bzw. der Umgebung statt aus dem Quelltext - ein
-# Schluessel im Repo waere ein Leck, sobald das Repo geteilt wird.
+# HTTP 401. Aus der Umgebung statt aus dem Quelltext - ein Schluessel im Repo
+# waere ein Leck, sobald das Repo geteilt wird.
 MP_API_KEY = konfig.wert("MP_API_KEY")
 
 # Einzelne MP-Materialien haben keine eigene DOI. Belegt wird deshalb mit der

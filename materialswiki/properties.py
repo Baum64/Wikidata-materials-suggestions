@@ -227,6 +227,33 @@ PROPERTY_MAP = {
             "trigonal": ("Q588274", "trigonales Kristallsystem"),
         },
     },
+    # Magnetische Ordnung aus {{Infobox Chemisches Element}}, Feld "Magnetismus"
+    # ("ferromagnetisch", "paramagnetisch", ...). P1552 "has characteristic"
+    # ist itemwertig; die value_map uebersetzt die deutschen Stichworte in die
+    # Items der Phaenomene. Warum P1552 und NICHT eine P279/P31-Kante auf eine
+    # Magnetwerkstoff-Klasse: das magnetische Verhalten ist ein Merkmal, das
+    # quer zu mehreren Taxonomie-Aesten auftritt - Begruendung in
+    # proposals/ferromagnetika_pruefung_2026-08-30.md ("konkrete Werkstoffe /
+    # Elemente"). Eisen (Q677) und Nickel (Q744) tragen "P1552 -> Q184207"
+    # bereits; die Pruefung "schon vorhanden?" muss deshalb auf den WERT gehen
+    # und nicht bloss auf die PID (siehe _infobox_proposals).
+    #
+    # Ein Wert ausserhalb der value_map wird NICHT geraten, sondern zur
+    # manuellen Klaerung markiert; nennt das Feld mehrere Ordnungen (Chrom:
+    # "antiferromagnetisch, paramagnetisch"), wird gar nichts vorgeschlagen.
+    "magnetism": {
+        "pid": "P1552",
+        "datatype": "item",
+        "unit_qid": "",
+        "label": "charakterisiert durch",
+        "value_map": {
+            "ferromagnetisch": ("Q184207", "Ferromagnetismus"),
+            "ferrimagnetisch": ("Q217121", "Ferrimagnetismus"),
+            "antiferromagnetisch": ("Q575224", "Antiferromagnetismus"),
+            "paramagnetisch": ("Q188479", "Paramagnetismus"),
+            "diamagnetisch": ("Q201048", "Diamagnetismus"),
+        },
+    },
     # Elastische Moduln. MP fuehrt sie als Objekt mit voigt/reuss/vrh;
     # genommen wird das Voigt-Reuss-Hill-Mittel (Pfad "...vrh" in
     # MP_FIELD_MAP), das uebliche Mittel fuer polykristalline Werkstoffe.
@@ -781,7 +808,8 @@ STUFEN_PIDS = {
                     for k, _ in MP_FIELD_MAP.values() if k in PROPERTY_MAP),
     "nist": _pids("formation_enthalpy", "molar_entropy"),
     # Die Infoboxen liefern alles, was in den vier Feldkarten steht, dazu
-    # Kristallsystem, CAS-Nummer und Laengenausdehnungskoeffizient.
+    # Kristallsystem, CAS-Nummer, Laengenausdehnungskoeffizient und die
+    # magnetische Ordnung (P1552, Feld "Magnetismus").
     "wikipedia": frozenset(
         [PROPERTY_MAP[k]["pid"] for k, _ in WIKIPEDIA_DE_FIELDS.values()]
         + [PROPERTY_MAP[k]["pid"] for k, _ in WIKIPEDIA_DE_CHEM_FIELDS.values()]
@@ -790,5 +818,5 @@ STUFEN_PIDS = {
         + [PROPERTY_MAP[k]["pid"] for k in
            ("crystal_system", "cas_number", "density", "melting_point",
             "boiling_point", "electrical_resistivity",
-            "linear_thermal_expansion")]),
+            "linear_thermal_expansion", "magnetism")]),
 }

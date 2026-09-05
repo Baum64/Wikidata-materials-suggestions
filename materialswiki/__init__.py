@@ -6,7 +6,7 @@ Wikidata; es erzeugt ausschliesslich Vorschlagslisten zur manuellen Pruefung.
 Der Code liegt in Schichten, die einzeln ladbar sind - wer nur Formeln
 zerlegen will, braucht weder Netz noch Wikidata:
 
-    konfiguration  Kennungen, Endpunkte, Schluessel aus .env
+    konfiguration  Kennungen, Endpunkte, Schluessel aus der Umgebung
     netz           HTTP: Drosselung je Gegenstelle, Retry
     properties     Property-Tabellen, Einheiten, Plausibilitaetsschranken
     formeln        Summenformeln zerlegen und schreiben

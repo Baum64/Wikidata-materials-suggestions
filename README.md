@@ -42,7 +42,7 @@ Material class structure/  Klassenhierarchie der Werkstoffe: prüfen und zeichne
   wikidata_graph.py         gemeinsame Wikidata-Zugriffsschicht beider Skripte
 Anwendung/     Anwendungen der Werkstoffe (P366/P186/P2079) entwerfen
   Anwendung.py       Kommandozeile (python "Anwendung/Anwendung.py")
-lauf.py        Sammelbefehl: Benchmark + materialswiki + ClassCheck je Gruppe
+lauf.py        Dialog vor Benchmark + materialswiki + ClassCheck + Anwendung
 tests/         Offline-Tests (pytest)
 ```
 
@@ -68,30 +68,27 @@ python "Anwendung/Anwendung.py"
 python "Material class structure/visualisierung.py"
 ```
 
-`python -m lauf` bündelt Benchmark, `materialswiki` und die Strukturprüfung
-(`ClassCheck.py`) zu **einem** kurzen Befehl je Werkstoffgruppe; alle
-Ergebnisse tragen denselben Zeitstempel und landen zusammen in `--out-dir`
-(Default `proposals/`):
+`python -m lauf` ist ein **Dialog** vor die vier Werkzeuge geschaltet
+(Benchmark, `materialswiki`, `ClassCheck.py`, `Anwendung.py`). Er nimmt keine
+Argumente mehr, sondern fragt der Reihe nach:
 
-```bash
-python -m lauf legierungen                  # Benchmark + materialswiki
-python -m lauf legierungen --struktur        # zusätzlich die Klassenstruktur
-python -m lauf polymer --struktur            # Polymere/Kunststoffe (Q11474)
-python -m lauf magnetwerkstoffe --struktur   # Magnetwerkstoffe (Q949573)
-python -m lauf keramik --struktur            # Keramik-Klassen (Q45621)
-python -m lauf glas --struktur               # Glas/Glaswerkstoffe (Q11469)
+1. **Grundgesamtheit** — welche Population? Danach die Ausgabe, wie viele
+   Items das betrifft.
+2. **Batchgröße** — nur bei mehr als 200 Items (mind. 100, Vorgabe 500). Der
+   Vorschlagslauf arbeitet dann in Chargen und lässt sich fortsetzen.
+3. **Umfang** — Mehrfachauswahl aus den Schritten `benchmark`, `vorschlaege`,
+   `struktur` (die jede Population hat) und `anwendungen` (nur `legierungen`).
 
-# nur die Strukturprüfung (ClassCheck.py), für JEDE Grundgesamtheit:
-python -m lauf struktur benannte-legierungen
-python -m lauf struktur oxide
-python -m lauf struktur material --limit 500
-python -m lauf struktur periodensystem -- --ohne-dichte
-```
+Alle gewählten Schritte laufen nacheinander, tragen denselben Zeitstempel und
+landen zusammen in `proposals/`. Bricht ein Schritt ab, startet der nächste
+nicht mehr. Gibt es einen unterbrochenen Chargenlauf, bietet der Dialog vor
+der ersten Frage an, ihn fortzusetzen.
 
-`python -m lauf struktur <population>` deckt auch `material` und
-`metallischer-werkstoff` ab, die kein Benchmark-Gegenstück haben. ClassCheck
-lässt sich weiterhin direkt aufrufen — mit `--out-dir` landet die Empfehlung
-im selben `proposals/`-Ordner.
+Die vier Werkzeuge behalten daneben ihre eigenen Schalter
+(`python -m materialswiki …`, `python -m benchmark.benchmark …`,
+`python "Material class structure/ClassCheck.py" …`,
+`python "Anwendung/Anwendung.py" …`) — mit `--out-dir` / `--md` / `--out`
+landen auch ihre Einzelläufe in `proposals/`.
 
 ## Ausgabedateien
 
@@ -108,7 +105,7 @@ gehören nicht ins Repo:
 | `werkstoffe_vorschlaege.md`, `werkstoffe_qs_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
 | `abdeckung.md` (nur mit `--md`) | [benchmark/benchmark.py](benchmark/benchmark.py) |
 | `proposals/qs_class_<Population>_<Zeitstempel>.txt` (und `qs_class_befunde_*.md` nur mit `--md`) | [Material class structure/ClassCheck.py](Material%20class%20structure/ClassCheck.py) |
-| alle drei Schritte (`abdeckung_*`, `qs_*`, `qs_class_*`) mit gemeinsamem Zeitstempel in `--out-dir` (Default `proposals/`) | [lauf.py](lauf.py) |
+| die gewählten Schritte (`abdeckung_*`, `vorschlaege_*`/`qs_*`, `qs_class_*`, `anwendungen_*`/`qs_anwendungen_*`) mit gemeinsamem Zeitstempel in `proposals/` | [lauf.py](lauf.py) (Dialog) |
 | `proposals/anwendungen_befunde_<Zeitstempel>.md`, `proposals/qs_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
 | `trace_*.png`, `szenario_*` (nur `--szenario`), `subclass_tree_material.png` (nur `--tree`) | [Material class structure/visualisierung.py](Material%20class%20structure/visualisierung.py) |
 | `output/…` (`--output`) | [wikikg/cli.py](wikikg/cli.py) |
@@ -126,18 +123,23 @@ jeweiligen Skript mit echtem Namen und Kontaktadresse zu füllen — so verlangt
 es die
 [Wikimedia-User-Agent-Richtlinie](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy).
 
-## Zugangsdaten (`.env`)
+## Zugangsdaten (Umgebung)
 
-API-Schlüssel und Kontaktadresse stehen an **einer** Stelle: `.env` im
-Repo-Wurzelverzeichnis. Die Datei ist in [.gitignore](.gitignore) eingetragen
-und wird nie committet — im Quelltext steht kein Zugangsdatum mehr.
+API-Schlüssel und Kontaktadresse liest [konfig.py](konfig.py)
+**ausschließlich aus der Prozessumgebung** (`os.environ`) — keine zweite
+Quelle, keine Suche in Arbeitsverzeichnissen.
 
-Einrichten:
+Damit man die Werte nicht bei jedem Aufruf exportieren muss, spiegelt
+`konfig.py` beim Import einmalig die Datei **`.env.api-keys`** im
+Repo-Wurzelverzeichnis in die Umgebung — aber nur Namen, die dort noch nicht
+gesetzt sind. Die Datei ist über [.gitignore](.gitignore) (`.env.*`) vom
+Repo ausgeschlossen und wird nie committet.
+
+Einrichten (die Datei liegt schon da, mit leeren Platzhaltern):
 
 ```bash
-cp .env.beispiel .env
-chmod 600 .env
-# dann .env ausfüllen
+chmod 600 .env.api-keys
+# dann .env.api-keys ausfüllen — oder die Werte stattdessen exportieren
 ```
 
 | Eintrag | Wofür |
@@ -147,19 +149,15 @@ chmod 600 .env
 | `CONTACT_NAME` | Klarname für den User-Agent (optional) |
 | `MP_ACCOUNT_EMAIL`, `WIKIDATA_USERNAME` | nur zur Dokumentation, werden nicht abgefragt |
 
-[.env.beispiel](.env.beispiel) ist die versionierte Vorlage und enthält nur
-Platzhalter.
-
-Gelesen wird in dieser Rangfolge: **echte Umgebungsvariable → `.env` →
-Vorgabewert im Skript**. Die Umgebung gewinnt, damit sich ein einzelner Lauf
-umstellen lässt, ohne die Datei zu ändern:
+Eine **echte Umgebungsvariable gewinnt** immer gegen den Dateiwert — ein
+einzelner Lauf lässt sich so umstellen, ohne die Datei zu ändern:
 
 ```bash
 MP_API_KEY=zweitschluessel python -m materialswiki --periodic-table
 ```
 
-Gelesen wird über [konfig.py](konfig.py) — 20 Zeilen ohne zusätzliche
-Abhängigkeit; `python-dotenv` wäre dafür zu viel.
+`konfig.py` sind 20 Zeilen ohne zusätzliche Abhängigkeit; `python-dotenv`
+wäre dafür zu viel.
 
 ## Tests
 

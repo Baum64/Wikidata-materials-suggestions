@@ -44,8 +44,9 @@ darauf, statt es zu wiederholen - sonst driften beide auseinander.
 
 Vor dem Einsatz
 ---------------
-- MP_API_KEY und CONTACT_EMAIL gehoeren in die gitignorierte .env im
-  Repo-Wurzelverzeichnis (Vorlage: .env.beispiel), nicht in den Quelltext.
+- MP_API_KEY und CONTACT_EMAIL gehoeren in die Umgebung, nicht in den
+  Quelltext - entweder exportiert oder in der gitignorierten .env.api-keys
+  im Repo-Wurzelverzeichnis, die konfig.py beim Start hineinspiegelt.
   Ohne Schluessel antwortet die MP-API mit HTTP 401.
 - MP_FIELD_MAP: Feldnamen und Einheiten stammen aus dem OpenAPI-Schema
   (https://api.materialsproject.org/openapi.json, ausgewertet 2026-08-15).
@@ -134,7 +135,8 @@ from . import infobox  # noqa: E402
 from .infobox import (  # noqa: E402,F401
     WIKIPEDIA_API, WIKIPEDIA_DE_API, WIKIPEDIA_DE_QID, aggregatzustand_bei,
     dichte_qualifikatoren, extract_ref_ids, parse_de_cas,
-    parse_de_messtemperatur, parse_de_number, parse_de_temperature,
+    parse_de_magnetismus, parse_de_messtemperatur, parse_de_number,
+    parse_de_temperature,
     parse_infobox_fields, parse_thermal_expansion, parse_wiki_number,
     strip_wiki_markup, waermeausdehnung_proposals_for_item,
     wikipedia_de_chem_values, wikipedia_de_proposals_for_item,
@@ -168,6 +170,7 @@ from .quellen.nist import (  # noqa: E402,F401
 # Quelle aus einem Item ableiten laesst, in ableitungen.py.
 from . import ableitungen, gruppen  # noqa: E402
 from .gruppen import (  # noqa: E402,F401
+    CARBID_PATTERN, CARBID_QID,
     GLAS_AUSSCHLUSS_FILTER, GLAS_AUSSCHLUSS_QIDS, GLAS_PATTERN, GLAS_QID,
     HALBMETALLE, KERAMIK_PATTERN, KERAMIK_QID,
     KUNSTSTOFF_PATTERN, KUNSTSTOFF_QID, LEGIERUNG_OHNE_ELEMENTE,

@@ -446,6 +446,7 @@ def claims_vorladen(qids: list) -> None:
             claims = (entities.get(qid) or {}).get("claims", {})
             _CLAIM_CACHE[qid] = set(claims)
             _SIEDEPUNKT_CACHE[qid] = _siedepunkt_aus_claims(claims)
+            _MERKMAL_CACHE[qid] = _merkmale_aus_claims(claims)
 
 
 def _siedepunkt_aus_claims(claims: dict) -> Optional[float]:
@@ -464,6 +465,31 @@ def _siedepunkt_aus_claims(claims: dict) -> Optional[float]:
         except (TypeError, ValueError):
             continue
     return min(kelvin) if kelvin else None
+
+
+_MERKMAL_CACHE: dict = {}
+
+
+def _merkmale_aus_claims(claims: dict) -> set:
+    """Die Ziel-QIDs aller P1552-Aussagen ('has characteristic') eines Items."""
+    ziele = set()
+    for aussage in claims.get("P1552", []):
+        wert = aussage.get("mainsnak", {}).get("datavalue", {}).get("value")
+        if isinstance(wert, dict) and wert.get("id"):
+            ziele.add(wert["id"])
+    return ziele
+
+
+def item_hat_merkmal(qid: str, ziel_qid: str) -> bool:
+    """True, wenn das Item schon 'P1552 -> ziel_qid' traegt.
+
+    Wertgenaue Pruefung: P1552 kann an einem Item mehrfach stehen (Farbe,
+    Kristallform, magnetische Ordnung), deshalb reicht item_has_statement hier
+    nicht.
+    """
+    if qid not in _MERKMAL_CACHE:
+        claims_vorladen([qid])
+    return ziel_qid in _MERKMAL_CACHE.get(qid, set())
 
 
 def fetch_item_pids(qid: str) -> set:

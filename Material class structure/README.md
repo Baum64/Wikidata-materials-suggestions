@@ -34,14 +34,13 @@ Hier sind zwei Ansätze zusammengeführt: die Strukturprüfungen auf dem
 P279-Graphen und die Label-Heuristik aus dem früheren
 `material_subclass_check.py`, das darin aufgegangen ist.
 
-Kurz über den Sammelbefehl (`python -m lauf`) — deckt jede Grundgesamtheit ab
-und schreibt nach `proposals/`:
-
-```bash
-python -m lauf struktur benannte-legierungen
-python -m lauf struktur material --limit 500
-python -m lauf struktur periodensystem -- --ohne-dichte
-```
+Über den Dialog `python -m lauf`: dort Grundgesamtheit wählen und im Umfang
+`struktur` ankreuzen (allein oder mit den anderen Schritten); die Empfehlung
+landet in `proposals/`. Der Dialog deckt `legierungen`, `oxide`, `carbide`,
+`minerale`, `polymer`, `magnetwerkstoffe`, `keramik`, `glas` und
+`periodensystem` ab. `benannte-legierungen`, `metallischer-werkstoff` und
+`material` (die beiden letzten **brauchen `--limit N`**) laufen nur über den
+direkten Aufruf:
 
 Direkt:
 
@@ -407,12 +406,14 @@ und Handelsprodukte, ein Treffer gegen die wäre fast immer Zufall.
 | `legierungen` | Legierungen unter Q37756, ohne Elemente und Isotope |
 | `metallischer-werkstoff` | Klassen unterhalb von Q1924900 — **braucht `--limit N`** (die Abfrage läuft sonst ins Timeout) |
 | `material` | Klassen unterhalb von Q214609 — **braucht `--limit N`**; der volle Baum hat rund 936.000 Klassen, in einer Abfrage nicht holbar. Beide Wurzeln liefern nur die *Klassen* (`P279*`), nicht zusätzlich jede Instanz jeder Unterklasse |
-| `oxide` | Oxide mit Summenformel unter Q50690 — dieselbe Menge wie `python -m lauf oxide` und der Benchmark (`OXID_PATTERN` importiert, nicht kopiert). Bringt eine eigene Prüfungsauswahl mit (`kennzahlen`, `redundant`, `verkehrt`, `instanz-als-klasse`, `zyklus`, `parallelzweig`) und `--bereichswurzel Q50690` |
+| `oxide` | Oxide mit Summenformel unter Q50690 — dieselbe Menge wie die Population `oxide` in `lauf` und im Benchmark (`OXID_PATTERN` importiert, nicht kopiert). Bringt eine eigene Prüfungsauswahl mit (`kennzahlen`, `redundant`, `verkehrt`, `instanz-als-klasse`, `zyklus`, `parallelzweig`) und `--bereichswurzel Q50690` |
+| `carbide` | Carbide unter Q241906 (Instanzen und Klassen, ~27), **ohne Formelzwang** — wie die Population `carbide` in `lauf` und im Benchmark. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q241906` |
+| `minerale` | Mineralarten (`P31 = Q12089225`, IMA-geführt, ~6300) — wie die Population `minerale` in `lauf` und im Benchmark. Es sind **Instanzen**, keine Klassen: die Auswahl ist auf `kennzahlen`, `redundant`, `instanz-als-klasse`, `zyklus` reduziert (kein `parallelzweig` — das meldete sonst tausendfach „kein `P279*`-Pfad zu material" —, kein `verkehrt`). `--bereichswurzel Q12089225` |
 | `periodensystem` | die 118 chemischen Elemente (`P31 = Q11344`, Ordnungszahl ≤ 118) |
-| `polymer` | **Klassen** der Polymere/Kunststoffe unter Q11474 (`P279*`, ~206) — dieselbe Wurzel wie `python -m lauf polymer` und der Benchmark, dort aber mitsamt Instanzen. Für die Strukturprüfung nur die Klassen, sonst meldet `parallelzweig` massenhaft „kein `P279*`-Pfad zu material" für konkrete Kunststoffsorten. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11474` |
+| `polymer` | **Klassen** der Polymere/Kunststoffe unter Q11474 (`P279*`, ~206) — dieselbe Wurzel wie die Population `polymer` in `lauf` und im Benchmark, dort aber mitsamt Instanzen. Für die Strukturprüfung nur die Klassen, sonst meldet `parallelzweig` massenhaft „kein `P279*`-Pfad zu material" für konkrete Kunststoffsorten. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11474` |
 | `magnetwerkstoffe` | Magnetwerkstoffe unter Q949573, **ohne Isotope** (`FILTER NOT EXISTS { ?i wdt:P1086 ?z }`) — sonst zieht ein schiefer Instanzpfad über Nickel (Q744) ~40 Nickel-Isotope herein. Winzig (~17 Klassen), `MAGNET_PATTERN` mit dem Benchmark identisch, `--bereichswurzel Q949573`. `MAGNET_PATTERN` verankert neben Q949573 auch **Q2554911** (weichmagnetische Werkstoffe) und **Q9259184** (ferromagnetic material) als eigene Wurzeln, damit der ganze ferromagnetische Zweig nicht an einer einzigen P279-Kante hängt |
-| `keramik` | **Klassen** der Keramik unter Q45621 (`P279*`, ~1021) — wie `python -m lauf keramik` und der Benchmark. Nur die Klassen, denn der Instanzzweig sind ~49.000 Museums-/Fundstücke (Objekte *aus* Keramik). Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q45621` |
-| `glas` | **Klassen** des Glases unter Q11469 (`P279*`, ~165) — dieselbe Wurzel wie `python -m lauf glas` und der Benchmark, dort aber mitsamt Instanzen (~1160). Für die Strukturprüfung nur die Klassen. Der Behälter-Ast `Q1207302` „jar" (de-Label „Glas") ist über `GLAS_AUSSCHLUSS_FILTER` ausgeschlossen — wie im Benchmark/materialswiki-Lauf. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11469` |
+| `keramik` | **Klassen** der Keramik unter Q45621 (`P279*`, ~1021) — wie die Population `keramik` in `lauf` und im Benchmark. Nur die Klassen, denn der Instanzzweig sind ~49.000 Museums-/Fundstücke (Objekte *aus* Keramik). Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q45621` |
+| `glas` | **Klassen** des Glases unter Q11469 (`P279*`, ~165) — dieselbe Wurzel wie die Population `glas` in `lauf` und im Benchmark, dort aber mitsamt Instanzen (~1160). Für die Strukturprüfung nur die Klassen. Der Behälter-Ast `Q1207302` „jar" (de-Label „Glas") ist über `GLAS_AUSSCHLUSS_FILTER` ausgeschlossen — wie im Benchmark/materialswiki-Lauf. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11469` |
 
 Die Muster kommen aus [materialswiki/cli.py](../materialswiki/cli.py) — sie
 werden importiert, nicht kopiert, damit dieses Werkzeug und der

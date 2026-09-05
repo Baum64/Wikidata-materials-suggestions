@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import konfig  # noqa: E402
 import requests
 
-# Kontaktadresse aus .env im Repo-Wurzelverzeichnis - siehe .env.beispiel.
+# Kontaktadresse aus der Umgebung (konfig spiegelt .env.api-keys hinein).
 USER_AGENT = (
     "WikiKnowledgeGraph/0.1 (https://github.com/Baum64/WikiKnowledgeGraph; "
     f'contact: {konfig.wert("CONTACT_EMAIL", "set-your-email-here")})'

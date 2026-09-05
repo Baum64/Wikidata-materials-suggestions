@@ -106,7 +106,7 @@ from materialswiki.cli import (  # noqa: E402
 
 WIKIDATA_SPARQL = "https://query.wikidata.org/sparql"
 WIKIDATA_API = "https://www.wikidata.org/w/api.php"
-# Kontaktadresse aus .env - siehe .env.beispiel.
+# Kontaktadresse aus der Umgebung (konfig spiegelt .env.api-keys hinein).
 USER_AGENT = ("MaterialsWikidataSuggestBot/0.1 "
               f'(mailto:{konfig.wert("CONTACT_EMAIL", "DEINE-ADRESSE@example.org")})')
 HEADERS = {"User-Agent": USER_AGENT}
@@ -228,7 +228,7 @@ DEFAULT_AUS = {"formel": "--formel"}
 # Elementvorlage - also gibt es ihn ausserhalb des Elementlaufs gar nicht.
 WP_SCHLUESSEL = {
     "de-element": ({k for k, _ in WIKIPEDIA_DE_FIELDS.values()}
-                   | {"cas_number", "crystal_system"}),
+                   | {"cas_number", "crystal_system", "magnetism"}),
     "de-chemikalie": ({k for k, _ in WIKIPEDIA_DE_CHEM_FIELDS.values()}
                       | {"melting_point", "boiling_point", "cas_number"}),
     "de-mineral": {"density", "mohs_hardness"},

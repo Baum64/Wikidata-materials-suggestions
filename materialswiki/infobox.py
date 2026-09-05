@@ -263,6 +263,54 @@ def parse_de_temperature(raw: str) -> Optional[float]:
     return None
 
 
+# Feld "Magnetismus" in {{Infobox Chemisches Element}}. Der Wert steht als
+# Wikilink oder blankes Wort, meist gefolgt von der Suszeptibilitaet oder der
+# Curie-Temperatur in Klammern und einem <ref>:
+#   | Magnetismus = [[Ferromagnetismus|ferromagnetisch]]
+#   | Magnetismus = ferromagnetisch
+#   | Magnetismus = [[Paramagnetismus|paramagnetisch]] (''χ<sub>m</sub>'' = 2,1 · 10<sup>−5</sup>)<ref .../>
+#   | Magnetismus = [[Ferromagnetismus|ferromagnetisch]] ([[Curie-Temperatur|Curie-Temp.]] 292,5 K)<ref .../>
+# Reihenfolge der Stichworte: die spezifischen ("antiferro", "ferri") vor
+# "ferro", weil "antiferromagnetisch" das Teilwort "ferromagnet" enthaelt.
+_DE_MAGNETISMUS_STICHWORTE = [
+    ("antiferromagnet", "antiferromagnetisch"),
+    ("ferrimagnet", "ferrimagnetisch"),
+    ("ferromagnet", "ferromagnetisch"),
+    ("paramagnet", "paramagnetisch"),
+    ("diamagnet", "diamagnetisch"),
+]
+
+
+def parse_de_magnetismus(raw: str) -> Optional[str]:
+    """Magnetische Ordnung aus dem Infobox-Feld 'Magnetismus', sonst None.
+
+    Zurueck kommt das deutsche Stichwort ("ferromagnetisch", ...), das die
+    value_map von P1552 auf ein Wikidata-Item abbildet.
+
+    Konservativ wie ueberall: nennt das Feld mehrere Ordnungen (Chrom:
+    "antiferromagnetisch,<br />paramagnetisch"), wird nichts zurueckgegeben -
+    welche dem Element-Item zusteht, entscheidet das Skript nicht. Der
+    Klammerzusatz (Suszeptibilitaet, Curie-Temperatur) wird ignoriert.
+    """
+    s = _WIKI_COMMENT.sub(" ", raw or "")
+    if not s.strip() or "<br" in s.lower():
+        return None
+    s = _WIKI_REF.sub(" ", s)
+    s = re.sub(r"\([^()]*\)", " ", s)                       # Klammerzusatz weg
+    s = re.sub(r"\[\[[^\]|]*\|?([^\]]*)\]\]", r"\1", s)     # Wikilink aufloesen
+    s = strip_wiki_markup(s).lower()
+
+    for stichwort, wert in _DE_MAGNETISMUS_STICHWORTE:
+        if stichwort in s:
+            # Steht daneben noch eine ANDERE, unabhaengige Ordnung? Dann ist
+            # das Feld mehrdeutig (Chrom auch ohne <br />).
+            rest = s.replace(stichwort, " ")
+            if any(w in rest for w, _ in _DE_MAGNETISMUS_STICHWORTE):
+                return None
+            return wert
+    return None
+
+
 def wikipedia_de_chem_values(fields: dict, article_wikitext: str = "") -> dict:
     """{Schluessel: (wert, notiz, beleg_ids)} aus {{Infobox Chemikalie}}."""
     out = {}
@@ -356,6 +404,11 @@ def wikipedia_de_values(fields: dict, article_wikitext: str = "") -> dict:
                 merken("crystal_system", system, "Kristallstruktur",
                        f"Infobox 'Kristallstruktur' = '{xtal}'")
                 break
+
+    ordnung = parse_de_magnetismus(fields.get("Magnetismus", ""))
+    if ordnung:
+        merken("magnetism", ordnung, "Magnetismus",
+               f"Infobox-Feld 'Magnetismus' = '{ordnung}'")
     return out
 
 
@@ -508,7 +561,17 @@ def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
                 ))
                 continue
 
-        already_present = wikidata.item_has_statement(wd_match["qid"], prop_info["pid"])
+        if prop_info["pid"] == "P1552":
+            # P1552 "has characteristic" traegt an einem Item oft mehrere,
+            # voneinander unabhaengige Merkmale (Farbe, Kristallform,
+            # magnetische Ordnung). Eine reine "PID schon da?"-Pruefung wuerde
+            # die Magnetismus-Aussage an jedem Element unterdruecken, das
+            # irgendein P1552 hat - Sauerstoff (Q629) traegt drei. Deshalb hier
+            # auf den WERT genau pruefen.
+            already_present = wikidata.item_hat_merkmal(wd_match["qid"], value)
+        else:
+            already_present = wikidata.item_has_statement(
+                wd_match["qid"], prop_info["pid"])
         proposals.append(make_row(
             "BEREITS_VORHANDEN" if already_present else "VORSCHLAG",
             quelle, wd_match, prop_info, value, value_label, reference,
