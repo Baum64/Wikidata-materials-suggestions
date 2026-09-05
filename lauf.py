@@ -18,9 +18,12 @@ mehrschichtigen Dialog. Die Fragen kommen in dieser Reihenfolge:
          anwendungen    P366/P186/P2079 aus den Rueckverweisen (Anwendung.py)
 
 Alle gewaehlten Schritte laufen nacheinander, tragen denselben Zeitstempel
-und landen zusammen in proposals/. Bricht ein Schritt ab, startet der
-naechste nicht mehr. Gibt es einen unterbrochenen Chargenlauf, bietet der
-Dialog vor der ersten Frage an, ihn fortzusetzen.
+und landen zusammen in proposals/ - je Lauf EIN Protokoll
+(lauf_<population>_<stempel>.log) fuer alle Schritte. Die Vorschlags-Stufe
+schreibt keine Markdown-Tabelle mehr; ihr QuickStatements-Entwurf
+(qs_<population>_<stempel>.txt) traegt ohnehin jede Zeile. Bricht ein Schritt
+ab, startet der naechste nicht mehr. Gibt es einen unterbrochenen
+Chargenlauf, bietet der Dialog vor der ersten Frage an, ihn fortzusetzen.
 
 Welche Schritte eine Population kennt, steht in POPULATIONEN unten:
 'benchmark', 'vorschlaege' und 'struktur' gibt es fuer jede, 'anwendungen'
@@ -291,15 +294,23 @@ def charge_fortsetzen(eintrag: dict) -> int:
                               eintrag["stand"])
     batch = stand.get("batch_size") or 500
     pfad = _pfad_fabrik(gruppe, stempel)
+    log_pfad = pfad("lauf", ".log")
     befehl = [PY, "-m", "materialswiki", "--group", gruppe, "--weiter",
-              "--batch-size", str(batch),
-              "--out", pfad("vorschlaege", ".md"),
+              "--batch-size", str(batch), "--no-tabelle",
               "--qs-out", pfad("qs", ".txt")]
+    if _mp_schluessel_fehlt():
+        print("Hinweis: kein MP_API_KEY - Fortsetzung laeuft mit --no-mp "
+              "(Materials Project uebersprungen).", file=sys.stderr)
+        befehl.append("--no-mp")
     print(f"\nSetze '{gruppe}' fort bei Item {stand.get('erledigt', 0) + 1} "
           f"von {stand.get('gesamt', '?')} (Charge {stand.get('letzte_charge', '?')} "
           f"war die letzte fertige).")
-    code = schritt("VORSCHLAEGE - fortgesetzt", befehl,
-                   pfad("vorschlaege", ".log"))
+    # An die bestehende Log-Datei des Laufs anhaengen - die Fortsetzung
+    # gehoert zu demselben Zeitstempel.
+    with open(log_pfad, "a", encoding="utf-8") as f:
+        f.write(f"\n{'=' * 72}\nFORTGESETZT "
+                f"{dt.datetime.now():%Y-%m-%d %H:%M}\n{'=' * 72}\n")
+    code = schritt("VORSCHLAEGE - fortgesetzt", befehl, log_pfad)
     if code == 0:
         _fertig(PROPOSALS_DIR, f"_{gruppe}_{stempel}")
     return code
@@ -314,9 +325,25 @@ def _pfad_fabrik(name: str, stempel: str):
         PROPOSALS_DIR, f"{stamm}_{name}_{stempel}{endung}")
 
 
+def _mp_schluessel_fehlt() -> bool:
+    """True, wenn kein MP_API_KEY in der Umgebung (bzw. .env.api-keys) steht.
+
+    Die Materials-Project-Stufe des Vorschlagslaufs bricht ohne Schluessel
+    mit HTTP 401 ab und riss bislang den ganzen Sammellauf mit. Fehlt der
+    Schluessel, haengt lauf.py stattdessen --no-mp an: der Schritt laeuft
+    dann ohne MP weiter, COD/NIST/Wikipedia tragen ohnehin den groesseren
+    Teil bei. konfig.py spiegelt .env.api-keys beim Import hinein.
+    """
+    try:
+        import konfig
+    except ImportError:
+        return False
+    return not konfig.wert("MP_API_KEY")
+
+
 def struktur_befehl(population: str, verzeichnis: str, stempel: str,
-                    limit=None, extra=()) -> tuple:
-    """(befehl, log-pfad) fuer einen ClassCheck-Lauf.
+                    limit=None, extra=()) -> list:
+    """Der ClassCheck-Aufruf fuer eine Grundgesamtheit.
 
     Die Dateinamen tragen die Population; --limit wirkt nicht im
     Periodensystem-Modus (dort ist die Grundgesamtheit abgeschlossen).
@@ -328,30 +355,37 @@ def struktur_befehl(population: str, verzeichnis: str, stempel: str,
               "--review-needed", os.path.join(PROPOSALS_DIR, "review-needed.md")]
     if limit is not None and population != "periodensystem":
         befehl += ["--limit", str(limit)]
-    return befehl + list(extra), basis.format("qs_class") + ".log"
+    return befehl + list(extra)
 
 
-def schritt_befehl(stufe: str, name: str, stempel: str, groesse) -> tuple:
-    """(befehl, log-pfad) fuer einen der vier Schritte."""
+def schritt_befehl(stufe: str, name: str, stempel: str, groesse) -> list:
+    """Der Aufruf fuer einen der vier Schritte.
+
+    Die Vorschlags-Stufe schreibt KEINE Markdown-Tabelle (--no-tabelle) - der
+    QuickStatements-Entwurf traegt ohnehin jede Zeile.
+    """
     info = POPULATIONEN[name]
     konfig = info["schritte"][stufe]
     pfad = _pfad_fabrik(name, stempel)
 
     if stufe == "benchmark":
-        return ([PY, "-m", "benchmark.benchmark",
-                 "--population", konfig["population"],
-                 "--md", pfad("abdeckung", ".md")],
-                pfad("benchmark", ".log"))
+        return [PY, "-m", "benchmark.benchmark",
+                "--population", konfig["population"],
+                "--md", pfad("abdeckung", ".md")]
 
     if stufe == "vorschlaege":
-        befehl = [PY, "-m", "materialswiki", *konfig["cli"],
-                  "--out", pfad("vorschlaege", ".md"),
+        befehl = [PY, "-m", "materialswiki", *konfig["cli"], "--no-tabelle",
                   "--qs-out", pfad("qs", ".txt")]
         # Chargenbetrieb gibt es nur im Gruppenmodus - der Periodensystem-
         # Modus kennt weder --batch-size noch mehr als 118 Items.
         if konfig["cli"][0] == "--group" and groesse:
             befehl += ["--batch-size", str(groesse)]
-        return befehl, pfad("vorschlaege", ".log")
+        # Ohne MP_API_KEY die MP-Stufe abschalten statt den Lauf abbrechen.
+        if _mp_schluessel_fehlt():
+            print("Hinweis: kein MP_API_KEY - der Vorschlagslauf laeuft mit "
+                  "--no-mp (Materials Project uebersprungen).", file=sys.stderr)
+            befehl.append("--no-mp")
+        return befehl
 
     if stufe == "struktur":
         # ClassCheck laeuft ueber die volle Grundgesamtheit - die Batchgroesse
@@ -359,21 +393,24 @@ def schritt_befehl(stufe: str, name: str, stempel: str, groesse) -> tuple:
         return struktur_befehl(konfig["population"], PROPOSALS_DIR, stempel)
 
     # anwendungen
-    return ([PY, ANWENDUNG_SKRIPT, "--population", konfig["population"],
-             "--md", pfad("anwendungen_befunde", ".md"),
-             "--qs-out", pfad("qs_anwendungen", ".txt")],
-            pfad("anwendungen", ".log"))
+    return [PY, ANWENDUNG_SKRIPT, "--population", konfig["population"],
+            "--md", pfad("anwendungen_befunde", ".md"),
+            "--qs-out", pfad("qs_anwendungen", ".txt")]
 
 
 def schritt(titel: str, befehl: list, protokoll: str) -> int:
-    """Einen Teilschritt ausfuehren; Ausgabe geht gleichzeitig in eine Datei.
+    """Einen Teilschritt ausfuehren; Ausgabe geht gleichzeitig in EIN Protokoll.
 
     tee statt Umleitung, damit ein stundenlanger Lauf mitverfolgt werden kann
-    und das Protokoll trotzdem vollstaendig ist.
+    und das Protokoll trotzdem vollstaendig ist. Angehaengt, nicht ueberschrieben:
+    alle Schritte eines Laufs teilen sich dieselbe Log-Datei (siehe
+    fuehre_aus), die vorher einmal frisch angelegt wird.
     """
-    print(f"\n{'=' * 72}\n{titel}\n{'  ' + ' '.join(befehl)}\n{'=' * 72}",
-          flush=True)
-    with open(protokoll, "w", encoding="utf-8") as f:
+    kopf = f"\n{'=' * 72}\n{titel}\n{'  ' + ' '.join(befehl)}\n{'=' * 72}"
+    print(kopf, flush=True)
+    with open(protokoll, "a", encoding="utf-8") as f:
+        f.write(kopf + "\n")
+        f.flush()
         prozess = subprocess.Popen(befehl, stdout=subprocess.PIPE,
                                    stderr=subprocess.STDOUT, text=True)
         for zeile in prozess.stdout:
@@ -390,22 +427,34 @@ def _fertig(verzeichnis: str, muster: str) -> None:
             print(f"  {datei}")
 
 
+def _log_anlegen(log_pfad: str, kopf: list) -> None:
+    """Die eine Log-Datei des Laufs frisch anlegen (bzw. leeren)."""
+    with open(log_pfad, "w", encoding="utf-8") as f:
+        f.write("\n".join(kopf) + "\n")
+
+
 def fuehre_aus(name: str, schritte: list, groesse) -> int:
     os.makedirs(PROPOSALS_DIR, exist_ok=True)
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
+    log_pfad = _pfad_fabrik(name, stempel)("lauf", ".log")
 
-    print(f"\n{'=' * 72}")
-    print(f"Grundgesamtheit: {name} - {POPULATIONEN[name]['beschreibung']}")
-    print(f"Zeitstempel:     {stempel}")
-    print(f"Schritte:        {', '.join(schritte)}")
+    kopf = [
+        "=" * 72,
+        f"Grundgesamtheit: {name} - {POPULATIONEN[name]['beschreibung']}",
+        f"Zeitstempel:     {stempel}",
+        f"Schritte:        {', '.join(schritte)}",
+    ]
     if groesse:
-        print(f"Batchgroesse:    {groesse}")
-    print("=" * 72)
+        kopf.append(f"Batchgroesse:    {groesse}")
+    kopf.append("=" * 72)
+    for zeile in kopf:
+        print(zeile)
+    _log_anlegen(log_pfad, kopf)
 
     for nr, stufe in enumerate(schritte, 1):
-        befehl, log = schritt_befehl(stufe, name, stempel, groesse)
+        befehl = schritt_befehl(stufe, name, stempel, groesse)
         code = schritt(f"SCHRITT {nr}/{len(schritte)}  {stufe.upper()}",
-                       befehl, log)
+                       befehl, log_pfad)
         if code != 0:
             print(f"\n{stufe} fehlgeschlagen (Code {code}) - Abbruch, die "
                   f"folgenden Schritte laufen nicht mehr.", file=sys.stderr)

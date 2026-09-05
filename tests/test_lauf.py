@@ -116,22 +116,54 @@ def test_struktur_laeuft_ungebremst():
     """Die Batchgroesse betrifft nur den Vorschlagslauf - ClassCheck sieht
     immer die volle Grundgesamtheit."""
     for name in ("keramik", "minerale"):
-        befehl, _ = lauf.schritt_befehl("struktur", name, "2026-01-01_0000", 500)
+        befehl = lauf.schritt_befehl("struktur", name, "2026-01-01_0000", 500)
         assert "--limit" not in befehl
 
 
 def test_periodensystem_vorschlaege_ohne_batch():
     """Der Periodensystem-Modus kennt kein --batch-size."""
-    befehl, _ = lauf.schritt_befehl("vorschlaege", "periodensystem",
-                                    "2026-01-01_0000", 500)
+    befehl = lauf.schritt_befehl("vorschlaege", "periodensystem",
+                                 "2026-01-01_0000", 500)
     assert "--batch-size" not in befehl
     assert "--periodic-table" in befehl
 
 
 def test_gruppen_vorschlaege_mit_batch():
-    befehl, _ = lauf.schritt_befehl("vorschlaege", "minerale",
-                                    "2026-01-01_0000", 300)
+    befehl = lauf.schritt_befehl("vorschlaege", "minerale",
+                                 "2026-01-01_0000", 300)
     assert befehl[befehl.index("--batch-size") + 1] == "300"
+
+
+def test_vorschlaege_schreibt_keine_markdown_tabelle():
+    """Der QuickStatements-Entwurf traegt alles - lauf haengt --no-tabelle an
+    und uebergibt kein --out."""
+    befehl = lauf.schritt_befehl("vorschlaege", "minerale",
+                                 "2026-01-01_0000", 300)
+    assert "--no-tabelle" in befehl
+    assert "--out" not in befehl
+    assert befehl[befehl.index("--qs-out") + 1].endswith(
+        "qs_minerale_2026-01-01_0000.txt")
+
+
+def test_vorschlaege_ohne_mp_schluessel_haengt_no_mp_an(monkeypatch):
+    """Fehlt MP_API_KEY, laeuft der Vorschlagsschritt mit --no-mp weiter,
+    statt den ganzen Sammellauf mit HTTP 401 abzureissen."""
+    monkeypatch.setattr(lauf, "_mp_schluessel_fehlt", lambda: True)
+    befehl = lauf.schritt_befehl("vorschlaege", "minerale",
+                                 "2026-01-01_0000", 300)
+    assert "--no-mp" in befehl
+
+    monkeypatch.setattr(lauf, "_mp_schluessel_fehlt", lambda: False)
+    befehl = lauf.schritt_befehl("vorschlaege", "minerale",
+                                 "2026-01-01_0000", 300)
+    assert "--no-mp" not in befehl
+
+
+def test_mp_schluessel_fehlt_liest_die_umgebung(monkeypatch):
+    monkeypatch.setenv("MP_API_KEY", "vorhanden")
+    assert lauf._mp_schluessel_fehlt() is False
+    monkeypatch.delenv("MP_API_KEY", raising=False)
+    assert lauf._mp_schluessel_fehlt() is True
 
 
 # ---------------------------------------------------------------------------
@@ -139,19 +171,34 @@ def test_gruppen_vorschlaege_mit_batch():
 # ---------------------------------------------------------------------------
 
 def test_ausgabenamen_tragen_das_qs_schema():
-    befehl, log = lauf.struktur_befehl("legierungen", "/tmp/x", "2026-01-01_0000")
+    befehl = lauf.struktur_befehl("legierungen", "/tmp/x", "2026-01-01_0000")
     out = befehl[befehl.index("--out") + 1]
     befund_md = befehl[befehl.index("--md") + 1]
     assert os.path.basename(out) == "qs_class_legierungen_2026-01-01_0000.txt"
     assert os.path.basename(befund_md) == "qs_class_befunde_legierungen_2026-01-01_0000.md"
-    assert os.path.basename(log) == "qs_class_legierungen_2026-01-01_0000.log"
 
 
 def test_benchmark_und_vorschlaege_teilen_den_zeitstempel():
-    b, _ = lauf.schritt_befehl("benchmark", "oxide", "2026-02-02_1200", None)
-    v, _ = lauf.schritt_befehl("vorschlaege", "oxide", "2026-02-02_1200", None)
+    b = lauf.schritt_befehl("benchmark", "oxide", "2026-02-02_1200", None)
+    v = lauf.schritt_befehl("vorschlaege", "oxide", "2026-02-02_1200", None)
     assert b[b.index("--md") + 1].endswith("abdeckung_oxide_2026-02-02_1200.md")
-    assert v[v.index("--out") + 1].endswith("vorschlaege_oxide_2026-02-02_1200.md")
+    assert v[v.index("--qs-out") + 1].endswith("qs_oxide_2026-02-02_1200.txt")
+
+
+def test_ein_protokoll_fuer_alle_schritte(tmp_path, monkeypatch):
+    """Statt je Schritt eine .log gibt es genau eine lauf_<pop>_<stempel>.log."""
+    monkeypatch.setattr(lauf, "PROPOSALS_DIR", str(tmp_path))
+    aufrufe = []
+    monkeypatch.setattr(lauf, "schritt",
+                        lambda titel, befehl, log: aufrufe.append(log) or 0)
+    monkeypatch.setattr(lauf, "_fertig", lambda *a: None)
+
+    assert lauf.fuehre_aus("oxide", ["benchmark", "vorschlaege", "struktur"],
+                           None) == 0
+    assert len(set(aufrufe)) == 1
+    assert os.path.basename(aufrufe[0]).startswith("lauf_oxide_")
+    assert aufrufe[0].endswith(".log")
+    assert os.path.exists(aufrufe[0])   # vorab frisch angelegt
 
 
 # ---------------------------------------------------------------------------

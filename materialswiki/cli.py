@@ -5,7 +5,9 @@ Materials Project -> Wikidata: Vorschlagsgenerator (nur bestehende Items)
 Erstellt KEINE neuen Wikidata-Items und schreibt nichts automatisch nach
 Wikidata. Es entstehen eine Vorschlagsliste als Markdown-Tabelle zur manuellen
 Pruefung und ein QuickStatements-Entwurf, in dem nur Zeilen mit Status
-"VORSCHLAG" ausfuehrbar sind.
+"VORSCHLAG" ausfuehrbar sind. Der Entwurf traegt JEDE Zeile (Abschnitt 1
+einspielbar, 2 vorhanden, 3 zur Klaerung) - --no-tabelle laesst die dann
+redundante Markdown-Tabelle weg (so ruft lauf.py das Werkzeug auf).
 
 Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
 
@@ -213,7 +215,7 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
                           formel: bool = False,
                           punktgruppe_an: bool = True, nist: bool = True,
                           auch_vorhandene: bool = False,
-                          ausschluss: bool = True):
+                          ausschluss: bool = True, mp: bool = True):
     """Vorschlaege fuer eine Werkstoffgruppe (Generator).
 
     Dieselbe Quellenkaskade wie sonst; welche Stufe traegt, haengt an der
@@ -228,7 +230,7 @@ def build_group_proposals(gruppe: str, limit: Optional[int] = None,
         items, wikipedia, cod, nur_experimentell, nur_stabil, max_entries,
         formel=formel,
         punktgruppe_an=punktgruppe_an, nist=nist,
-        auch_vorhandene=auch_vorhandene)
+        auch_vorhandene=auch_vorhandene, mp=mp)
 
 
 def build_proposals_for_items(items: list, wikipedia: bool = True,
@@ -239,7 +241,8 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                               formel: bool = False,
                               punktgruppe_an: bool = True,
                               nist: bool = True,
-                              auch_vorhandene: bool = False):
+                              auch_vorhandene: bool = False,
+                              mp: bool = True):
     """Vorschlaege fuer eine fertige Itemliste (Generator).
 
     Von build_group_proposals abgetrennt, damit der Chargenbetrieb dieselbe
@@ -369,7 +372,9 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
                 print(f"  {eintrag['qid']}: COD uebersprungen - {fehler}",
                       file=sys.stderr)
 
-        zusammensetzung = parse_formula(eintrag["formula"])
+        # Ohne MP_API_KEY laeuft die MP-Stufe mit --no-mp gar nicht erst an -
+        # sonst risse sie mit HTTP 401 den ganzen Lauf ab (siehe lauf.py).
+        zusammensetzung = parse_formula(eintrag["formula"]) if mp else None
         if zusammensetzung and ueberspringen("mp"):
             zusammensetzung = None
         if zusammensetzung:
@@ -432,7 +437,8 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
 
 def build_proposals(elements: Optional[list], max_entries: int,
                     wikipedia: bool = True, nur_experimentell: bool = True,
-                    nur_stabil: bool = True, cod: bool = True):
+                    nur_stabil: bool = True, cod: bool = True,
+                    mp: bool = True):
     """Liefert Vorschlagszeilen ueber die Summenformel.
 
     Dieselbe Quellenkaskade wie im Periodensystem-Modus, jede Stufe nur fuer
@@ -444,10 +450,14 @@ def build_proposals(elements: Optional[list], max_entries: int,
     Generator: die Zeilen werden sofort weitergereicht, damit ein langer Lauf
     auch bei Abbruch bereits Geschriebenes behaelt.
     """
+    # Der Formel-Modus haengt ganz an MP - ohne die Stufe (kein MP_API_KEY)
+    # gibt es hier nichts zu gruppieren, und COD/Wikipedia laufen mangels
+    # Treffermenge leer. Der Gruppen- und der Periodensystem-Modus tragen
+    # dann noch, siehe --no-mp.
     materials = mp_quelle.fetch_mp_materials(
         elements, max_entries,
         nur_experimentell=nur_experimentell, nur_stabil=nur_stabil,
-    )
+    ) if mp else []
     print(f"{len(materials)} MP-Materialien gefunden"
           + (" (experimentell" if nur_experimentell else " (auch theoretisch")
           + (", stabil)." if nur_stabil else ", auch instabil)."),
@@ -535,7 +545,7 @@ def build_periodic_table_proposals(
     max_per_element: int = 1, only: Optional[list] = None,
     wikipedia: bool = True, nur_experimentell: bool = True,
     nur_stabil: bool = True, cod: bool = True, nur_metalle: bool = True,
-    nist: bool = True, auch_vorhandene: bool = False,
+    nist: bool = True, auch_vorhandene: bool = False, mp: bool = True,
 ):
     """Vorschlaege fuer die metallischen Elemente (Generator).
 
@@ -611,19 +621,23 @@ def build_periodic_table_proposals(
         # uebrigen 6 voellig in Ordnung gewesen waeren. Genau so ist es
         # passiert (HTTP 400 auf einen Platzhalter, siehe
         # wikidata.fetch_element_qids). Fehlender Schluessel bleibt toedlich - der
-        # trifft jedes Element, da waere Weitermachen sinnlos.
-        try:
-            materials = mp_quelle.fetch_mp_materials(
-                None, max_per_element, pure_element=sym,
-                nur_experimentell=nur_experimentell, nur_stabil=nur_stabil,
-            )
-        except MissingApiKey:
-            raise
-        except (RuntimeError, requests.RequestException) as fehler:
-            gescheitert.append(sym)
-            print(f"  [{i}/{len(todo)}] {sym}: uebersprungen - {fehler}",
-                  file=sys.stderr)
-            continue
+        # trifft jedes Element, da waere Weitermachen sinnlos. Wer MP ganz
+        # weglassen will (kein Schluessel), nimmt --no-mp.
+        if not mp:
+            materials = []
+        else:
+            try:
+                materials = mp_quelle.fetch_mp_materials(
+                    None, max_per_element, pure_element=sym,
+                    nur_experimentell=nur_experimentell, nur_stabil=nur_stabil,
+                )
+            except MissingApiKey:
+                raise
+            except (RuntimeError, requests.RequestException) as fehler:
+                gescheitert.append(sym)
+                print(f"  [{i}/{len(todo)}] {sym}: uebersprungen - {fehler}",
+                      file=sys.stderr)
+                continue
 
         def ueberspringen(stufe, qid=info["qid"]):
             if auch_vorhandene:
@@ -777,7 +791,8 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
         charge = offen[versatz:versatz + args.batch_size]
         nummer = erste_nummer + versatz // args.batch_size
         erstes = offset + versatz + 1
-        tabellen_pfad = _chargen_pfad(out, nummer, ".md")
+        tabellen_pfad = (_chargen_pfad(out, nummer, ".md")
+                         if args.tabelle else None)
         qs_pfad = _chargen_pfad(qs_out, nummer, ".txt")
 
         print(f"\n--- Charge {nummer}: Items {erstes} bis "
@@ -788,7 +803,7 @@ def chargenlauf(args, out: str, qs_out: str) -> int:
             args.experimentell, args.stabil, args.max,
             nummer_ab=erstes, gesamt=gesamt, formel=args.formel,
             punktgruppe_an=args.punktgruppe, nist=args.nist,
-            auch_vorhandene=args.auch_vorhandene,
+            auch_vorhandene=args.auch_vorhandene, mp=args.mp,
         )
         try:
             zeilen = write_markdown_streaming(zeilen_gen, tabellen_pfad)
@@ -917,6 +932,16 @@ def main():
         "Mit --no-cod liefert wieder MP diese Groessen",
     )
     parser.add_argument(
+        "--mp",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="gerechnete Kennwerte aus dem Materials Project holen "
+        "(DFT bei 0 K, jede Aussage traegt P459 'berechnet'). Default: an. "
+        "--no-mp schaltet die Stufe ab - noetig, wenn kein MP_API_KEY "
+        "gesetzt ist, sonst bricht der Lauf dort mit HTTP 401 ab. COD, NIST "
+        "und Wikipedia laufen unveraendert weiter",
+    )
+    parser.add_argument(
         "--formel",
         action=argparse.BooleanOptionalAction,
         default=False,
@@ -985,6 +1010,15 @@ def main():
     parser.add_argument("--out", default=None,
                         help="Vorschlagstabelle als Markdown (Default: "
                              "proposals/vorschlaege_<Zeitstempel>.md)")
+    parser.add_argument(
+        "--tabelle",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="die Markdown-Vorschlagstabelle schreiben. Default: an. "
+        "--no-tabelle laesst sie weg - der QuickStatements-Entwurf "
+        "(--qs-out) traegt ohnehin jede Zeile (Abschnitt 1 einspielbar, "
+        "2 vorhanden, 3 zur Klaerung), die Tabelle ist dann reine Doppelung",
+    )
     parser.add_argument("--qs-out", default=None,
                         help="QuickStatements-Entwurf (Default: "
                              "proposals/qs_<Zeitstempel>.txt)")
@@ -995,6 +1029,9 @@ def main():
     # Ohne --out/--qs-out nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
     os.makedirs(PROPOSALS_DIR, exist_ok=True)
+    # Ohne --tabelle wird keine Markdown-Datei geschrieben (None wandert bis
+    # write_markdown_streaming durch). Der Pfad wird trotzdem gebildet, damit
+    # der Chargenbetrieb daraus die je-Charge-Namen ableiten kann.
     out = args.out or os.path.join(PROPOSALS_DIR, f"vorschlaege_{stempel}.md")
     qs_out = args.qs_out or os.path.join(
         PROPOSALS_DIR, f"qs_{stempel}.txt")
@@ -1008,18 +1045,18 @@ def main():
             args.experimentell, args.stabil, args.max, formel=args.formel,
             punktgruppe_an=args.punktgruppe, nist=args.nist,
             auch_vorhandene=args.auch_vorhandene,
-            ausschluss=not args.mit_ueberschneidungen,
+            ausschluss=not args.mit_ueberschneidungen, mp=args.mp,
         )
     elif args.periodic_table:
         proposals = build_periodic_table_proposals(
             args.per_element, args.elements, args.wikipedia,
             args.experimentell, args.stabil, args.cod, args.nur_metalle,
-            nist=args.nist, auch_vorhandene=args.auch_vorhandene,
+            nist=args.nist, auch_vorhandene=args.auch_vorhandene, mp=args.mp,
         )
     else:
         proposals = build_proposals(
             args.elements, args.max, args.wikipedia,
-            args.experimentell, args.stabil, args.cod,
+            args.experimentell, args.stabil, args.cod, mp=args.mp,
         )
 
     # Bei selbst gesetzten Pfaden kann eine Datei aus einem frueheren Lauf
@@ -1028,20 +1065,22 @@ def main():
     # und nur teilweise geschriebenen Vorschlagstabelle von heute.
     clear_quickstatements_draft(qs_out)
 
-    print(f"Schreibe laufend nach: {os.path.abspath(out)}", file=sys.stderr)
+    tabelle_ziel = out if args.tabelle else None
+    if tabelle_ziel:
+        print(f"Schreibe laufend nach: {os.path.abspath(tabelle_ziel)}",
+              file=sys.stderr)
     try:
-        proposals = write_markdown_streaming(proposals, out)
+        proposals = write_markdown_streaming(proposals, tabelle_ziel)
     except MissingApiKey as fehler:
         # Kein Traceback - das ist kein Programmfehler, sondern eine fehlende
         # Voraussetzung, und die Abhilfe steht in der Meldung.
         print(f"\nFEHLER: {fehler}", file=sys.stderr)
         return 2
     except KeyboardInterrupt:
-        # Die Vorschlagstabelle ist durch das flush() bereits vollstaendig bis
-        # zur letzten verarbeiteten Zeile; nur der QuickStatements-Entwurf entfaellt.
+        hinweis = (f"Bereits geschriebene Zeilen stehen in "
+                   f"{os.path.abspath(tabelle_ziel)}; " if tabelle_ziel else "")
         print(
-            f"\nAbgebrochen. Bereits geschriebene Zeilen stehen in "
-            f"{os.path.abspath(out)}; {os.path.abspath(qs_out)} ist als "
+            f"\nAbgebrochen. {hinweis}{os.path.abspath(qs_out)} ist als "
             f"unvollstaendig markiert.",
             file=sys.stderr,
         )

@@ -376,6 +376,27 @@ def test_fehlender_schluessel_bricht_sehr_wohl_ab(monkeypatch):
         list(cli.build_periodic_table_proposals(1, None, wikipedia=False))
 
 
+def test_no_mp_ueberspringt_die_stufe_ohne_schluessel(monkeypatch):
+    """Mit mp=False wird fetch_mp_materials gar nicht erst aufgerufen - so
+    laeuft der Lauf ohne MP_API_KEY durch, statt mit HTTP 401 abzubrechen
+    (lauf.py haengt dafuer --no-mp an)."""
+    from materialswiki import cli
+
+    monkeypatch.setattr(wikidata, "fetch_element_qids", lambda: {
+        "Ti": {"qid": "Q716", "label": "Ti", "name_en": "ti", "title_de": "Ti"}
+    })
+    monkeypatch.setattr(wikidata, "claims_vorladen", lambda q: None)
+    monkeypatch.setattr(wikidata, "stufe_kann_nichts_beitragen", lambda q, s: False)
+
+    def darf_nicht(*a, **kw):
+        raise AssertionError("MP-Stufe trotz --no-mp aufgerufen")
+
+    monkeypatch.setattr(mp, "fetch_mp_materials", darf_nicht)
+    zeilen = list(cli.build_periodic_table_proposals(
+        1, None, wikipedia=False, cod=False, nist=False, mp=False))
+    assert zeilen == []
+
+
 # --- User-Agent -----------------------------------------------------------
 
 def test_mp_user_agent_enthaelt_kein_bot():

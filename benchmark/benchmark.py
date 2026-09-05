@@ -23,9 +23,14 @@ materialswiki bedient sie seither aus den Infoboxen. Davor waren es die
 thermodynamischen Groessen P3078 (Standardbildungsenthalpie) und P3071
 (molare Standardentropie) unter "Chemical".
 
-Die Projektseite listet nur Messgroessen. Die CAS-Nummer (P231) wird deshalb
-fest ergaenzt (Abschnitt "Identifikatoren", abschaltbar mit --no-extra) - sie
-ist der zentrale externe Schluessel zu Stoffdatenbanken.
+Die Projektseite listet nur Messgroessen. Zwei Properties werden deshalb fest
+ergaenzt (je ein eigener Abschnitt, gemeinsam abschaltbar mit --no-extra):
+
+  P231   CAS-Nummer - der zentrale externe Schluessel zu Stoffdatenbanken.
+  P1552  charakterisiert durch - traegt die magnetische Ordnung (Ferro-,
+         Ferri-, Antiferro-, Para-, Diamagnetismus), die materialswiki aus
+         dem Feld "Magnetismus" der {{Infobox Chemisches Element}} holt.
+         Gezaehlt wird jedes Item mit irgendeiner P1552-Aussage.
 
 Zusaetzlich wird je Property markiert, AUS WELCHER QUELLE materialswiki den
 Wert ueberhaupt holen koennte - also welche Stufe des Laufs sie wirklich
@@ -118,11 +123,23 @@ DEFAULT_SECTIONS = ["Physics", "Mechanical", "Thermal", "Chemical",
 SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "properties_snapshot.json")
 
-# Die Projektseite listet nur Messgroessen, keine Identifikatoren. Die
-# CAS-Nummer ist fuer Werkstoffe und Elemente aber der zentrale externe
-# Schluessel (und die Bruecke zu Stoffdatenbanken), deshalb hier fest ergaenzt.
-# Herkunft bleibt getrennt sichtbar: eigener Abschnitt, nicht in "Chemical".
-EXTRA_SECTIONS = {"Identifikatoren": ["P231"]}  # P231 = CAS-Nummer
+# Die Projektseite listet nur Messgroessen - keine Identifikatoren und keine
+# qualitativen Merkmale. Zwei Properties ergaenzt der Benchmark deshalb fest,
+# jede in einem eigenen Abschnitt, damit die Herkunft sichtbar bleibt:
+#
+#   P231   CAS-Nummer - fuer Werkstoffe und Elemente der zentrale externe
+#          Schluessel und die Bruecke zu Stoffdatenbanken.
+#   P1552  "charakterisiert durch" - itemwertig; materialswiki traegt hier die
+#          magnetische Ordnung aus dem Feld "Magnetismus" der
+#          {{Infobox Chemisches Element}} ein (value_map in PROPERTY_MAP,
+#          Schluessel "magnetism"). Die Zaehlung geht auf die PID, nicht auf
+#          den Wert: an konkreten Werkstoffen und Elementen ist ein P1552
+#          praktisch immer die magnetische Ordnung, an quer liegenden Items
+#          kann es auch etwas anderes sein.
+EXTRA_SECTIONS = {
+    "Identifikatoren": ["P231"],        # CAS-Nummer
+    "Magnetische Ordnung": ["P1552"],   # charakterisiert durch (has characteristic)
+}
 
 # Instanzen ODER Unterklassen - siehe Modul-Docstring.
 POPULATION_PATTERN = (

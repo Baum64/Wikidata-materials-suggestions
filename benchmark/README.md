@@ -25,6 +25,7 @@ python -m benchmark.benchmark --offline          # ohne Wiki-Abruf
 | `--offline` | Property-Liste aus [properties_snapshot.json](properties_snapshot.json) statt live |
 | `--md` | Ergebnistabelle zusätzlich als Markdown-Datei schreiben (gitignoriert) |
 | `--top` | Anzahl der am besten belegten Items in der Ausgabe (`0` = aus, Standard: 10) |
+| `--no-extra` | die fest ergänzten Properties (`P231`, `P1552`) weglassen |
 
 ## Woher die Property-Liste kommt
 
@@ -37,6 +38,20 @@ Die Liste wird live geholt und als Momentaufnahme in
 [properties_snapshot.json](properties_snapshot.json) abgelegt. Diese Datei ist
 die **einzige bewusst versionierte Ergebnisdatei** des Repos — sie hält einen
 Lauf reproduzierbar und macht `--offline` möglich.
+
+Die Projektseite listet nur Messgrößen. Zwei Properties ergänzt der Benchmark
+deshalb fest (je ein eigener Abschnitt, gemeinsam abschaltbar mit
+`--no-extra`):
+
+- **`P231`** (CAS-Nummer) — der zentrale externe Schlüssel zu Stoffdatenbanken.
+- **`P1552`** („charakterisiert durch") — trägt die magnetische Ordnung
+  (Ferro-, Ferri-, Antiferro-, Para-, Diamagnetismus), die `materialswiki` aus
+  dem Feld `Magnetismus` der `{{Infobox Chemisches Element}}` vorschlägt.
+  Gezählt wird jedes Item mit irgendeiner `P1552`-Aussage.
+
+Sobald die Projektseite eine davon selbst aufnimmt (wie bei `P231` unter
+„Chemical" geschehen), löst sich die Ergänzung von allein auf und wird nicht
+mehr doppelt gezählt.
 
 ## Grundgesamtheit
 
@@ -74,7 +89,7 @@ Properties.
 | `NIST` | NIST Chemistry WebBook | `P3078`, `P3071` |
 | `WD` | aus der Raumgruppe am Item abgeleitet | `P589` |
 | `(Formel)` | aus der Summenformel abgeleitet | `P2670`, `P527` |
-| `WPde-El` | de `{{Infobox Chemisches Element}}` | `P2101`, `P2102`, `P2054`, `P2068`, `P2055`, `P2056`, `P2075`, `P5593`, `P1088`, `P231`, `P556` |
+| `WPde-El` | de `{{Infobox Chemisches Element}}` | `P2101`, `P2102`, `P2054`, `P2068`, `P2055`, `P2056`, `P2075`, `P5593`, `P1088`, `P231`, `P556`, `P1552` |
 | `WPde-Chem` | de `{{Infobox Chemikalie}}` | `P2054`, `P2101`, `P2102`, `P231` |
 | `WPde-Min` | de `{{Infobox Mineral}}` | `P2054`, `P1088` |
 | `WPen-El` | en `Template:Infobox <element>` | `P2101`, `P2102`, `P2068`, `P1088`, `P2054`, `P5679`, `P556`, `P5672` |

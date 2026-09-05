@@ -64,6 +64,11 @@ Endpunkt mit HTTP 401, mit einem falschen Schlüssel mit HTTP 403. Beides fängt
 das Skript mit einer verständlichen Meldung ab (Exit-Code 2) statt mit einem
 Traceback.
 
+Wer die MP-Stufe bewusst ohne Schlüssel überspringen will, gibt `--no-mp` mit:
+COD, NIST und Wikipedia laufen dann unverändert weiter. `python -m lauf` hängt
+`--no-mp` automatisch an, wenn kein `MP_API_KEY` gesetzt ist, statt den ganzen
+Sammellauf abzubrechen.
+
 Kostenlos anlegen unter <https://next-gen.materialsproject.org/api>. `konfig.py`
 liest den Schlüssel **nur aus der Umgebung**; die gitignorierte
 `.env.api-keys` im Repo-Wurzelverzeichnis wird beim Start dort hineingespiegelt:
@@ -547,7 +552,8 @@ Gezielt nachholen mit: --periodic-table --elements Am Cm Np
 ```
 
 Ein fehlender API-Schlüssel bricht dagegen weiterhin sofort ab — der träfe
-jedes Element, da wäre Weitermachen sinnlos.
+jedes Element, da wäre Weitermachen sinnlos. Wer die MP-Stufe ganz weglassen
+will, nimmt `--no-mp` (COD/NIST/Wikipedia laufen weiter).
 
 ## Quellenkaskade
 
@@ -1416,6 +1422,11 @@ und ohne das Leeren stünde nach einem Abbruch der vollständige Entwurf des
 letzten Laufs neben der frisch und nur teilweise geschriebenen
 Vorschlagstabelle — zwei Dateien, die nicht zusammengehören. Nach einem Abbruch trägt der Entwurf
 deshalb nur die Zeile `# Lauf noch nicht abgeschlossen …`.
+
+`--no-tabelle` lässt die Markdown-Tabelle ganz weg. Der QuickStatements-Entwurf
+trägt jede Zeile (Abschnitt 1 einspielbar, 2 vorhanden, 3 zur Klärung), die
+Tabelle ist dann reine Doppelung — so ruft der Dialog `python -m lauf` das
+Werkzeug auf.
 
 ### Status in der Vorschlagstabelle
 

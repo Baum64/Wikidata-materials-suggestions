@@ -67,6 +67,22 @@ def test_legierungen_bekommen_chemikalieninfobox_und_chembox():
     assert quellen["P2101"] == ["WPde-Chem", "WPen-Chem"]
 
 
+def test_magnetische_ordnung_wird_fest_ergaenzt():
+    """P1552 steht nicht auf der Projektseite (kein Messwert), gehoert aber
+    in den Benchmark - materialswiki schlaegt es aus der Elementinfobox vor."""
+    from benchmark.benchmark import EXTRA_SECTIONS
+
+    ergaenzt = [p for pids in EXTRA_SECTIONS.values() for p in pids]
+    assert "P1552" in ergaenzt
+
+
+def test_magnetische_ordnung_nur_im_elementlauf():
+    """Das Feld 'Magnetismus' gibt es nur in {{Infobox Chemisches Element}} -
+    also kommt P1552 im Element-, nicht im Gruppenlauf als belegbar vor."""
+    assert quellen_je_property("periodensystem")["P1552"] == ["WPde-El"]
+    assert "P1552" not in quellen_je_property("minerale")
+
+
 def test_laengenausdehnung_nur_im_elementlauf():
     """P5672 haengt allein an der englischen Elementvorlage, und die wird
     nur im Periodensystem-Modus geholt."""

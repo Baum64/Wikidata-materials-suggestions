@@ -229,7 +229,7 @@ def _md_zelle(wert) -> str:
             .replace("\r\n", " ").replace("\n", "<br>").replace("\r", " "))
 
 
-def write_markdown_streaming(proposals, path: str = "vorschlaege.md") -> list:
+def write_markdown_streaming(proposals, path=None) -> list:
     """Schreibt jede Zeile SOFORT als Markdown-Tabellenzeile und gibt sie
     zusaetzlich gesammelt zurueck.
 
@@ -240,7 +240,18 @@ def write_markdown_streaming(proposals, path: str = "vorschlaege.md") -> list:
 
     Die Tabellenzeile ist selbst bei einem Abbruch mitten im Schreiben noch
     eine gueltige Markdown-Zeile - der Header samt Trennzeile steht davor.
+
+    path=None: nur einsammeln, KEINE Datei schreiben. Der
+    QuickStatements-Entwurf traegt ohnehin jede Zeile (Abschnitt 1
+    einspielbar, 2 vorhanden, 3 zur Klaerung) - die Markdown-Tabelle ist dann
+    reine Doppelung.
     """
+    if path is None:
+        gesammelt = list(proposals)
+        print(f"Vorschlagsliste eingesammelt ({len(gesammelt)} Zeilen) - "
+              f"keine Markdown-Tabelle, siehe QuickStatements-Entwurf.",
+              file=sys.stderr)
+        return gesammelt
     gesammelt = []
     with open(path, "w", encoding="utf-8") as f:
         f.write("| " + " | ".join(TABELLENSPALTEN) + " |\n")
