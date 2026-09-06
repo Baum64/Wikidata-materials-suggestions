@@ -19,9 +19,11 @@ mehrschichtigen Dialog. Die Fragen kommen in dieser Reihenfolge:
 
 Alle gewaehlten Schritte laufen nacheinander, tragen denselben Zeitstempel
 und landen zusammen in proposals/ - je Lauf EIN Protokoll
-(lauf_<population>_<stempel>.log) fuer alle Schritte. Die Vorschlags-Stufe
-schreibt keine Markdown-Tabelle mehr; ihr QuickStatements-Entwurf
-(qs_<population>_<stempel>.txt) traegt ohnehin jede Zeile. Bricht ein Schritt
+(<stempel>_lauf_<population>.log) fuer alle Schritte. Der Zeitstempel steht
+VORN im Dateinamen, damit sich die Laeufe chronologisch sortieren. Die
+Vorschlags-Stufe schreibt keine Markdown-Tabelle mehr; ihr
+QuickStatements-Entwurf (<stempel>_qs_<population>.txt) traegt ohnehin jede
+Zeile. Bricht ein Schritt
 ab, startet der naechste nicht mehr. Gibt es einen unterbrochenen
 Chargenlauf, bietet der Dialog vor der ersten Frage an, ihn fortzusetzen.
 
@@ -89,13 +91,15 @@ POPULATIONEN = {
             "struktur": {"population": "oxide"},
         },
     },
-    "carbide": {
-        "beschreibung": "Carbide (Q241906) - technische Hartstoffe wie SiC, WC, TiC, B4C; ~27 Items",
+    "hartstoffe": {
+        "beschreibung": ("Hartstoffe - Carbide/Nitride/Boride/Silicide "
+                         "(Q241906/Q410851/Q419302/Q426473); SiC, WC, TiC, B4C, "
+                         "TiN, Si3N4 ...; ~60 Items"),
         "zaehl": "gruppe",
         "schritte": {
-            "benchmark": {"population": "carbide"},
-            "vorschlaege": {"cli": ["--group", "carbide"]},
-            "struktur": {"population": "carbide"},
+            "benchmark": {"population": "hartstoffe"},
+            "vorschlaege": {"cli": ["--group", "hartstoffe"]},
+            "struktur": {"population": "hartstoffe"},
         },
     },
     "periodensystem": {
@@ -126,7 +130,7 @@ POPULATIONEN = {
         },
     },
     "keramik": {
-        "beschreibung": "Keramik-Klassen (Q45621, ohne Objekt-Instanzen) - ~1021 Klassen",
+        "beschreibung": "Keramik / Keramikwerkstoffe (Q45621) - ~2500 Items, ~457 Klassen",
         "zaehl": "gruppe",
         "schritte": {
             "benchmark": {"population": "keramik"},
@@ -267,11 +271,12 @@ def unterbrochene_laeufe() -> list:
     """Alle Fortschrittsdateien in proposals/, deren Lauf nicht fertig ist.
 
     Der Chargenbetrieb von materialswiki schreibt nach jeder Charge
-    qs_<gruppe>_<stempel>.fortschritt.json. Steht dort erledigt < gesamt,
-    laesst sich der Lauf mit --weiter genau dort fortsetzen.
+    <stempel>_qs_<gruppe>.fortschritt.json (Datum vorn, damit sich die Laeufe
+    chronologisch sortieren). Steht dort erledigt < gesamt, laesst sich der
+    Lauf mit --weiter genau dort fortsetzen.
     """
     offen = []
-    muster = os.path.join(PROPOSALS_DIR, "qs_*_*.fortschritt.json")
+    muster = os.path.join(PROPOSALS_DIR, "*_qs_*.fortschritt.json")
     for pfad in sorted(glob.glob(muster)):
         try:
             with open(pfad, encoding="utf-8") as f:
@@ -284,7 +289,7 @@ def unterbrochene_laeufe() -> list:
         if stand.get("erledigt", 0) >= stand.get("gesamt", 0):
             continue
         basis = os.path.basename(pfad)[:-len(".fortschritt.json")]
-        stempel = basis[len(f"qs_{gruppe}_"):]
+        stempel = basis[:-len(f"_qs_{gruppe}")]
         offen.append({"gruppe": gruppe, "stempel": stempel, "stand": stand})
     return offen
 
@@ -312,7 +317,7 @@ def charge_fortsetzen(eintrag: dict) -> int:
                 f"{dt.datetime.now():%Y-%m-%d %H:%M}\n{'=' * 72}\n")
     code = schritt("VORSCHLAEGE - fortgesetzt", befehl, log_pfad)
     if code == 0:
-        _fertig(PROPOSALS_DIR, f"_{gruppe}_{stempel}")
+        _fertig(PROPOSALS_DIR, stempel, gruppe)
     return code
 
 
@@ -321,8 +326,10 @@ def charge_fortsetzen(eintrag: dict) -> int:
 # ---------------------------------------------------------------------------
 
 def _pfad_fabrik(name: str, stempel: str):
+    # Der Zeitstempel steht VORN: so sortieren sich alle Dateien eines Laufs
+    # (Protokoll, Abdeckung, QuickStatements ...) chronologisch nebeneinander.
     return lambda stamm, endung: os.path.join(
-        PROPOSALS_DIR, f"{stamm}_{name}_{stempel}{endung}")
+        PROPOSALS_DIR, f"{stempel}_{stamm}_{name}{endung}")
 
 
 def _mp_schluessel_fehlt() -> bool:
@@ -348,7 +355,7 @@ def struktur_befehl(population: str, verzeichnis: str, stempel: str,
     Die Dateinamen tragen die Population; --limit wirkt nicht im
     Periodensystem-Modus (dort ist die Grundgesamtheit abgeschlossen).
     """
-    basis = os.path.join(verzeichnis, "{}_" + f"{population}_{stempel}")
+    basis = os.path.join(verzeichnis, f"{stempel}_" + "{}_" + population)
     befehl = [PY, STRUKTUR_SKRIPT, "--population", population,
               "--out", basis.format("qs_class") + ".txt",
               "--md", basis.format("qs_class_befunde") + ".md",
@@ -420,10 +427,10 @@ def schritt(titel: str, befehl: list, protokoll: str) -> int:
         return prozess.wait()
 
 
-def _fertig(verzeichnis: str, muster: str) -> None:
+def _fertig(verzeichnis: str, stempel: str, name: str) -> None:
     print(f"\n{'=' * 72}\nFertig. Dateien in {verzeichnis}:")
     for datei in sorted(os.listdir(verzeichnis)):
-        if muster in datei:
+        if datei.startswith(f"{stempel}_") and name in datei:
             print(f"  {datei}")
 
 
@@ -460,7 +467,7 @@ def fuehre_aus(name: str, schritte: list, groesse) -> int:
                   f"folgenden Schritte laufen nicht mehr.", file=sys.stderr)
             return code
 
-    _fertig(PROPOSALS_DIR, f"_{name}_{stempel}")
+    _fertig(PROPOSALS_DIR, stempel, name)
     if "vorschlaege" in schritte and groesse \
             and POPULATIONEN[name]["schritte"]["vorschlaege"]["cli"][0] == "--group":
         print("\nWurde der Vorschlagslauf unterbrochen: 'python -m lauf' erneut "

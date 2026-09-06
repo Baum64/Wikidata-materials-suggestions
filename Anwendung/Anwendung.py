@@ -128,8 +128,8 @@ Skript nichts tun; die Zahl sagt, wie gross die Luecke wirklich ist.
 
 Ausgabe (nach proposals/, siehe CLAUDE.md "Arbeitsweise" Punkt 2)
 ----------------------------------------------------------------
-  proposals/anwendungen_befunde_<Zeitstempel>.md   alle Befunde (Markdown-Tabelle)
-  proposals/qs_anwendungen_<Zeitstempel>.txt  Entwurf,
+  proposals/<Zeitstempel>_anwendungen_befunde.md   alle Befunde (Markdown-Tabelle)
+  proposals/<Zeitstempel>_qs_anwendungen.txt  Entwurf,
                                                 Abschnitt 1 einspielbar
 
 Aufruf
@@ -1397,10 +1397,10 @@ def main(argv: Optional[list] = None) -> int:
     parser.add_argument("--md", default=None,
                         help="Ziel des Befundberichts als Markdown-Tabelle "
                              "(Default: "
-                             "proposals/anwendungen_befunde_<Zeitstempel>.md)")
+                             "proposals/<Zeitstempel>_anwendungen_befunde.md)")
     parser.add_argument("--qs-out", default=None,
                         help="Ziel des Entwurfs (Default: "
-                             "proposals/qs_anwendungen_<Zeit>.txt)")
+                             "proposals/<Zeit>_qs_anwendungen.txt)")
     args = parser.parse_args(argv)
 
     # Ohne --md/--qs-out nach proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2).
@@ -1409,9 +1409,9 @@ def main(argv: Optional[list] = None) -> int:
     os.makedirs(_proposals, exist_ok=True)
     stempel = dt.datetime.now().strftime("%Y-%m-%d_%H%M")
     md_pfad = args.md or os.path.join(
-        _proposals, f"anwendungen_befunde_{stempel}.md")
+        _proposals, f"{stempel}_anwendungen_befunde.md")
     qs_pfad = args.qs_out or os.path.join(
-        _proposals, f"qs_anwendungen_{stempel}.txt")
+        _proposals, f"{stempel}_qs_anwendungen.txt")
 
     print(f"Hole Grundgesamtheit '{args.population}' ...", file=sys.stderr)
     items = hole_population(args.population, args.limit)

@@ -376,11 +376,12 @@ def write_quickstatements_draft(proposals: list, path: str = "qs_entwurf.txt") -
     Einspielbar ist nur, was status == 'VORSCHLAG' hat (bestehendes Item,
     Property noch nicht gesetzt, Beleg vorhanden). Die beiden anderen
     Status kommen mit in die Datei, aber in eigene, durchgehend
-    auskommentierte Abschnitte:
+    auskommentierte Abschnitte - erst die Klaerungsfaelle (Abschnitt 2),
+    zuletzt das schon Vorhandene (Abschnitt 3):
 
-      BEREITS_VORHANDEN         geprueft und bewusst nicht vorgeschlagen
       MANUELLE_KLAERUNG_NOETIG  Entscheidung noetig, die das Skript nicht
                                 treffen darf
+      BEREITS_VORHANDEN         geprueft und bewusst nicht vorgeschlagen
 
     Sie stehen dort zur Kenntnis, nicht zur Ausfuehrung: ausserhalb des
     ersten Abschnitts beginnt JEDE Zeile mit '#'. Die Datei laesst sich
@@ -402,9 +403,9 @@ def write_quickstatements_draft(proposals: list, path: str = "qs_entwurf.txt") -
         "# Aufbau dieser Datei:",
         f"#   ABSCHNITT 1  EINSPIELBAR .......... {len(vorschlaege):4d}  "
         "(die einzigen ausfuehrbaren Zeilen)",
-        f"#   ABSCHNITT 2  BEREITS VORHANDEN .... {len(vorhanden):4d}  "
+        f"#   ABSCHNITT 2  MANUELLE KLAERUNG .... {len(klaerung):4d}  "
         "(auskommentiert)",
-        f"#   ABSCHNITT 3  MANUELLE KLAERUNG .... {len(klaerung):4d}  "
+        f"#   ABSCHNITT 3  BEREITS VORHANDEN .... {len(vorhanden):4d}  "
         "(auskommentiert)",
         "#",
         "# Ausserhalb von Abschnitt 1 beginnt jede Zeile mit '#'.",
@@ -486,14 +487,7 @@ def write_quickstatements_draft(proposals: list, path: str = "qs_entwurf.txt") -
         lines.append("# (keine)")
 
     lines += _abschnitt_kopf(
-        "ABSCHNITT 2: BEREITS VORHANDEN - NICHT EINSPIELEN", len(vorhanden),
-        ["Das Item traegt diese Property schon. Hier nur, damit",
-         "nachvollziehbar ist, was geprueft und verworfen wurde."],
-    )
-    lines += [_vorhandene_zeile(r) for r in vorhanden] or ["# (keine)"]
-
-    lines += _abschnitt_kopf(
-        "ABSCHNITT 3: MANUELLE KLAERUNG NOETIG - NICHT EINSPIELEN",
+        "ABSCHNITT 2: MANUELLE KLAERUNG NOETIG - NICHT EINSPIELEN",
         len(klaerung),
         ["Hier ist eine fachliche Entscheidung noetig, die das Skript",
          "nicht treffen darf - etwa welches Polymorph gemeint ist.",
@@ -503,6 +497,13 @@ def write_quickstatements_draft(proposals: list, path: str = "qs_entwurf.txt") -
         lines += _klaerungs_zeilen(row)
     if not klaerung:
         lines.append("# (keine)")
+
+    lines += _abschnitt_kopf(
+        "ABSCHNITT 3: BEREITS VORHANDEN - NICHT EINSPIELEN", len(vorhanden),
+        ["Das Item traegt diese Property schon. Hier nur, damit",
+         "nachvollziehbar ist, was geprueft und verworfen wurde."],
+    )
+    lines += [_vorhandene_zeile(r) for r in vorhanden] or ["# (keine)"]
 
     if ohne_einheit:
         # Sichtbar machen statt still durchgehen lassen - eine Mengenaussage

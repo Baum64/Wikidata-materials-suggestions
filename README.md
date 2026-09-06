@@ -81,10 +81,12 @@ Argumente mehr, sondern fragt der Reihe nach:
 
 Alle gewählten Schritte laufen nacheinander, tragen denselben Zeitstempel und
 landen zusammen in `proposals/` — je Lauf **ein** Protokoll
-(`lauf_<population>_<stempel>.log`) für alle Schritte. Die Vorschlags-Stufe
-schreibt dabei **keine** Markdown-Tabelle; ihr QuickStatements-Entwurf
-(`qs_<population>_<stempel>.txt`) trägt ohnehin jede Zeile (Abschnitt 1
-einspielbar, 2 vorhanden, 3 zur Klärung). Bricht ein Schritt ab, startet der
+(`<stempel>_lauf_<population>.log`) für alle Schritte. Der Zeitstempel steht
+**vorn** im Dateinamen, damit sich die Läufe chronologisch sortieren. Die
+Vorschlags-Stufe schreibt dabei **keine** Markdown-Tabelle; ihr
+QuickStatements-Entwurf (`<stempel>_qs_<population>.txt`) trägt ohnehin jede
+Zeile (Abschnitt 1
+einspielbar, 2 zur Klärung, 3 vorhanden). Bricht ein Schritt ab, startet der
 nächste nicht mehr. Gibt es einen unterbrochenen Chargenlauf, bietet der
 Dialog vor der ersten Frage an, ihn fortzusetzen.
 
@@ -105,12 +107,12 @@ gehören nicht ins Repo:
 
 | Datei | Erzeugt von |
 |---|---|
-| `proposals/vorschlaege_<Zeitstempel>.md`, `proposals/qs_<Zeitstempel>.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
+| `proposals/<Zeitstempel>_vorschlaege.md`, `proposals/<Zeitstempel>_qs.txt` | [materialswiki/cli.py](materialswiki/cli.py) |
 | `werkstoffe_vorschlaege.md`, `werkstoffe_qs_entwurf.txt` | [materialswiki/Werkstoff wikidata vorschläge.py](materialswiki/Werkstoff%20wikidata%20vorschl%C3%A4ge.py) |
 | `abdeckung.md` (nur mit `--md`) | [benchmark/benchmark.py](benchmark/benchmark.py) |
-| `proposals/qs_class_<Population>_<Zeitstempel>.txt` (und `qs_class_befunde_*.md` nur mit `--md`) | [Material class structure/ClassCheck.py](Material%20class%20structure/ClassCheck.py) |
-| die gewählten Schritte (`abdeckung_*`, `qs_*`, `qs_class_*` + `qs_class_befunde_*`, `qs_anwendungen_*` + `anwendungen_befunde_*`) mit gemeinsamem Zeitstempel in `proposals/`, dazu **ein** Protokoll `lauf_<population>_<stempel>.log`; die Vorschlags-Stufe läuft mit `--no-tabelle` (keine `vorschlaege_*.md`) | [lauf.py](lauf.py) (Dialog) |
-| `proposals/anwendungen_befunde_<Zeitstempel>.md`, `proposals/qs_anwendungen_<Zeitstempel>.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
+| `proposals/<Zeitstempel>_qs_class_<Population>.txt` (und `<Zeitstempel>_qs_class_befunde_*.md` nur mit `--md`) | [Material class structure/ClassCheck.py](Material%20class%20structure/ClassCheck.py) |
+| die gewählten Schritte (`<stempel>_abdeckung_*`, `<stempel>_qs_*`, `<stempel>_qs_class_*` + `_qs_class_befunde_*`, `<stempel>_qs_anwendungen_*` + `_anwendungen_befunde_*`) mit gemeinsamem, **vorangestelltem** Zeitstempel in `proposals/`, dazu **ein** Protokoll `<stempel>_lauf_<population>.log`; die Vorschlags-Stufe läuft mit `--no-tabelle` (keine `*_vorschlaege.md`) | [lauf.py](lauf.py) (Dialog) |
+| `proposals/<Zeitstempel>_anwendungen_befunde.md`, `proposals/<Zeitstempel>_qs_anwendungen.txt` | [Anwendung/Anwendung.py](Anwendung/Anwendung.py) |
 | `trace_*.png`, `szenario_*` (nur `--szenario`), `subclass_tree_material.png` (nur `--tree`) | [Material class structure/visualisierung.py](Material%20class%20structure/visualisierung.py) |
 | `output/…` (`--output`) | [wikikg/cli.py](wikikg/cli.py) |
 

@@ -95,6 +95,52 @@ CARBID_PATTERN = (
     f"{{ ?i wdt:P279* wd:{CARBID_QID} }}"
 )
 
+# Hartstoffe: der Oberbegriff, unter dem frueher 'carbide' allein lief.
+# Technische Hartstoffe sind hochschmelzende Carbide, Nitride, Boride und
+# Silicide (SiC, WC, TiC, B4C, TiN, Si3N4, TiB2, MoSi2 ...). Wikidata hat
+# KEINE gemeinsame Wurzel dafuer - die vier Stoffklassen-Wurzeln zusammen
+# kommen dem am naechsten (Stand 2026-09-06, Itemzahlen im Subtree):
+#   Q241906  Carbid    ~29  sauber (SiC, WC, TiC, B4C ...), wenige Organik-Reste
+#   Q410851  Nitrid    ~14  aber TiN/GaN/AlN/BN haengen NICHT darunter -
+#                           sie stehen von Hand in HARTSTOFF_ZUSATZ_QIDS
+#   Q419302  Borid     ~4
+#   Q426473  Silicid   ~20  fast nur natuerliche Eisensilicid-MINERALE; darum
+#                           traegt die Gruppe "ausschluss": ("minerale",)
+# Wie bei 'carbide' KEIN Formelzwang: die Items ohne Summenformel (Zementit,
+# Urancarbide ...) sind gerade die, an denen etwas vorzuschlagen ist.
+# HARTSTOFF_AUSSCHLUSS_QIDS entfernt nur zweifelsfreie Nicht-Hartstoffe
+# (Organik, Koordinationskomplexe) und Meta-/Sammelartikel; die uebrigen
+# Grenzfaelle stehen in proposals/review-needed.md ('hartstoff-wurzel-unsauber').
+NITRID_QID = "Q410851"
+BORID_QID = "Q419302"
+SILICID_QID = "Q426473"
+HARTSTOFF_WURZELN = (CARBID_QID, NITRID_QID, BORID_QID, SILICID_QID)
+HARTSTOFF_ZUSATZ_QIDS = ("Q415638", "Q411713", "Q414445", "Q410193")
+HARTSTOFF_AUSSCHLUSS_QIDS = (
+    "Q11685462",   # acetylenide/allylenide (Organik)
+    "Q1884281",    # magnesium allylenide
+    "Q21979517",   # borafullerene
+    "Q5037858",    # metal carbido complex (Koordinationschemie)
+    "Q63384585",   # carbides in steel (Sammelartikel, kein Stoff)
+    "Q416387",     # tetraazidomethane (Organik)
+    "Q1147038",    # cyanuric triazide (Organik)
+    "Q421724",     # cyanogen (Pseudohalogen)
+    "Q60723419",   # tetracyanomethane (Organik)
+    "Q5191418",    # "Crystal structure of boron-rich metal borides" (Artikel)
+    "Q58887427",   # nitride and boride family of minerals (Meta-Item)
+    "Q58887467",   # silicide and germanide family of minerals (Meta-Item)
+)
+_HARTSTOFF_WURZEL_VALUES = " ".join(f"wd:{q}" for q in HARTSTOFF_WURZELN)
+_HARTSTOFF_ZUSATZ_VALUES = " ".join(f"wd:{q}" for q in HARTSTOFF_ZUSATZ_QIDS)
+_HARTSTOFF_NOT_IN = ", ".join(f"wd:{q}" for q in HARTSTOFF_AUSSCHLUSS_QIDS)
+HARTSTOFF_PATTERN = (
+    f"{{ {{ VALUES ?hartwurzel {{ {_HARTSTOFF_WURZEL_VALUES} }} "
+    f"{{ {{ ?i wdt:P31/wdt:P279* ?hartwurzel }} UNION "
+    f"{{ ?i wdt:P279* ?hartwurzel }} }} }} UNION "
+    f"{{ VALUES ?i {{ {_HARTSTOFF_ZUSATZ_VALUES} }} }} }} "
+    f"FILTER(?i NOT IN ({_HARTSTOFF_NOT_IN}))"
+)
+
 # Polymere / Kunststoffe: der Subtree unter Q11474 "Kunststoff" (haengt per
 # P279 direkt an Q214609 Material). Gemessen 2026-08-30: 795 Items, davon 206
 # Klassen; nur 8 tragen eine Summenformel (Polyethylen hat keine), aber 113
@@ -138,14 +184,22 @@ MAGNET_PATTERN = (
 )
 
 # Keramik: der Subtree unter Q45621 "Keramik" (P279 -> Q214609 Material).
-# NUR die Klassen (P279*, ~1021), nicht die Instanzen: allein unter "fine
-# ceramic" (Q13464614) haengen rund 49.000 Museums- und Fundstuecke - konkrete
-# Objekte AUS Keramik, keine Werkstoffsorten. Die volle Grundgesamtheit ist
-# damit unbrauchbar. Die Klassen tragen keine Summenformel (0 von 1021), aber
-# ~210 einen de-Wikipedia-Artikel; der Ertrag liegt wie bei den Polymeren in
-# Struktur und Infobox-Kennzahlen, nicht in der Kristallografie.
+# Volle Grundgesamtheit aus Klassen und Instanzen (~2500 Items, davon ~457
+# Klassen, ~186 mit de-Artikel; keine Summenformel).
+#
+# Bis 2026-09 war hier NUR die Klassenmenge moeglich: der Objektzweig
+# "Toepferware" (Q17379525) und "fine ceramic" (Q13464614) hingen per P279
+# faelschlich unter Q45621 und zogen ~49.000 Museums-/Fundstuecke herein
+# (konkrete Objekte AUS Keramik, keine Werkstoffe). Diese beiden Kanten sind
+# auf Wikidata inzwischen gekappt - Q45621 fuehrt jetzt nur noch Werkstoffe,
+# also kann der Instanzzweig wieder mit (wie bei polymer/glas). Wie bei den
+# Polymeren liegt der Ertrag in Struktur und Infobox-Kennzahlen, nicht in der
+# Kristallografie.
 KERAMIK_QID = "Q45621"
-KERAMIK_PATTERN = f"?i wdt:P279* wd:{KERAMIK_QID} ."
+KERAMIK_PATTERN = (
+    f"{{ ?i wdt:P31/wdt:P279* wd:{KERAMIK_QID} }} UNION "
+    f"{{ ?i wdt:P279* wd:{KERAMIK_QID} }}"
+)
 
 # Glas: der Subtree unter Q11469 "Glas" (P279 -> Q214609 Material). Anders als
 # bei der Keramik ist der Instanzzweig hier handhabbar (~3870 Items, davon
@@ -288,9 +342,13 @@ WERKSTOFFGRUPPEN = {
         "pattern": OXID_PATTERN,
         "beschreibung": "Oxide mit Summenformel (Q50690)",
     },
-    "carbide": {
-        "pattern": CARBID_PATTERN,
-        "beschreibung": "Carbide (Q241906)",
+    "hartstoffe": {
+        "pattern": HARTSTOFF_PATTERN,
+        "beschreibung": ("Hartstoffe - Carbide/Nitride/Boride/Silicide "
+                         "(Q241906/Q410851/Q419302/Q426473)"),
+        # Die Silicid-Wurzel besteht fast nur aus Eisensilicid-Mineralen, die
+        # in 'minerale' mitlaufen - dort besser aufgehoben (Summenformel).
+        "ausschluss": ("minerale",),
     },
     "polymer": {
         "pattern": KUNSTSTOFF_PATTERN,
@@ -302,7 +360,7 @@ WERKSTOFFGRUPPEN = {
     },
     "keramik": {
         "pattern": KERAMIK_PATTERN,
-        "beschreibung": "Keramik-Klassen (Q45621, ohne Objekt-Instanzen)",
+        "beschreibung": "Keramik / Keramikwerkstoffe (Q45621)",
     },
     "glas": {
         "pattern": GLAS_PATTERN,

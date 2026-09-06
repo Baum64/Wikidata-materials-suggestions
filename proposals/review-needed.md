@@ -335,3 +335,40 @@ Review-Liste gewandert:
 - **Zinn (Z=50)** (https://www.wikidata.org/wiki/Q1096): Dichte 7.28 g/cm3, durchweg ueber 5 g/cm3 -> Schwermetall; aktuell am Item verwendete Property fuer dieses Ziel: keine. Ziel waere Q105789 (Schwermetalle), aber welche Property (P31/P279/P1552) dafuer richtig ist, steht noch nicht fest.
 - **Zirconium (Z=40)** (https://www.wikidata.org/wiki/Q1038): Dichte 6.51 g/cm3, durchweg ueber 5 g/cm3 -> Schwermetall; aktuell am Item verwendete Property fuer dieses Ziel: keine. Ziel waere Q105789 (Schwermetalle), aber welche Property (P31/P279/P1552) dafuer richtig ist, steht noch nicht fest.
 
+
+## Lauf 2026-09-06 (Einrichtung der Population `hartstoffe`, Befundart `hartstoff-wurzel-unsauber`)
+
+Die Population `carbide` (nur Q241906) wurde durch `hartstoffe` ersetzt: Carbide,
+Nitride, Boride und Silicide zusammen. Wikidata hat **keine gemeinsame Wurzel**
+fuer technische Hartstoffe, deshalb laeuft die Gruppe ueber vier
+Stoffklassen-Wurzeln (Q241906 Carbid, Q410851 Nitrid, Q419302 Borid, Q426473
+Silicid) plus eine Handliste. Folgende Punkte sind fachlich zu klaeren, nicht
+automatisch entschieden:
+
+- **Fehlende Nitrid-Einordnung.** Titannitrid (https://www.wikidata.org/wiki/Q415638),
+  Galliumnitrid (https://www.wikidata.org/wiki/Q411713), Aluminiumnitrid
+  (https://www.wikidata.org/wiki/Q414445) und Bornitrid
+  (https://www.wikidata.org/wiki/Q410193) haengen unter **keiner** Nitrid-Klasse
+  (Q415638 z. B. unter "titanium-based alloy" + "chemical compound"). Sie sind in
+  `HARTSTOFF_ZUSATZ_QIDS` von Hand aufgenommen. Frage: soll `P279 -> Q410851`
+  (nitride compound) ergaenzt werden, und ist bei Q415638 die Kante
+  `P279 -> titanium-based alloy` falsch (ClassCheck-Befund `verkehrt` sollte sie
+  jetzt melden)?
+- **Silicid-Wurzel = Eisensilicid-Minerale.** Der Subtree unter Q426473 besteht
+  fast nur aus natuerlichen Mineralen (naquite, suessite, gupeiite, xifengite,
+  perryite ...). Sie laufen in der Population `minerale` mit (dort mit
+  Summenformel besser aufgehoben) und sind im materialswiki-Schritt via
+  `"ausschluss": ("minerale",)` ausgenommen. Frage: ist eine eigene Silicid-Wurzel
+  ueberhaupt sinnvoll, oder soll die Gruppe auf Carbide + Nitride + Boride
+  eingegrenzt werden, bis technische Silicide (MoSi2, WSi2 ...) sauber
+  eingehaengt sind?
+- **Duenne Borid-Wurzel.** Unter Q419302 haengen nur ~4 Items (Cobaltborid,
+  Lithiumdodecaborid, ein Sammelartikel). TiB2, ZrB2, CrB2 fehlen. Frage: von
+  Hand ergaenzen wie bei den Nitriden, oder Borid-Zweig zunaechst weglassen?
+- **Organik unter der Carbid-/Nitrid-Wurzel.** `HARTSTOFF_AUSSCHLUSS_QIDS`
+  entfernt bereits zweifelsfreie Faelle (Acetylenide, Borafulleren, Cyanogen,
+  Tetraazidomethan, Cyanursaeuretriazid, "metal carbido complex",
+  Sammelartikel "carbides in steel"). Grenzfall: Carbonitrid /
+  graphitisches Carbonitrid (https://www.wikidata.org/wiki/Q5597232) - wird als
+  Hartstoff/Halbleiter erforscht und daher NICHT ausgeschlossen; bitte
+  bestaetigen.

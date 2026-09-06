@@ -62,7 +62,7 @@ in der Regel zwei Zeilen. Was sich wiederholen wuerde - Zielklasse, Link,
 Pruefanweisung - steht einmal im Gruppenkopf. Fuer die 118 Elemente sind das
 rund 600 Zeilen statt rund 1130.
 
-Die dreizehn Pruefungen
+Die zwoelf Pruefungen
 -----------------------
   1. kennzahlen        Wie wird P279 in der Grundgesamtheit ueberhaupt
                        benutzt: P279, P31, beides, keines; Mehrfacheltern;
@@ -113,12 +113,7 @@ Die dreizehn Pruefungen
                        hat zusaetzlich P31. Nur Meldung - siehe
                        pruefe_p31_neben_p279() dazu, warum kein Entwurf
                        daraus wird.                              [Stufe 4]
- 12. parallelzweig     Item ohne P279*-Pfad zu "material" (Q214609). Kein
-                       Fehler (P186 erlaubt mehrere gleichrangige Werttypen,
-                       siehe visualisierung.py daneben). P31-Instanzen einer
-                       Klasse (konkrete Sorten, selbst keine Klasse) werden
-                       gar nicht erst gemeldet.                  [Stufe 4]
- 13. elementklasse     NUR im Szenario 'periodensystem' (siehe unten). Drei
+ 12. elementklasse     NUR im Szenario 'periodensystem' (siehe unten). Drei
                        Fragen an ein chemisches Element: fehlt die
                        Elementkategorie (Alkalimetall, Uebergangsmetall,
                        Halbmetall, ...), fehlt die Gruppe des
@@ -183,7 +178,7 @@ faellt beim Bauen nicht auf, beim Einspielen schon:
 
 Ausgabe
 -------
-  proposals/qs_class_<Population>_<Zeitstempel>.txt   die Empfehlung
+  proposals/<Zeitstempel>_qs_class_<Population>.txt   die Empfehlung
   --md <pfad>                                        Befundbericht als
                                                      Markdown-Tabelle, optional
 Beide landen in proposals/ (CLAUDE.md, "Arbeitsweise" Punkt 2) - im selben
@@ -218,7 +213,8 @@ Grundgesamtheiten (--population)
   metallischer-werkstoff Klassen unterhalb von Q1924900 (braucht --limit)
   material               Klassen unterhalb von Q214609 (braucht --limit)
   oxide                  Oxide mit Summenformel (Q50690)
-  carbide                Carbide unter Q241906
+  hartstoffe             Carbide/Nitride/Boride/Silicide (Q241906/Q410851/
+                         Q419302/Q426473) zusammen
   minerale               Mineralarten (P31 Q12089225, IMA-gefuehrt)
   polymer                Klassen der Polymere / Kunststoffe (Q11474)
   magnetwerkstoffe       Magnetwerkstoffe (Q949573, ohne Isotope)
@@ -226,10 +222,10 @@ Grundgesamtheiten (--population)
   glas                   Klassen des Glases (Q11469)
   periodensystem         die 118 chemischen Elemente (P31 Q11344)
 
-  oxide, carbide, minerale, polymer, magnetwerkstoffe, keramik und glas
+  oxide, hartstoffe, minerale, polymer, magnetwerkstoffe, keramik und glas
   bringen eine reduzierte Pruefungsauswahl mit (der Legierungsbezug und die
-  Ordnungszahl fehlen dort); minerale zusaetzlich ohne 'parallelzweig' und
-  'verkehrt', weil es Instanzen sind, keine Klassen.
+  Ordnungszahl fehlen dort); minerale zusaetzlich ohne 'verkehrt', weil es
+  Instanzen sind, keine Klassen.
 """
 
 import argparse
@@ -252,7 +248,7 @@ sys.path[:0] = [_HIER, _REPO]
 PROPOSALS_DIR = os.path.join(_REPO, "proposals")
 
 from materialswiki.cli import (  # noqa: E402
-    CARBID_PATTERN, CARBID_QID,
+    HARTSTOFF_PATTERN, HARTSTOFF_WURZELN,
     GLAS_AUSSCHLUSS_FILTER, GLAS_QID, KERAMIK_QID, KUNSTSTOFF_QID,
     LEGIERUNG_PATTERN, LEGIERUNG_QID,
     MAGNET_PATTERN, MAGNETWERKSTOFF_QID, MINERAL_PATTERN, OXID_PATTERN,
@@ -413,27 +409,30 @@ POPULATIONEN = {
         "pattern": OXID_PATTERN,
         "beschreibung": "Oxide mit Summenformel (Q50690) - wie 'lauf oxide'",
         "pruefungen": ["kennzahlen", "redundant", "verkehrt",
-                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+                       "instanz-als-klasse", "zyklus"],
         "bereichswurzel": OXID_QID,
     },
-    # Carbide - der Subtree unter Q241906 (Instanzen und Klassen, wie bei den
-    # Oxiden), aber OHNE Formelzwang: die Gruppe ist mit ~27 Items winzig und
-    # sauber (SiC, WC, TiC, B4C ...). CARBID_PATTERN kommt woertlich aus
+    # Hartstoffe - Carbide, Nitride, Boride, Silicide zusammen (der Oberbegriff,
+    # unter dem frueher 'carbide' allein lief). OHNE Formelzwang: die Gruppe ist
+    # mit ~60 Items winzig. HARTSTOFF_PATTERN kommt woertlich aus
     # materialswiki.gruppen. Reduzierter Strukturkern wie bei 'oxide' - der
     # Legierungsbezug (metaklasse, zusammensetzung, ohne-einordnung) und die
-    # Ordnungszahl (elementklasse) fehlen hier.
-    "carbide": {
-        "pattern": CARBID_PATTERN,
-        "beschreibung": "Carbide (Q241906) - wie 'lauf carbide'",
+    # Ordnungszahl (elementklasse) fehlen hier. 'verkehrt'/'redundant' laufen
+    # ueber ALLE vier Stoffklassen-Wurzeln (bereichswurzeln, nicht -wurzel) -
+    # gerade hier haeufig, dass ein Nitrid faelschlich unter einer
+    # Metall-Legierung haengt (z. B. Titannitrid P279 titanium-based alloy).
+    "hartstoffe": {
+        "pattern": HARTSTOFF_PATTERN,
+        "beschreibung": ("Hartstoffe: Carbide/Nitride/Boride/Silicide "
+                         "(Q241906/Q410851/Q419302/Q426473) - wie 'lauf hartstoffe'"),
         "pruefungen": ["kennzahlen", "redundant", "verkehrt",
-                       "instanz-als-klasse", "zyklus", "parallelzweig"],
-        "bereichswurzel": CARBID_QID,
+                       "instanz-als-klasse", "zyklus"],
+        "bereichswurzeln": list(HARTSTOFF_WURZELN),
     },
     # Mineralarten - die von der IMA gefuehrten Arten (P31 Q12089225), dieselbe
     # Menge wie 'lauf minerale' und der Benchmark. Es sind ~6300 INSTANZEN,
-    # keine Klassen: 'parallelzweig' ("kein P279*-Pfad zu material") und
-    # 'verkehrt' (Klassenbaum unter der Bereichswurzel) haetten daran nichts zu
-    # tun bzw. meldeten es tausendfach. Bleibt der Strukturkern, der auch an
+    # keine Klassen: 'verkehrt' (Klassenbaum unter der Bereichswurzel) haette
+    # daran nichts zu tun bzw. meldete es tausendfach. Bleibt der Strukturkern, der auch an
     # den wenigen Mineralen mit P279 (Varietaeten, Untergruppen) noch greift.
     "minerale": {
         "pattern": MINERAL_PATTERN,
@@ -461,14 +460,11 @@ POPULATIONEN = {
     # 'elementklasse' braucht die Ordnungszahl.
     #
     # polymer, keramik und glas pruefen NUR die Klassen (P279*) - anders als
-    # der materialswiki-/Benchmark-Lauf, der bei polymer und glas ueber das
-    # jeweilige _PATTERN auch die Instanzen mitnimmt (bei keramik nicht, dort
-    # ist der Instanzzweig mit ~49.000 Fundstuecken ohnehin unbrauchbar).
-    # Fuer eine Strukturpruefung sind die Instanzen
-    # (konkrete Kunststoffsorten, per P31 an ihrer Klasse) nur Rauschen:
-    # 'parallelzweig' meldete sonst ~580x "kein P279*-Pfad zu material",
-    # was fuer Instanzen normal ist. Gleiche Logik wie bei 'material' /
-    # 'metallischer-werkstoff' (SUBTREE_KLASSEN_PATTERN).
+    # der materialswiki-/Benchmark-Lauf, der ueber das jeweilige _PATTERN auch
+    # die Instanzen mitnimmt. Fuer eine Strukturpruefung sind die Instanzen
+    # (konkrete Kunststoffsorten, per P31 an ihrer Klasse) nur Rauschen -
+    # gleiche Logik wie bei 'material' / 'metallischer-werkstoff'
+    # (SUBTREE_KLASSEN_PATTERN).
     #
     # magnetwerkstoffe ist mit dem Isotopenfilter ohnehin nur ~17 Klassen -
     # da schadet der Instanzzweig nicht, und MAGNET_PATTERN bleibt mit dem
@@ -480,7 +476,7 @@ POPULATIONEN = {
         "pattern": SUBTREE_KLASSEN_PATTERN.format(root=KUNSTSTOFF_QID),
         "beschreibung": "Klassen der Polymere / Kunststoffe (Q11474)",
         "pruefungen": ["kennzahlen", "redundant", "verkehrt",
-                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+                       "instanz-als-klasse", "zyklus"],
         "bereichswurzel": KUNSTSTOFF_QID,
     },
     "magnetwerkstoffe": {
@@ -488,14 +484,14 @@ POPULATIONEN = {
         "beschreibung": ("Magnetwerkstoffe (Q949573, ohne Isotope) - wie "
                          "'lauf magnetwerkstoffe'"),
         "pruefungen": ["kennzahlen", "redundant", "verkehrt",
-                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+                       "instanz-als-klasse", "zyklus"],
         "bereichswurzel": MAGNETWERKSTOFF_QID,
     },
     "keramik": {
         "pattern": SUBTREE_KLASSEN_PATTERN.format(root=KERAMIK_QID),
         "beschreibung": "Klassen der Keramik (Q45621)",
         "pruefungen": ["kennzahlen", "redundant", "verkehrt",
-                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+                       "instanz-als-klasse", "zyklus"],
         "bereichswurzel": KERAMIK_QID,
     },
     "glas": {
@@ -506,7 +502,7 @@ POPULATIONEN = {
                     + GLAS_AUSSCHLUSS_FILTER),
         "beschreibung": "Klassen des Glases (Q11469, ohne Q1207302 'jar')",
         "pruefungen": ["kennzahlen", "redundant", "verkehrt",
-                       "instanz-als-klasse", "zyklus", "parallelzweig"],
+                       "instanz-als-klasse", "zyklus"],
         "bereichswurzel": GLAS_QID,
     },
 }
@@ -514,7 +510,7 @@ POPULATIONEN = {
 PRUEFUNGEN = ["kennzahlen", "zyklus", "redundant", "verkehrt",
               "instanz-als-klasse", "metaklasse", "zusammensetzung",
               "clad-taxonomie", "zu-allgemein", "ohne-einordnung",
-              "p31-neben-p279", "parallelzweig", "elementklasse"]
+              "p31-neben-p279", "elementklasse"]
 
 # Pruefungen, die nur in der Grundgesamtheit 'periodensystem' etwas
 # bedeuten. Sie brauchen die Ordnungszahl - ausserhalb des Periodensystems
@@ -1987,43 +1983,6 @@ def pruefe_ohne_einordnung(items: dict, eingeordnet: set, labels: dict,
     return treffer, luecken
 
 
-def pruefe_parallelzweig(items: dict, unter_material: set,
-                         labels: dict, p31_werte: dict | None = None,
-                         ist_klasse: set | None = None) -> list:
-    """Items ohne P279*-Pfad zu material (Q214609).
-
-    Uebersprungen werden Items, die per P31 Instanz einer Klasse sind und
-    selbst keine Klasse (kein P279, keine Unterklassen): eine konkrete,
-    normierte Sorte haengt korrekt per P31 an ihrer Klasse und braucht
-    keinen eigenen P279-Pfad zu material - das ist kein meldenswerter
-    Zustand, sondern der Regelfall (siehe .claude/rules/).
-
-    Ausdruecklich KEIN Fehler: P279 erlaubt (und P186 verlangt) mehrere
-    gleichrangige Werttypen nebeneinander - alloy, chemical compound,
-    substance. Eine Legierung muss nicht unter Q214609 haengen, um richtig
-    eingeordnet zu sein. Der ausfuehrliche Nachweis steht in
-    visualisierung.py, im selben Ordner.
-
-    Gemeldet wird trotzdem, weil die Zahl die Frage beantwortet, ob sich eine
-    Vereinheitlichung ueberhaupt lohnt.
-    """
-    p31_werte = p31_werte or {}
-    ist_klasse = ist_klasse or set()
-
-    def nur_instanz(qid: str) -> bool:
-        """P31-Instanz einer Klasse und selbst keine Klasse -> kein Befund."""
-        return bool(p31_werte.get(qid)) and qid not in ist_klasse
-
-    return [befund(
-        "parallelzweig", qid, labels.get(qid, eintrag.get("label", qid)), "",
-        "kein P279*-Pfad zu material (Q214609) - laeuft ueber einen "
-        "parallelen Zweig (alloy, chemical compound, ...).",
-        "Kein Fehler. Nur relevant, wenn die Hierarchie unter Q214609 "
-        "vereinheitlicht werden soll.", eigenschaft="P279")
-        for qid, eintrag in items.items()
-        if qid not in unter_material and not nur_instanz(qid)]
-
-
 def kennzahlen(items: dict, graph, p31_kanten: list, kinder: dict,
                unter_material: set, eingeordnet: set) -> list:
     """Wie wird P279 in dieser Grundgesamtheit ueberhaupt benutzt?"""
@@ -2452,7 +2411,7 @@ STUFEN = [
                                        "clad-klasse-fehlt",
                                        "metaklasse-klasse",
                                        "ohne-einordnung-instanz",
-                                       "p31-neben-p279", "parallelzweig"],
+                                       "p31-neben-p279"],
      False,
      "beschreibt die Lage, fordert nichts - ein Teil ist KEIN Fehler",
      ["Hier gibt es nichts einzuspielen. Wo der Graph die Klassenzugehoerigkeit",
@@ -2501,8 +2460,6 @@ ART_TITEL = {
                                 "nur Meldung: das Item hat nur P31 - ein "
                                 "P279 setzt eine Klasse voraus"),
     "p31-neben-p279": ("P31 neben P279", "nur zur Kenntnis"),
-    "parallelzweig": ("Kein Pfad zu material (Q214609)",
-                      "kein Fehler - P186 erlaubt parallele Werttypen"),
     "element-kategorie-fehlt": ("Elementkategorie fehlt (P361)",
                                 "NACHGERECHNET: die Ordnungszahl legt die "
                                 "Kategorie im Periodensystem eindeutig fest"),
@@ -3052,7 +3009,7 @@ def main(argv: Optional[list] = None) -> int:
                              "selben Ordner wie ein 'python -m lauf'-Lauf.")
     parser.add_argument("--out", default=None,
                         help="Ziel der Empfehlung (Default: "
-                             "<out-dir>/qs_class_<Population>_<Zeit>.txt)")
+                             "<out-dir>/<Zeit>_qs_class_<Population>.txt)")
     parser.add_argument("--md", default=None,
                         help="zusaetzlich einen Befundbericht als "
                              "Markdown-Tabelle schreiben. Ohne diese Angabe "
@@ -3076,6 +3033,16 @@ def main(argv: Optional[list] = None) -> int:
             "pruefungen", [p for p in PRUEFUNGEN if p not in NUR_PERIODENSYSTEM])
     if args.bereichswurzel is None:
         args.bereichswurzel = info.get("bereichswurzel", LEGIERUNG_QID)
+    # Eine Grundgesamtheit aus mehreren Stoffklassen (Hartstoffe: Carbide,
+    # Nitride, Boride, Silicide) bringt statt EINER Bereichswurzel eine Liste
+    # mit. --bereichswurzel auf der Kommandozeile schlaegt sie, wie bei allen
+    # Voreinstellungen. Sonst ist es genau die eine Wurzel.
+    _argv = argv if argv is not None else sys.argv[1:]
+    kli_bereichswurzel = any(a.startswith("--bereichswurzel") for a in _argv)
+    if not kli_bereichswurzel and info.get("bereichswurzeln"):
+        args.bereichswurzeln = list(info["bereichswurzeln"])
+    else:
+        args.bereichswurzeln = [args.bereichswurzel]
     if (set(args.pruefungen) & NUR_PERIODENSYSTEM
             and args.population != "periodensystem"):
         print(f"  {', '.join(sorted(NUR_PERIODENSYSTEM))} uebersprungen: "
@@ -3092,7 +3059,7 @@ def main(argv: Optional[list] = None) -> int:
         return pfad if os.path.isabs(pfad) else os.path.join(args.out_dir, pfad)
 
     empfehlung_pfad = im_ordner(
-        args.out or f"qs_class_{args.population}_{stempel}.txt")
+        args.out or f"{stempel}_qs_class_{args.population}.txt")
     md_pfad = im_ordner(args.md) if args.md else None
 
     items, ohne_item = hole_population(args.population, args.limit)
@@ -3150,14 +3117,12 @@ def main(argv: Optional[list] = None) -> int:
     unter_material = erreichbar(MATERIAL_QID)
     unter_legierung = erreichbar(LEGIERUNG_QID)
     # Die Werkstoff-Ecke: alles unter material oder Legierung, plus die
-    # Grundgesamtheit selbst (die haengt nicht zwingend unter beidem - genau
-    # das misst die Pruefung 'parallelzweig'). Ausserhalb davon wird nichts
-    # vorgeschlagen, siehe pruefe_redundant.
+    # Grundgesamtheit selbst (die haengt nicht zwingend unter beidem).
+    # Ausserhalb davon wird nichts vorgeschlagen, siehe pruefe_redundant.
     im_bereich = unter_material | unter_legierung | set(qids)
 
     braucht_p31 = {"instanz-als-klasse", "kennzahlen", "ohne-einordnung",
-                   "p31-neben-p279", "metaklasse", "parallelzweig",
-                   "clad-taxonomie"}
+                   "p31-neben-p279", "metaklasse", "clad-taxonomie"}
     p31_kanten = (hole_p31_kanten(sorted(set(qids) | set(direkt_allgemein)))
                   if braucht_p31 & set(args.pruefungen) else [])
     # Ueber P31 eingeordnet zaehlt genauso: "X ist ein/e Legierung".
@@ -3169,7 +3134,7 @@ def main(argv: Optional[list] = None) -> int:
     # Merkmal einer Klasse, eigene Unterklassen das andere. Ohne die
     # Kinderabfrage waere der Test halb.
     braucht_kinder = {"instanz-als-klasse", "kennzahlen", "p31-neben-p279",
-                      "metaklasse", "ohne-einordnung", "parallelzweig"}
+                      "metaklasse", "ohne-einordnung"}
     kinder = (hole_kinder(sorted(set(qids) | set(direkt_allgemein)))
               if braucht_kinder & set(args.pruefungen) else {})
 
@@ -3194,16 +3159,19 @@ def main(argv: Optional[list] = None) -> int:
     # haengt man nichts Neues (pruefe_zu_allgemein).
     verkehrt = []
     if {"verkehrt", "redundant", "zu-allgemein"} & set(args.pruefungen):
-        print(f"Hole P279-Huelle nach unten unter {args.bereichswurzel} ...",
-              file=sys.stderr)
-        ab_kanten = hole_p279_huelle([args.bereichswurzel], abwaerts=True)
+        print(f"Hole P279-Huelle nach unten unter "
+              f"{', '.join(args.bereichswurzeln)} ...", file=sys.stderr)
+        ab_kanten = hole_p279_huelle(args.bereichswurzeln, abwaerts=True)
         ab_graph = nx.DiGraph()
-        ab_graph.add_nodes_from([args.bereichswurzel])
+        ab_graph.add_nodes_from(args.bereichswurzeln)
         ab_graph.add_edges_from(ab_kanten)
-        # Im Bereich ist nur, was WIRKLICH unter der Wurzel haengt: die
+        # Im Bereich ist nur, was WIRKLICH unter einer der Wurzeln haengt: die
         # Abwaerts-Huelle bringt ueber die Kanten auch Eltern ausserhalb mit,
         # und fuer die stimmt die gezaehlte Unterbaugroesse nicht.
-        im_bereich = nx.ancestors(ab_graph, args.bereichswurzel) | {args.bereichswurzel}
+        im_bereich = set(args.bereichswurzeln)
+        for _w in args.bereichswurzeln:
+            if _w in ab_graph:
+                im_bereich |= nx.ancestors(ab_graph, _w)
         print(f"  {ab_graph.number_of_nodes()} Klassen, davon "
               f"{len(im_bereich)} im Bereich", file=sys.stderr)
         verkehrt = verkehrt_kandidaten(ab_graph, im_bereich, args.min_unterbau)
@@ -3293,9 +3261,6 @@ def main(argv: Optional[list] = None) -> int:
     if "p31-neben-p279" in args.pruefungen:
         befunde += pruefe_p31_neben_p279(p31_kanten, kinder,
                                          set(direkt_allgemein), labels)
-    if "parallelzweig" in args.pruefungen:
-        befunde += pruefe_parallelzweig(items, unter_material, labels,
-                                        p31_werte, ist_klasse)
     if "elementklasse" in args.pruefungen:
         befunde += pruefe_elementklasse(items, elementdaten, labels,
                                         mit_dichte=not args.ohne_dichte)

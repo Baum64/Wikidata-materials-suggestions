@@ -23,10 +23,9 @@ materialswiki bedient sie seither aus den Infoboxen. Davor waren es die
 thermodynamischen Groessen P3078 (Standardbildungsenthalpie) und P3071
 (molare Standardentropie) unter "Chemical".
 
-Die Projektseite listet nur Messgroessen. Zwei Properties werden deshalb fest
-ergaenzt (je ein eigener Abschnitt, gemeinsam abschaltbar mit --no-extra):
+Die Projektseite listet nur Messgroessen. Eine Property wird deshalb fest
+ergaenzt (eigener Abschnitt, abschaltbar mit --no-extra):
 
-  P231   CAS-Nummer - der zentrale externe Schluessel zu Stoffdatenbanken.
   P1552  charakterisiert durch - traegt die magnetische Ordnung (Ferro-,
          Ferri-, Antiferro-, Para-, Diamagnetismus), die materialswiki aus
          dem Feld "Magnetismus" der {{Infobox Chemisches Element}} holt.
@@ -124,11 +123,9 @@ SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                         "properties_snapshot.json")
 
 # Die Projektseite listet nur Messgroessen - keine Identifikatoren und keine
-# qualitativen Merkmale. Zwei Properties ergaenzt der Benchmark deshalb fest,
-# jede in einem eigenen Abschnitt, damit die Herkunft sichtbar bleibt:
+# qualitativen Merkmale. Eine Property ergaenzt der Benchmark deshalb fest,
+# in einem eigenen Abschnitt, damit die Herkunft sichtbar bleibt:
 #
-#   P231   CAS-Nummer - fuer Werkstoffe und Elemente der zentrale externe
-#          Schluessel und die Bruecke zu Stoffdatenbanken.
 #   P1552  "charakterisiert durch" - itemwertig; materialswiki traegt hier die
 #          magnetische Ordnung aus dem Feld "Magnetismus" der
 #          {{Infobox Chemisches Element}} ein (value_map in PROPERTY_MAP,
@@ -137,7 +134,6 @@ SNAPSHOT = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 #          praktisch immer die magnetische Ordnung, an quer liegenden Items
 #          kann es auch etwas anderes sein.
 EXTRA_SECTIONS = {
-    "Identifikatoren": ["P231"],        # CAS-Nummer
     "Magnetische Ordnung": ["P1552"],   # charakterisiert durch (has characteristic)
 }
 
@@ -185,7 +181,7 @@ METALLE_PATTERN = (
 # Entscheidend ist, dass nicht jeder Lauf jede Stufe fahren kann - sonst
 # verspricht der Benchmark Vorschlaege, die nie kommen:
 #
-#   Gruppenlauf (--group, also lauf.py legierungen|minerale|oxide|carbide)
+#   Gruppenlauf (--group, also lauf.py legierungen|minerale|oxide|hartstoffe)
 #       faehrt alle sechs Stufen.
 #   Elementlauf (--periodic-table, also lauf.py metalle|periodensystem)
 #       faehrt NUR die vier externen Quellen. Punktgruppe und Formel gibt es
@@ -263,7 +259,7 @@ WP_SCHLUESSEL = {
 WP_JE_POPULATION = {
     "minerale": ["de-mineral"],
     "oxide": ["de-chemikalie", "en-chembox"],
-    "carbide": ["de-chemikalie", "en-chembox"],
+    "hartstoffe": ["de-chemikalie", "en-chembox"],
     "polymer": ["de-chemikalie", "en-chembox"],
     "magnetwerkstoffe": ["de-chemikalie", "en-chembox"],
     "keramik": ["de-chemikalie", "en-chembox"],
@@ -703,16 +699,12 @@ def main(argv: Optional[list] = None) -> int:
     # Nach dem Snapshot-Schreiben ergaenzen, damit der Snapshot die
     # Projektseite unvermischt abbildet - und NUR, was dort noch fehlt.
     # Die Ergaenzung loest sich damit von selbst auf, sobald die Projektseite
-    # eine Property uebernimmt: P231 stand am 2026-08-16 noch nicht auf der
-    # Seite und steht seit demselben Tag unter "Chemical". Ohne diese Pruefung
-    # erschiene sie in zwei Abschnitten und die Zusammenfassung zaehlte 66
-    # statt 65 Properties.
-    uebernommen = []
+    # eine Property uebernimmt (so geschehen mit P231, das seit 2026-08-16
+    # selbst unter "Chemical" steht und hier nicht mehr ergaenzt wird).
     if not args.no_extra:
         schon_da = {p for v in sections.values() for p in v}
         for abschnitt, extra_pids in EXTRA_SECTIONS.items():
             fehlend = [p for p in extra_pids if p not in schon_da]
-            uebernommen += [p for p in extra_pids if p in schon_da]
             if fehlend:
                 sections[abschnitt] = fehlend
 
@@ -720,9 +712,7 @@ def main(argv: Optional[list] = None) -> int:
     print(f"{aus_projekt} Properties aus {len(args.sections)} Abschnitten von "
           f"[[{PROJECT_PAGE}]]"
           + (f" + {len(pids) - aus_projekt} fest ergaenzt"
-             if len(pids) > aus_projekt else "")
-          + (f"; {', '.join(uebernommen)} steht inzwischen selbst auf der "
-             f"Projektseite und wird nicht mehr ergaenzt" if uebernommen else ""),
+             if len(pids) > aus_projekt else ""),
           file=sys.stderr)
 
     population_pattern, teilmengen = build_population(args)

@@ -81,21 +81,21 @@ def test_zaehl_schluessel_ist_aufloesbar():
 # ---------------------------------------------------------------------------
 
 def test_populationen_mit_voller_kette():
-    for name in ("minerale", "carbide", "oxide", "polymer", "magnetwerkstoffe",
+    for name in ("minerale", "hartstoffe", "oxide", "polymer", "magnetwerkstoffe",
                  "keramik", "glas"):
         schritte = lauf.POPULATIONEN[name]["schritte"]
         assert set(schritte) == {"benchmark", "vorschlaege", "struktur"}
         assert schritte["struktur"]["population"] == name
 
 
-def test_minerale_und_carbide_haben_die_struktur_option():
-    for name in ("minerale", "carbide"):
+def test_minerale_und_hartstoffe_haben_die_struktur_option():
+    for name in ("minerale", "hartstoffe"):
         assert "struktur" in lauf.POPULATIONEN[name]["schritte"]
 
 
 def test_entfernte_populationen_sind_weg():
     for name in ("benannte-legierungen", "material", "metallischer-werkstoff",
-                 "metalle"):
+                 "metalle", "carbide"):
         assert name not in lauf.POPULATIONEN
 
 
@@ -142,7 +142,7 @@ def test_vorschlaege_schreibt_keine_markdown_tabelle():
     assert "--no-tabelle" in befehl
     assert "--out" not in befehl
     assert befehl[befehl.index("--qs-out") + 1].endswith(
-        "qs_minerale_2026-01-01_0000.txt")
+        "2026-01-01_0000_qs_minerale.txt")
 
 
 def test_vorschlaege_ohne_mp_schluessel_haengt_no_mp_an(monkeypatch):
@@ -174,19 +174,19 @@ def test_ausgabenamen_tragen_das_qs_schema():
     befehl = lauf.struktur_befehl("legierungen", "/tmp/x", "2026-01-01_0000")
     out = befehl[befehl.index("--out") + 1]
     befund_md = befehl[befehl.index("--md") + 1]
-    assert os.path.basename(out) == "qs_class_legierungen_2026-01-01_0000.txt"
-    assert os.path.basename(befund_md) == "qs_class_befunde_legierungen_2026-01-01_0000.md"
+    assert os.path.basename(out) == "2026-01-01_0000_qs_class_legierungen.txt"
+    assert os.path.basename(befund_md) == "2026-01-01_0000_qs_class_befunde_legierungen.md"
 
 
 def test_benchmark_und_vorschlaege_teilen_den_zeitstempel():
     b = lauf.schritt_befehl("benchmark", "oxide", "2026-02-02_1200", None)
     v = lauf.schritt_befehl("vorschlaege", "oxide", "2026-02-02_1200", None)
-    assert b[b.index("--md") + 1].endswith("abdeckung_oxide_2026-02-02_1200.md")
-    assert v[v.index("--qs-out") + 1].endswith("qs_oxide_2026-02-02_1200.txt")
+    assert b[b.index("--md") + 1].endswith("2026-02-02_1200_abdeckung_oxide.md")
+    assert v[v.index("--qs-out") + 1].endswith("2026-02-02_1200_qs_oxide.txt")
 
 
 def test_ein_protokoll_fuer_alle_schritte(tmp_path, monkeypatch):
-    """Statt je Schritt eine .log gibt es genau eine lauf_<pop>_<stempel>.log."""
+    """Statt je Schritt eine .log gibt es genau eine <stempel>_lauf_<pop>.log."""
     monkeypatch.setattr(lauf, "PROPOSALS_DIR", str(tmp_path))
     aufrufe = []
     monkeypatch.setattr(lauf, "schritt",
@@ -196,8 +196,9 @@ def test_ein_protokoll_fuer_alle_schritte(tmp_path, monkeypatch):
     assert lauf.fuehre_aus("oxide", ["benchmark", "vorschlaege", "struktur"],
                            None) == 0
     assert len(set(aufrufe)) == 1
-    assert os.path.basename(aufrufe[0]).startswith("lauf_oxide_")
-    assert aufrufe[0].endswith(".log")
+    basis = os.path.basename(aufrufe[0])
+    assert basis.endswith("_lauf_oxide.log")
+    assert basis[:10].count("-") == 2   # der Zeitstempel steht vorn
     assert os.path.exists(aufrufe[0])   # vorab frisch angelegt
 
 
@@ -263,11 +264,11 @@ def test_pruefe_umgebung_meldet_fehlendes_requests(monkeypatch):
 def test_unterbrochene_laeufe_liest_die_fortschrittsdatei(tmp_path, monkeypatch):
     import json
     monkeypatch.setattr(lauf, "PROPOSALS_DIR", str(tmp_path))
-    (tmp_path / "qs_minerale_2026-03-03_0900.fortschritt.json").write_text(
+    (tmp_path / "2026-03-03_0900_qs_minerale.fortschritt.json").write_text(
         json.dumps({"gruppe": "minerale", "erledigt": 500, "gesamt": 6301,
                     "batch_size": 500, "letzte_charge": 1,
                     "zeitpunkt": "2026-03-03T09:00:00"}), encoding="utf-8")
-    (tmp_path / "qs_oxide_2026-03-03_1000.fortschritt.json").write_text(
+    (tmp_path / "2026-03-03_1000_qs_oxide.fortschritt.json").write_text(
         json.dumps({"gruppe": "oxide", "erledigt": 154, "gesamt": 154}),
         encoding="utf-8")
 

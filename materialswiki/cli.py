@@ -6,7 +6,7 @@ Erstellt KEINE neuen Wikidata-Items und schreibt nichts automatisch nach
 Wikidata. Es entstehen eine Vorschlagsliste als Markdown-Tabelle zur manuellen
 Pruefung und ein QuickStatements-Entwurf, in dem nur Zeilen mit Status
 "VORSCHLAG" ausfuehrbar sind. Der Entwurf traegt JEDE Zeile (Abschnitt 1
-einspielbar, 2 vorhanden, 3 zur Klaerung) - --no-tabelle laesst die dann
+einspielbar, 2 zur Klaerung, 3 vorhanden) - --no-tabelle laesst die dann
 redundante Markdown-Tabelle weg (so ruft lauf.py das Werkzeug auf).
 
 Quellenkaskade, jede Stufe nur fuer das, was die vorherige nicht lieferte:
@@ -173,6 +173,7 @@ from .quellen.nist import (  # noqa: E402,F401
 from . import ableitungen, gruppen  # noqa: E402
 from .gruppen import (  # noqa: E402,F401
     CARBID_PATTERN, CARBID_QID,
+    HARTSTOFF_PATTERN, HARTSTOFF_WURZELN,
     GLAS_AUSSCHLUSS_FILTER, GLAS_AUSSCHLUSS_QIDS, GLAS_PATTERN, GLAS_QID,
     HALBMETALLE, KERAMIK_PATTERN, KERAMIK_QID,
     KUNSTSTOFF_PATTERN, KUNSTSTOFF_QID, LEGIERUNG_OHNE_ELEMENTE,
@@ -342,8 +343,8 @@ def build_proposals_for_items(items: list, wikipedia: bool = True,
 
         # Quellen, die nichts mehr beitragen koennen, werden gar nicht erst
         # befragt - siehe wikidata.stufe_kann_nichts_beitragen. Mit --auch-vorhandene
-        # laeuft wieder jede Stufe, dann steht in Abschnitt 2 des Entwurfs
-        # auch wirklich alles Gepruefte.
+        # laeuft wieder jede Stufe, dann steht in Abschnitt 3 des Entwurfs
+        # (bereits vorhanden) auch wirklich alles Gepruefte.
         def ueberspringen(stufe, qid=eintrag["qid"]):
             if auch_vorhandene:
                 return False
@@ -982,8 +983,8 @@ def main():
         action="store_true",
         help="auch Quellen befragen, deren Properties das Item schon "
         "vollstaendig traegt. Standardmaessig werden sie uebersprungen - das "
-        "spart den teuersten Teil der Laufzeit, dafuer steht in Abschnitt 2 "
-        "des Entwurfs dann nur noch, was beim Suchen nebenbei anfiel",
+        "spart den teuersten Teil der Laufzeit, dafuer steht in Abschnitt 3 "
+        "(bereits vorhanden) dann nur noch, was beim Suchen nebenbei anfiel",
     )
     parser.add_argument(
         "--nist",
@@ -1009,7 +1010,7 @@ def main():
     )
     parser.add_argument("--out", default=None,
                         help="Vorschlagstabelle als Markdown (Default: "
-                             "proposals/vorschlaege_<Zeitstempel>.md)")
+                             "proposals/<Zeitstempel>_vorschlaege.md)")
     parser.add_argument(
         "--tabelle",
         action=argparse.BooleanOptionalAction,
@@ -1017,11 +1018,11 @@ def main():
         help="die Markdown-Vorschlagstabelle schreiben. Default: an. "
         "--no-tabelle laesst sie weg - der QuickStatements-Entwurf "
         "(--qs-out) traegt ohnehin jede Zeile (Abschnitt 1 einspielbar, "
-        "2 vorhanden, 3 zur Klaerung), die Tabelle ist dann reine Doppelung",
+        "2 zur Klaerung, 3 vorhanden), die Tabelle ist dann reine Doppelung",
     )
     parser.add_argument("--qs-out", default=None,
                         help="QuickStatements-Entwurf (Default: "
-                             "proposals/qs_<Zeitstempel>.txt)")
+                             "proposals/<Zeitstempel>_qs.txt)")
     args = parser.parse_args()
 
     # Zeitstempel im Dateinamen, fuer beide Dateien derselbe: so ueberschreibt
@@ -1032,9 +1033,9 @@ def main():
     # Ohne --tabelle wird keine Markdown-Datei geschrieben (None wandert bis
     # write_markdown_streaming durch). Der Pfad wird trotzdem gebildet, damit
     # der Chargenbetrieb daraus die je-Charge-Namen ableiten kann.
-    out = args.out or os.path.join(PROPOSALS_DIR, f"vorschlaege_{stempel}.md")
+    out = args.out or os.path.join(PROPOSALS_DIR, f"{stempel}_vorschlaege.md")
     qs_out = args.qs_out or os.path.join(
-        PROPOSALS_DIR, f"qs_{stempel}.txt")
+        PROPOSALS_DIR, f"{stempel}_qs.txt")
 
     if args.group and args.batch_size:
         return chargenlauf(args, out, qs_out)

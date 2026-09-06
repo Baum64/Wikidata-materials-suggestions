@@ -291,8 +291,8 @@ Eigenheit dieser Anwendung.
 ## Ausgabe
 
 ```
-anwendungen_befunde_<Zeitstempel>.md   alle Befunde als Markdown-Tabelle, eine Zeile je Befund
-qs_anwendungen_<Zeitstempel>.txt       Entwurf, nur Abschnitt 1 einspielbar
+<Zeitstempel>_anwendungen_befunde.md   alle Befunde als Markdown-Tabelle, eine Zeile je Befund
+<Zeitstempel>_qs_anwendungen.txt       Entwurf, nur Abschnitt 1 einspielbar
 ```
 
 Die `P2079`-Zeilen aus der Wikipedia tragen einen Beleg (`S143`+`S4656`,

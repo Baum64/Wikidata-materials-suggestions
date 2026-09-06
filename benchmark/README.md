@@ -106,7 +106,7 @@ koppelt — sonst verspricht der Benchmark Vorschläge, die nie kommen:
 
 | Lauf | `--population` | Stufen |
 |---|---|---|
-| Gruppenlauf (`--group`) | `legierungen`, `minerale`, `oxide`, `carbide`, `polymer`, `magnetwerkstoffe`, `keramik`, `glas`, `subtree` | COD, MP, NIST, WD, (Formel) + de-Infobox + `WPen-Chem` |
+| Gruppenlauf (`--group`) | `legierungen`, `minerale`, `oxide`, `hartstoffe`, `polymer`, `magnetwerkstoffe`, `keramik`, `glas`, `subtree` | COD, MP, NIST, WD, (Formel) + de-Infobox + `WPen-Chem` |
 | Elementlauf (`--periodic-table`) | `metalle`, `periodensystem` | COD, MP, NIST, `WPde-El`, `WPen-El` |
 
 Der Elementlauf kennt die beiden **Ableitungen nicht** —
@@ -132,7 +132,7 @@ Vorlage im Artikel:
 | `--population` | Vorlagen |
 |---|---|
 | `minerale` | `WPde-Min` |
-| `oxide`, `carbide`, `polymer`, `magnetwerkstoffe`, `keramik`, `glas` | `WPde-Chem`, `WPen-Chem` |
+| `oxide`, `hartstoffe`, `polymer`, `magnetwerkstoffe`, `keramik`, `glas` | `WPde-Chem`, `WPen-Chem` |
 | `legierungen`, `benannte-legierungen` | `WPde-Chem`, `WPde-Min`, `WPen-Chem` |
 | `metalle`, `periodensystem` | `WPde-El`, `WPen-El` |
 | sonst (`subtree`, eigenes `--root`) | alle im Gruppenlauf erreichbaren |

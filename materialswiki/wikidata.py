@@ -410,8 +410,8 @@ def stufe_kann_nichts_beitragen(qid: str, stufe: str) -> bool:
 
 
 def melde_uebersprungene_stufen() -> None:
-    """Was der Lauf sich gespart hat - und was dadurch NICHT in Abschnitt 2
-    des Entwurfs steht."""
+    """Was der Lauf sich gespart hat - und was dadurch NICHT in Abschnitt 3
+    (bereits vorhanden) des Entwurfs steht."""
     if not _UEBERSPRUNGEN:
         return
     text = ", ".join(f"{stufe} {n}x" for stufe, n in

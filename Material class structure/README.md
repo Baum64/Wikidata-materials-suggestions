@@ -6,13 +6,14 @@ Zwei Werkzeuge zur **Wikidata-Klassenhierarchie der Werkstoffe** — wie
 
 | Skript | Was es tut | Ausgabe |
 |---|---|---|
-| **[ClassCheck.py](ClassCheck.py)** | prüft die Struktur auf zwölf Arten und schreibt **eine gestaffelte Empfehlung** — vier Stufen nach Beweiskraft | `proposals/qs_class_<Population>_<Zeitstempel>.txt` |
+| **[ClassCheck.py](ClassCheck.py)** | prüft die Struktur auf zwölf Arten und schreibt **eine gestaffelte Empfehlung** — vier Stufen nach Beweiskraft | `proposals/<Zeitstempel>_qs_class_<Population>.txt` |
 | **[visualisierung.py](visualisierung.py)** | **zeichnet**, wie Werkstoffe an der Wurzel hängen und welche über einen parallelen Zweig laufen; mit `--szenario` zusätzlich Periodensystem, Legierungen und Minerale | `*.png` (+ `szenario_periodensystem.md`) |
 
 Die beiden ergänzen sich: die Visualisierung beantwortet **ob und wie** ein
 Werkstoff an der Wurzel hängt, die Vorschlagsgenerierung, **was daran zu
-ändern wäre**. Der Befund `parallelzweig` in der Empfehlung ist genau der,
-den die Visualisierung als roten Knoten zeigt.
+ändern wäre**. Die roten Knoten der Visualisierung (Werkstoffe, die nur über
+einen parallelen Zweig an `material` hängen) sind reine Bestandsaufnahme —
+ClassCheck macht daraus **keinen** Befund mehr.
 
 Beide brauchen `requests`; die Visualisierung zusätzlich `networkx` und
 `matplotlib` (siehe [../requirements.txt](../requirements.txt)). Gestartet
@@ -36,7 +37,7 @@ P279-Graphen und die Label-Heuristik aus dem früheren
 
 Über den Dialog `python -m lauf`: dort Grundgesamtheit wählen und im Umfang
 `struktur` ankreuzen (allein oder mit den anderen Schritten); die Empfehlung
-landet in `proposals/`. Der Dialog deckt `legierungen`, `oxide`, `carbide`,
+landet in `proposals/`. Der Dialog deckt `legierungen`, `oxide`, `hartstoffe`,
 `minerale`, `polymer`, `magnetwerkstoffe`, `keramik`, `glas` und
 `periodensystem` ab. `benannte-legierungen`, `metallischer-werkstoff` und
 `material` (die beiden letzten **brauchen `--limit N`**) laufen nur über den
@@ -53,7 +54,7 @@ python "Material class structure/ClassCheck.py" --tiefe 3 --beleg beides
 python "Material class structure/ClassCheck.py" --vorsichtig   # nichts einspielbar
 ```
 
-Es entsteht **eine** Datei: `proposals/qs_class_<Population>_<Zeitstempel>.txt`. Einen
+Es entsteht **eine** Datei: `proposals/<Zeitstempel>_qs_class_<Population>.txt`. Einen
 Befundbericht als Markdown-Tabelle gibt es nur auf Wunsch (`--md`).
 
 ## Die Staffelung
@@ -127,7 +128,7 @@ Trägt jeder Vorschlag einer Zielgruppe dieselbe Prüfanweisung, steht sie
 einmal im Gruppenkopf statt in jedem Eintrag. Der Kopf der Datei zählt die
 Befunde zusätzlich nach Eigenschaft auf, die `--md`-Tabelle ist ebenso sortiert.
 
-## Die dreizehn Prüfungen
+## Die zwölf Prüfungen
 
 | Prüfung | Findet | Stufe |
 |---|---|---|
@@ -142,8 +143,12 @@ Befunde zusätzlich nach Eigenschaft auf, die `--md`-Tabelle ist ebenso sortiert
 | `zu-allgemein` | Item hängt direkt unter einer sehr allgemeinen Klasse, obwohl seine Bezeichnung eine speziellere nennt | 3 |
 | `ohne-einordnung` | benannte Legierung ohne jeden Pfad zu `Legierung` (Q37756) — Entwurf nur, wenn das Item **keine** reine Instanz ist | 3 / 4 |
 | `p31-neben-p279` | Item direkt unter einer allgemeinen Klasse, zusätzlich mit P31 | 4 |
-| `parallelzweig` | Item ohne P279\*-Pfad zu `material` (Q214609) — **kein Fehler** | 4 |
 | `elementklasse` | nur im Szenario `periodensystem`: fehlende Elementkategorie, fehlende Gruppe, Leicht-/Schwermetall aus der Dichte | 2 / 3 / 4 |
+
+Ob ein Item einen `P279*`-Pfad zu `material` (Q214609) hat, prüft ClassCheck
+**nicht** — Werkstoffe hängen in Wikidata legitim an parallelen Hierarchien
+(`alloy`, `chemical compound`, …), ein „kein Pfad"-Befund wäre reines Rauschen.
+Wer die Verteilung sehen will, nimmt [visualisierung.py](visualisierung.py).
 
 Alle Prüfungen bleiben in der **Werkstoff-Ecke** (unter `material` oder
 `Legierung`, plus die Grundgesamtheit selbst). Das ist keine Bequemlichkeit:
@@ -406,13 +411,13 @@ und Handelsprodukte, ein Treffer gegen die wäre fast immer Zufall.
 | `legierungen` | Legierungen unter Q37756, ohne Elemente und Isotope |
 | `metallischer-werkstoff` | Klassen unterhalb von Q1924900 — **braucht `--limit N`** (die Abfrage läuft sonst ins Timeout) |
 | `material` | Klassen unterhalb von Q214609 — **braucht `--limit N`**; der volle Baum hat rund 936.000 Klassen, in einer Abfrage nicht holbar. Beide Wurzeln liefern nur die *Klassen* (`P279*`), nicht zusätzlich jede Instanz jeder Unterklasse |
-| `oxide` | Oxide mit Summenformel unter Q50690 — dieselbe Menge wie die Population `oxide` in `lauf` und im Benchmark (`OXID_PATTERN` importiert, nicht kopiert). Bringt eine eigene Prüfungsauswahl mit (`kennzahlen`, `redundant`, `verkehrt`, `instanz-als-klasse`, `zyklus`, `parallelzweig`) und `--bereichswurzel Q50690` |
-| `carbide` | Carbide unter Q241906 (Instanzen und Klassen, ~27), **ohne Formelzwang** — wie die Population `carbide` in `lauf` und im Benchmark. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q241906` |
-| `minerale` | Mineralarten (`P31 = Q12089225`, IMA-geführt, ~6300) — wie die Population `minerale` in `lauf` und im Benchmark. Es sind **Instanzen**, keine Klassen: die Auswahl ist auf `kennzahlen`, `redundant`, `instanz-als-klasse`, `zyklus` reduziert (kein `parallelzweig` — das meldete sonst tausendfach „kein `P279*`-Pfad zu material" —, kein `verkehrt`). `--bereichswurzel Q12089225` |
+| `oxide` | Oxide mit Summenformel unter Q50690 — dieselbe Menge wie die Population `oxide` in `lauf` und im Benchmark (`OXID_PATTERN` importiert, nicht kopiert). Bringt eine eigene Prüfungsauswahl mit (`kennzahlen`, `redundant`, `verkehrt`, `instanz-als-klasse`, `zyklus`) und `--bereichswurzel Q50690` |
+| `hartstoffe` | Carbide, Nitride, Boride und Silicide zusammen (Q241906/Q410851/Q419302/Q426473, Instanzen und Klassen, ~60), **ohne Formelzwang** — wie die Population `hartstoffe` in `lauf` und im Benchmark. Reduzierte Prüfungsauswahl wie `oxide`; `verkehrt`/`redundant` laufen über alle vier Wurzeln (`bereichswurzeln`). Wikidata hat keine gemeinsame Hartstoff-Wurzel; TiN/GaN/AlN/BN hängen unter keiner Nitrid-Klasse und sind von Hand ergänzt (`HARTSTOFF_ZUSATZ_QIDS`), die Silicid-Wurzel ist fast nur Eisensilicid-*Minerale* — Details in `proposals/review-needed.md` |
+| `minerale` | Mineralarten (`P31 = Q12089225`, IMA-geführt, ~6300) — wie die Population `minerale` in `lauf` und im Benchmark. Es sind **Instanzen**, keine Klassen: die Auswahl ist auf `kennzahlen`, `redundant`, `instanz-als-klasse`, `zyklus` reduziert (kein `verkehrt` — das meldete an Instanzen tausendfach). `--bereichswurzel Q12089225` |
 | `periodensystem` | die 118 chemischen Elemente (`P31 = Q11344`, Ordnungszahl ≤ 118) |
-| `polymer` | **Klassen** der Polymere/Kunststoffe unter Q11474 (`P279*`, ~206) — dieselbe Wurzel wie die Population `polymer` in `lauf` und im Benchmark, dort aber mitsamt Instanzen. Für die Strukturprüfung nur die Klassen, sonst meldet `parallelzweig` massenhaft „kein `P279*`-Pfad zu material" für konkrete Kunststoffsorten. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11474` |
+| `polymer` | **Klassen** der Polymere/Kunststoffe unter Q11474 (`P279*`, ~206) — dieselbe Wurzel wie die Population `polymer` in `lauf` und im Benchmark, dort aber mitsamt Instanzen. Für die Strukturprüfung nur die Klassen — konkrete Kunststoffsorten (per P31 an ihrer Klasse) wären nur Rauschen. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11474` |
 | `magnetwerkstoffe` | Magnetwerkstoffe unter Q949573, **ohne Isotope** (`FILTER NOT EXISTS { ?i wdt:P1086 ?z }`) — sonst zieht ein schiefer Instanzpfad über Nickel (Q744) ~40 Nickel-Isotope herein. Winzig (~17 Klassen), `MAGNET_PATTERN` mit dem Benchmark identisch, `--bereichswurzel Q949573`. `MAGNET_PATTERN` verankert neben Q949573 auch **Q2554911** (weichmagnetische Werkstoffe) und **Q9259184** (ferromagnetic material) als eigene Wurzeln, damit der ganze ferromagnetische Zweig nicht an einer einzigen P279-Kante hängt |
-| `keramik` | **Klassen** der Keramik unter Q45621 (`P279*`, ~1021) — wie die Population `keramik` in `lauf` und im Benchmark. Nur die Klassen, denn der Instanzzweig sind ~49.000 Museums-/Fundstücke (Objekte *aus* Keramik). Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q45621` |
+| `keramik` | **Klassen** der Keramik unter Q45621 (`P279*`, ~457) — dieselbe Wurzel wie die Population `keramik` in `lauf` und im Benchmark, dort aber mitsamt Instanzen (~2500). Für die Strukturprüfung nur die Klassen. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q45621` |
 | `glas` | **Klassen** des Glases unter Q11469 (`P279*`, ~165) — dieselbe Wurzel wie die Population `glas` in `lauf` und im Benchmark, dort aber mitsamt Instanzen (~1160). Für die Strukturprüfung nur die Klassen. Der Behälter-Ast `Q1207302` „jar" (de-Label „Glas") ist über `GLAS_AUSSCHLUSS_FILTER` ausgeschlossen — wie im Benchmark/materialswiki-Lauf. Reduzierte Prüfungsauswahl wie `oxide`, `--bereichswurzel Q11469` |
 
 Die Muster kommen aus [materialswiki/cli.py](../materialswiki/cli.py) — sie
@@ -556,8 +561,8 @@ sein — sie hängt an einer parallelen Klassenhierarchie. Ein „kein Pfad"-Bef
 ist deshalb nicht automatisch ein Fehler, aber für eine materialorientierte
 Auswertung überraschend. Genau das prüft dieses Skript empirisch.
 
-Das ist auch die Begründung dafür, dass `parallelzweig` in der Empfehlung
-nebenan in **Stufe 4** steht: gemeldet, aber ohne Entwurf.
+Das ist auch die Begründung dafür, dass ClassCheck einen fehlenden Pfad zu
+`material` gar nicht erst als Befund führt.
 
 Praktische Folge für [../benchmark/](../benchmark/): dessen Grundgesamtheit
 muss Instanzen **und** Unterklassen vereinigen, sonst zählt sie an den
