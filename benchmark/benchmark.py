@@ -475,7 +475,17 @@ def build_population(args) -> tuple:
         # Muster kommt aus materialswiki, damit Benchmark und Vorschlags-
         # lauf garantiert dieselbe Grundgesamtheit meinen.
         pattern = WERKSTOFFGRUPPEN[args.population]["pattern"]
-        return pattern, {"gesamt": pattern}
+        # Die Muster der Werkstoffgruppen ziehen beide Zweige (Instanzen ueber
+        # P31/P279*, Unterklassen ueber P279*). Damit im Bericht sichtbar wird,
+        # dass die Instanzen wirklich mitgezaehlt werden, hier ueber ein
+        # Merkmal des Items aufgeteilt: hat es ein ausgehendes P279, gilt es
+        # als Klasse, sonst als Instanz. Funktioniert fuer jedes Gruppenmuster
+        # unabhaengig von Wurzelzahl und Zusatzfiltern.
+        return pattern, {
+            "instanzen": f"{pattern} FILTER NOT EXISTS {{ ?i wdt:P279 ?sup }}",
+            "unterklassen": f"{pattern} FILTER EXISTS {{ ?i wdt:P279 ?sup }}",
+            "gesamt": pattern,
+        }
     if args.population == "metalle":
         nichtmetalle = ", ".join(f'"{s}"' for s in sorted(NICHTMETALLE))
         pattern = METALLE_PATTERN.format(max_z=args.max_z,
@@ -575,9 +585,14 @@ def print_report(titel: str, population: dict, rows: list,
     print(f"Grundgesamtheit: {titel}")
     print(f"Vorschlagslauf:  {LAEUFE[modus][0]}")
     if "instanzen" in population:
-        print(f"  Instanzen (P31/P279*)          {population['instanzen']:>7}")
-        print(f"  Unterklassen (P279*)           {population['unterklassen']:>7}")
-        print(f"  ausgewertet (Vereinigung)      {total:>7}")
+        if gruppe in WERKSTOFFGRUPPEN:
+            print(f"  Instanzen (ohne eigenes P279)  {population['instanzen']:>7}")
+            print(f"  Unterklassen (mit P279)        {population['unterklassen']:>7}")
+            print(f"  ausgewertet (gesamt)           {total:>7}")
+        else:
+            print(f"  Instanzen (P31/P279*)          {population['instanzen']:>7}")
+            print(f"  Unterklassen (P279*)           {population['unterklassen']:>7}")
+            print(f"  ausgewertet (Vereinigung)      {total:>7}")
     else:
         print(f"  ausgewertet                    {total:>7}")
 

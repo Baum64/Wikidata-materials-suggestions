@@ -176,12 +176,19 @@ MAGNETWERKSTOFF_QID = "Q949573"
 # mit der einen Kante passiert. Kostet nichts, solange die Kanten stehen -
 # dann liefern alle drei Wurzeln dieselben Items.
 MAGNET_WURZELN = (MAGNETWERKSTOFF_QID, "Q2554911", "Q9259184")
-_MAGNET_WURZEL_VALUES = " ".join(f"wd:{q}" for q in MAGNET_WURZELN)
-MAGNET_PATTERN = (
-    f"VALUES ?magnetwurzel {{ {_MAGNET_WURZEL_VALUES} }} "
-    f"{{ {{ ?i wdt:P31/wdt:P279* ?magnetwurzel }} UNION "
-    f"{{ ?i wdt:P279* ?magnetwurzel }} }} {LEGIERUNG_OHNE_ELEMENTE}"
-)
+# Pro Wurzel ein eigener UNION-Zweig mit KONSTANTER QID. Die fruehere Form
+# (VALUES ?magnetwurzel { ... } + ?i wdt:P279* ?magnetwurzel) laeuft im
+# Query-Service verlaesslich ins Timeout (504/502): steht das Pfadende in
+# einer Variablen statt als Konstante, kann Blazegraph den Property-Path
+# nicht mehr vom Ziel her aufrollen und traversiert den halben Graphen.
+# Beide Zweige - Instanzen (P31/P279*) UND Unterklassen (P279*) - bleiben
+# erhalten; aktuell (2026-09-06) liefert der Instanzzweig 0 Treffer (es gibt
+# noch keine normierte Einzelsorte als P31-Instanz), aber sobald eine
+# angelegt wird, ist sie in der Grundgesamtheit.
+_MAGNET_ZWEIGE = " UNION ".join(
+    f"{{ ?i wdt:P31/wdt:P279* wd:{q} }} UNION {{ ?i wdt:P279* wd:{q} }}"
+    for q in MAGNET_WURZELN)
+MAGNET_PATTERN = f"{{ {_MAGNET_ZWEIGE} }} {LEGIERUNG_OHNE_ELEMENTE}"
 
 # Keramik: der Subtree unter Q45621 "Keramik" (P279 -> Q214609 Material).
 # Volle Grundgesamtheit aus Klassen und Instanzen (~2500 Items, davon ~457

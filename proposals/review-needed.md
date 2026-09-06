@@ -372,3 +372,9 @@ automatisch entschieden:
   graphitisches Carbonitrid (https://www.wikidata.org/wiki/Q5597232) - wird als
   Hartstoff/Halbleiter erforscht und daher NICHT ausgeschlossen; bitte
   bestaetigen.
+## Lauf 2026-09-06 16:34 (1 Fund(e))
+
+### Verbund-/Clad-Werkstoffe: fehlende Zwischenklasse 'clad metal'
+
+- **clad metal (fehlende Zwischenklasse)** (https://www.wikidata.org/wiki/Q181790): Zwischen Q181790 (composite material) und den einzelnen Clad-Werkstoffen (copper clad aluminium, copper clad steel, copper clad stainless steel, nickel clad copper ...) fehlt in Wikidata eine gemeinsame Klasse 'clad metal' / 'Plattierwerkstoff'. Solange sie fehlt, haengen die Clad-Werkstoffe im Entwurf direkt unter composite material. Zwischenklasse in Wikidata anlegen (composite material -> clad metal -> copper clad aluminium -> copper clad steel ...). Dieses Werkzeug legt keine Items an - offene Aufgabe fuer den Reviewer.
+
