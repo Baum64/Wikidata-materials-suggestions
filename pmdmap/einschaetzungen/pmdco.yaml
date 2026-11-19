@@ -1,0 +1,226 @@
+# Fachliche Einschaetzungen je Bestandseintrag (Paket 0), PMDco.
+#
+# Getrennt von den Regeln in pmdmap/assessment.py: Eine Einschaetzung ersetzt
+# nur den VORSCHLAG in der Pruef-Tabelle (Spalten vorschlag, vorschlag_p4390)
+# und haengt ihre Begruendung als "Einschaetzung: ..." an. Die Regel-Befunde
+# bleiben sichtbar. Entschieden wird ausschliesslich in der Pruef-Tabelle.
+#
+# Schluessel: QID. Felder:
+#   vorschlag:   behalten | P4390 ergänzen | umstellen auf P2888+P4390 | entfernen | offen
+#   p4390:       englisches Label eines laut Constraint erlaubten Werts (z. B. close match)
+#                Richtung laut Constraint-Beschreibung: "narrow match" = die
+#                Ontologieklasse ist ENGER als der Wikidata-Eintrag, "broad
+#                match" = sie ist WEITER.
+#   grenzfall:   true/false - steuert den Eintrag in review-needed.md
+#   iri:         nur noetig, wenn der Eintrag mehrere PMD-Abbildungen traegt
+#   begruendung: kurz, mit Bezug auf die Definitionen
+#
+# Stand: PMDco 3.1.2, Wikidata 19.11.2026. Erstellt vom Agenten nach Vergleich
+# von Wikidata-Beschreibung/Aliassen und PMD-Definition.
+
+# --- Werkstoffe ---------------------------------------------------------------
+Q11426:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: close match
+  grenzfall: true
+  begruendung: >-
+    Doppelt genutzter Eintrag - de-Beschreibung "Gruppe chemischer Elemente",
+    en "element, compound, or alloy ...". PMD "metal" ist rein werkstofflich
+    (Leitfaehigkeit, Duktilitaet, metallische Bindung). Volle Deckung nur,
+    wenn Q11426 als Werkstoffklasse gilt; dient er Elementen auch als
+    Kategorie (periodic-table-conventions Fall 2), ist close match ehrlicher.
+Q670:
+  p4390: close match
+  begruendung: >-
+    Q670 ist das chemische Element, PMD "portion of silicon" eine Stoffportion
+    aus reinem Si. Kein exaktes Gegenstueck; close match pragmatisch (Q670 wird
+    in Wikidata auch fuer den Stoff benutzt), streng genommen related match.
+Q271449:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: close match
+  begruendung: >-
+    Wikidata: "metallic chemical element" - nur Elemente. PMD "precious metal"
+    ist eine Werkstoffklasse (metal), schliesst damit auch Edelmetall-
+    Legierungen ein. Gleicher Begriffskern, anderer Umfang.
+Q527601:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: broad match
+  begruendung: >-
+    Abgebildet auf PMD "amorphous material" (jedes Material mit
+    Nahordnung, also auch Glas, amorphe Polymere) - weiter als "metallisches
+    Glas". PMDco hat dafuer eine eigene Klasse "amorphous metal glass"
+    (PMD_0050149) - Kandidat fuer P1709 in Paket 1.
+
+# --- Eigenschaften ------------------------------------------------------------
+Q322481:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: narrow match
+  begruendung: >-
+    Wikidata "Groesse/size" = Magnitude oder Dimension eines Dings allgemein.
+    PMD "spatial extend" nur raeumliche Ausdehnung (Laenge, Flaeche, Volumen)
+    - enger.
+Q125660148:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: narrow match
+  begruendung: >-
+    Wikidata "degradability" = Abbaubarkeit allgemein; PMD "biodegradability"
+    nur mikrobieller Abbau - enger.
+Q134154404:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: close match
+  begruendung: >-
+    Wikidata nur "biochemical concept" (Wirkung auf Organismen allgemein);
+    PMD "bioactive" ist eine Disposition eines Materials im Organismus-
+    Kontext. Gleicher Kern, PMD fasst den Traeger enger.
+Q864426:
+  vorschlag: behalten
+  begruendung: >-
+    Substantiv vs. Adjektiv; inhaltlich gleich, und Wikidata ordnet
+    biocompatibility wie PMD unter bioactivity ein.
+Q44424:
+  vorschlag: behalten
+  begruendung: >-
+    PMD "atomic bond" (de "Bindung") = Kraftwechselwirkung zwischen Atomen;
+    gleicher Begriff wie "chemische Bindung", die Unterklassen (kovalent,
+    ionisch, metallisch, Wasserstoffbruecke) decken sich.
+Q865821:
+  vorschlag: behalten
+  begruendung: "Helmholtz energy = freie Energie F = U - TS; nur Namensvariante."
+Q334631:
+  vorschlag: behalten
+  begruendung: "Gibbs energy = Gibbs free energy G = U + pV - TS; nur Namensvariante."
+Q141350737:
+  vorschlag: behalten
+  begruendung: "Eigens als Gegenstueck zu PMD pressure (Qualitaet) angelegt; Definitionen decken sich."
+Q141393458:
+  iri: "https://w3id.org/pmd/co/PMD_0020265"
+  vorschlag: behalten
+  begruendung: >-
+    Eintrag ist ausdruecklich als Mapping-Klasse fuer "property" angelegt
+    (Qualitaeten oder Dispositionen) - entspricht der PMD-Sammelklasse.
+Q112225193:
+  p4390: close match
+  begruendung: >-
+    P3950 behauptet, PMD sei enger. PMD "characteristic material property"
+    ist aber eine Domaenen-Sammelklasse inkl. qualitativer Dispositionen
+    (Sproedigkeit, Abbaubarkeit), Wikidata "intrinsisch, intensiv,
+    quantitativ" - keine klare Ober-/Unterbeziehung, daher close match.
+Q5725005:
+  p4390: broad match
+  begruendung: >-
+    PMD "classical mechanics property" gilt fuer jedes Objekt (auch
+    Geschwindigkeit, kinetische Energie), Wikidata "mechanical property" nur
+    fuer Werkstoffe - PMD ist weiter, nicht enger wie P3950 behauptet.
+Q466491:
+  vorschlag: offen
+  p4390: close match
+  begruendung: >-
+    Wikidata meint Partikel-/Sedimentkorngroesse (Alias particle size),
+    PMD "grains of something" - in der Werkstoffkunde Kristallitkoerner.
+    Pruefen, ob Wikidata einen eigenen Eintrag fuer die metallographische
+    Korngroesse hat; sonst close match.
+Q764285:
+  vorschlag: behalten
+  begruendung: >-
+    en-Label und Definition decken sich ("chemical property"). Das de-Label
+    "Stoffeigenschaft" ist irrefuehrend (= Werkstoff-/Materialeigenschaft) -
+    am Wikidata-Eintrag korrigieren, betrifft die Abbildung nicht.
+
+# --- Funktionen/Faehigkeiten aus dem CCO-Abgleich ------------------------------
+# Eintraege Q141... "capability to ..." sind eigens angelegt; dieselben IRIs
+# stehen auf Wikidata:WikiProject Ontology/CCO. Ausserhalb von E2.
+Q141008211: &capability
+  vorschlag: offen
+  begruendung: >-
+    Wikidata-Eintrag "capability to ..." (CCO-Sicht: Faehigkeit/Disposition)
+    vs. PMD "... function" (BFO-Funktion eines Geraets). Inhaltlich dasselbe,
+    ontologisch verschieden kategorisiert - exact oder close match? Mit
+    WikiProject Ontology klaeren, nicht im Werkstoff-Pilot entscheiden.
+Q141008271: *capability
+Q141145377: *capability
+Q141666587: *capability
+Q141666629: *capability
+Q141672561: *capability
+
+# --- Objekte, Prozesse, Sonstiges --------------------------------------------
+Q12355387:
+  vorschlag: offen
+  p4390: related match
+  begruendung: >-
+    Wikidata ohne Beschreibung, Alias "electronic structure of atoms" =
+    Atombau (Kern/Huelle). PMD-Definition: Anordnung der Atome IM MATERIAL;
+    PMDs eigenes de-Label "Atombau" widerspricht der Definition. Beide Seiten
+    klaeren.
+Q29053962:
+  vorschlag: offen
+  p4390: related match
+  begruendung: >-
+    Wikidata mischt "size, mass or volume" (Groesse) mit "major part of
+    something"; PMD "bulk" = Inneres eines Objekts im Gegensatz zur
+    Oberflaeche. Kein sauberes Gegenstueck.
+Q905842:
+  vorschlag: offen
+  p4390: close match
+  begruendung: >-
+    Eintrag gemischt: de "Gleitsystem" (Ebene + Richtung), en "glide plane"
+    (auch Symmetrieelement), Alias "slip plane". PMD "slip plane" ist Teil
+    eines Gleitsystems. Erst den Wikidata-Eintrag klaeren.
+Q29702744:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: narrow match
+  begruendung: >-
+    Wikidata "kleine Oeffnung oder Vertiefung" allgemein (auch Oberflaechen,
+    Biologie); PMD "pore" nur Hohlraum im Inneren eines Materials - enger.
+Q113796:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: related match
+  begruendung: >-
+    Wikidata "Faellung" = Ausfallen aus einer FLUESSIGEN Loesung; PMD
+    "precipitation (phase)" = Ausscheidung aus einem uebersaettigten
+    FESTEN Mischkristall (Metallkunde). Verwandt, nicht gleich. Paket 1:
+    nach einem Wikidata-Eintrag "Ausscheidung (Werkstoffkunde)" suchen.
+Q281918:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: narrow match
+  begruendung: >-
+    Wikidata: Kalandrieren von Textil, Papier oder Kunststofffolie; PMD nur
+    Polymerschmelze (Urformen aus dem plastischen Zustand) - enger.
+Q219239:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: broad match
+  begruendung: >-
+    Wikidata "Kochrezept" - nur Lebensmittel. PMD "recipe" umfasst Kochen,
+    Fertigung und Chemie - weiter (Fall aus dem Konzept).
+Q173227:
+  vorschlag: umstellen auf P2888+P4390
+  p4390: broad match
+  begruendung: >-
+    PMD "nature constant" schliesst ausdruecklich mathematische Konstanten
+    ein; Wikidata "physikalische Konstante" nur physikalische Groessen -
+    PMD weiter.
+Q106080:
+  vorschlag: behalten
+  begruendung: "melting process = Schmelzen; nur Namensvariante."
+Q2512777:
+  vorschlag: behalten
+  begruendung: "simple substance = Stoff aus einem Element = portion of pure chemical element."
+Q4364514:
+  vorschlag: behalten
+  begruendung: "Lamelle im Gefuege; Singular/Plural."
+Q141416707:
+  vorschlag: behalten
+  begruendung: "process sequence = process chain; eigens als Gegenstueck angelegt."
+Q71129619:
+  vorschlag: behalten
+  begruendung: "radiation absorption = absorption of radiation."
+Q69189081:
+  begruendung: >-
+    PMD_0020368 fehlt in PMDco 3.1.2; eine Klasse "Avogadro ..." gibt es dort
+    nicht mehr (nur "per mol property" PMD_0020369, "a mol of entites"
+    PMD_0020370). Betrifft die offene Konzeptfrage zur IRI-Stabilitaet:
+    PMD-Team nach Verbleib fragen, sonst entfernen.
+Q104946:
+  begruendung: >-
+    PMD_0020207 ist in 3.1.2 veraltet, ohne Ersatz-Angabe. Moegliche
+    Nachfolger: "per mol property" (PMD_0020369), "a mol of entites"
+    (PMD_0020370) - beim PMD-Team erfragen, nicht raten.

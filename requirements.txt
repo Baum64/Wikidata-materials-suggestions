@@ -13,5 +13,9 @@ streamlit>=1.63
 plotly>=6.0
 pandas>=2.0
 
+# pmdmap (Abgleich PMDco <-> Wikidata; nutzt zusaetzlich requests, pandas)
+rdflib>=7.0
+pyyaml>=6.0
+
 # nur fuer die Tests
 pytest>=9.0

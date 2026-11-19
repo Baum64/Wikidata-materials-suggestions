@@ -102,3 +102,6 @@ Visualisierung/
 # lokale Werkzeugkonfiguration, keine Projektquelle.
 .claude/rules/
 CLAUDE.md
+
+# pmdmap: Ontologie- und API-Cache
+cache/

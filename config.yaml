@@ -1,0 +1,177 @@
+# Konfiguration fuer pmdmap (Abgleich Werkstoffontologie <-> Wikidata).
+#
+# Eine zweite Ontologie (z. B. MWO) ist ein weiterer Eintrag unter
+# "ontologien:" und wird mit "--ontologie mwo" oder ueber "ontologie:" gewaehlt.
+# Grundlage: docs/konzept_bfo_wikidata_mapping.md (Entscheidungen E1-E7).
+
+ontologie: pmdco
+
+# Ausgaben (Pruef-Tabelle, Berichte, spaeter QuickStatements). Laut CLAUDE.md
+# landet jeder Aenderungsvorschlag unter proposals/.
+ausgabe_verzeichnis: proposals/pmdmap
+# Grenzfaelle zusaetzlich hierhin (CLAUDE.md, Arbeitsweise Punkt 3).
+review_needed: proposals/review-needed.md
+
+cache_verzeichnis: cache
+# API-Antworten und Ontologie-Datei gelten so lange als frisch.
+# "--refresh" laedt unabhaengig davon neu.
+cache_gueltig_tage: 7
+
+netz:
+  # Wikimedia verlangt eine sprechende Kennung. Ist die Umgebungsvariable
+  # PMDMAP_KONTAKT gesetzt (z. B. eine Mail-Adresse oder URL), wird sie
+  # angehaengt. Sie steht bewusst NICHT hier, damit sie nicht im Repo landet.
+  user_agent: "pmdmap/0.1 (WikiKnowledgeGraph; Abgleich PMDco-Wikidata; nur lesend)"
+  # Mindestabstand zwischen zwei Anfragen je Gegenstelle in Sekunden.
+  # query.wikidata.org drosselt seit 19.11.2026 (Stoerung) auf 1 Anfrage pro
+  # Minute; nach Ende der Stoerung kann der Wert auf ~2 sinken.
+  drosselung_s:
+    query.wikidata.org: 61
+    www.wikidata.org: 1
+    default: 1
+  versuche: 6
+  # Wartezeit nach HTTP 429, falls die Antwort kein Retry-After mitliefert.
+  wartezeit_429_s: 61
+  timeout_s: 120
+
+wikidata:
+  sparql: https://query.wikidata.org/sparql
+  api: https://www.wikidata.org/w/api.php
+  # Properties, deren Wert als Abbildung auf eine Ontologieklasse gilt.
+  # P3950 ist im Konzept nicht vorgesehen, kommt im Bestand aber vor
+  # (2x, Stand 19.11.2026) - ohne sie fehlten diese Abbildungen in der Tabelle.
+  abbildungs_properties: [P1709, P2888, P3950, P1628]
+  # Qualifier fuer die Abbildungsart; erlaubte Werte werden aus dessen
+  # one-of-Constraint (P2302 = Q21510859, Werte in P2305) gelesen.
+  abbildungsart_property: P4390
+  element_klasse: Q11344          # chemical element (Periodensystem-Regel, Fall 1)
+  werkstoff_wurzel: Q214609       # material - fuer die E1-Pruefung
+
+ontologien:
+  pmdco:
+    name: Platform Material Digital core ontology
+    kurzname: PMDco
+    quelle_qid: Q141572184        # fuer S248 (stated in)
+    basis_iri: "https://w3id.org/pmd/co/"
+    iri_muster: '^https://w3id\.org/pmd/co/PMD_\d{7}$'
+    # Suchbegriff fuer die MediaWiki-Linksuche (exturlusage), ohne Protokoll.
+    linksuche: "w3id.org/pmd/"
+    # Download in dieser Reihenfolge; die w3id-IRI liefert per Content
+    # Negotiation Turtle (leitet auf materialdigital.github.io weiter).
+    download:
+      - "https://w3id.org/pmd/co/"
+      - "https://materialdigital.github.io/core-ontology/ontology.ttl"
+    # nur zum Abgleich: liefert w3id wirklich die neueste Release?
+    github_repo: materialdigital/core-ontology
+
+    # Begriffsart aus den Oberklassen: die ERSTE Ankerklasse, die unter den
+    # Oberklassen (inkl. der Klasse selbst) vorkommt, entscheidet. Reihenfolge
+    # ist daher wichtig ("material" vor "material entity").
+    # Am Bestand von PMDco 3.1.2 ermittelt: Werkstoffe haengen unter der
+    # eigenen Wurzel "material" (PMD_0000000) bzw. "metal" (PMD_0000852),
+    # Eigenschaften unter "property" (PMD_0020265).
+    #
+    # Rolle/Funktion stehen VOR "property": PMDs "property" ist eine
+    # Sammelklasse fuer Qualitaeten UND realisierbare Entitaeten, sonst
+    # liefe z. B. "heating function" als Eigenschaft. Dispositionen
+    # (Sproedigkeit, Abbaubarkeit) bleiben dagegen Eigenschaften.
+    kategorien:
+      - {anker: "https://w3id.org/pmd/co/PMD_0000000", art: werkstoff}       # material
+      - {anker: "https://w3id.org/pmd/co/PMD_0000852", art: werkstoff}       # metal
+      - {anker: "https://w3id.org/pmd/co/PMD_0000001", art: werkstoff}       # portion of matter
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000023", art: rolle}        # role
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000034", art: funktion}     # function
+      - {anker: "https://w3id.org/pmd/co/PMD_0020265", art: eigenschaft}     # property
+      - {anker: "https://w3id.org/pmd/co/PMD_0020108", art: eigenschaft}     # relational property
+      - {anker: "https://w3id.org/pmd/co/PMD_0020132", art: eigenschaft}     # spatial extend
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000019", art: eigenschaft}  # quality
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000016", art: eigenschaft}  # disposition
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000017", art: eigenschaft}  # realizable entity (z. B. Zugfestigkeit)
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000015", art: prozess}      # process
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000003", art: prozess}      # occurrent (z. B. process attribute)
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000029", art: defekt/ort}   # site (Riss, Pore ...)
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000141", art: defekt/ort}   # immaterial entity
+      - {anker: "http://purl.obolibrary.org/obo/IAO_0000030", art: information}  # information content entity
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000031", art: information}  # gdc (z. B. nature constant)
+      - {anker: "https://w3id.org/pmd/co/PMD_0000602", art: geraet}          # device
+      - {anker: "https://w3id.org/pmd/co/PMD_0000920", art: geraet}          # saw (eigene Wurzel in 3.1.2)
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000040", art: objekt}       # material entity (kein Werkstoff)
+      - {anker: "http://purl.obolibrary.org/obo/BFO_0000020", art: eigenschaft}  # specifically dependent continuant
+
+    # Einschaetzungen je Bestandseintrag (vom Agenten nach Lesen der
+    # Definitionen, getrennt von den Regeln). Ueberschreiben nur den Vorschlag,
+    # nie die Entscheidung.
+    einschaetzungen: pmdmap/einschaetzungen/pmdco.yaml
+    # dasselbe fuer die Kandidaten der Pakete 1/2, je Ontologieklasse
+    einschaetzungen_kandidaten: pmdmap/einschaetzungen/pmdco_kandidaten.yaml
+
+# Paket 0: Verdachtsfaelle laut Konzept - bekommen immer einen Pruefhinweis.
+verdachtsfaelle:
+  Q11426: "Metalle: evtl. Elementgruppe statt Werkstoffklasse"
+  Q670: "Silicium: Element vs. Werkstoff"
+  Q322481: "Groesse: Umfang pruefen"
+  Q219239: "Rezept (dt. 'Kochrezept'): Umfang gegen PMD 'recipe' pruefen"
+
+# E1: Eintraege, die eigens als BFO-/PMD-Klasse angelegt wurden, duerfen
+# nicht als Oberklasse (P279) von Werkstoff-Eintraegen auftauchen.
+e1:
+  # Eintraege ab dieser QID-Nummer gelten als "neu angelegt" (~ seit 2025).
+  # Nur sie werden geprueft - auch bei der BFO-Linksuche: etablierte Klassen
+  # wie process (Q3249551) haben Hunderte Unterklassen und sind keine
+  # nachgebauten Ontologie-Klassen (am 19.11.2026: 1271 Unterklassen -> 504).
+  neu_ab_qid: 131000000
+  # weitere Linksuchen, deren Treffer als BFO-/Ontologie-Klasse gelten.
+  # BFO-IRIs sind http-IRIs; mit https findet die Linksuche nichts
+  # (geprueft 19.11.2026: http 37 Eintraege, https 0).
+  linksuche_zusatz:
+    - {suche: "purl.obolibrary.org/obo/BFO_", protokoll: http}
+  # Neu angelegte Eintraege mit solcher englischer Beschreibung gelten als
+  # Ontologie-Konstrukt, auch ohne eigene Abbildungs-Aussage (Bestand
+  # 19.11.2026: "DOLCE class", "GSO class", "BFO class", "ontological class").
+  konstrukt_beschreibung: '(?i)\bclass\s*$'
+
+# Paket 1: Pilot-Werkstoffe. "pflicht" nach Label (en, wie in der Ontologie);
+# Labels ohne Klasse in der Ontologie werden als Luecke gemeldet (PMDco 3.1.2:
+# wood, concrete). "zusatz" als IRI. Danach wird bis "max_klassen" aufgefuellt:
+# unverlinkte, nicht veraltete Klassen unter "wurzeln", zuerst die im
+# Minimalprofil der Ontologie, dann nach Zahl der Unterklassen.
+pilot_werkstoffe:
+  pflicht: [steel, cast iron, copper alloy, polymer, glass, composite, wood, concrete]
+  zusatz:
+    - "https://w3id.org/pmd/co/PMD_0050149"   # amorphous metal glass (Paket 0, Q527601)
+  max_klassen: 20
+  wurzeln:
+    - "https://w3id.org/pmd/co/PMD_0000000"   # material
+    - "https://w3id.org/pmd/co/PMD_0000852"   # metal
+  # Annotation "ist im Minimalprofil" (PMDco: isInMinimalProfile)
+  profil_annotation: "https://w3id.org/pmd/co/PMD_0000060"
+  ausschliessen: []
+
+# Paket 2: Pilot-Eigenschaften (E7). Label (en) wie in der Ontologie;
+# "hinweis" landet in der Begruendung jeder Zeile dieser Eigenschaft.
+pilot_eigenschaften:
+  - mass density
+  - melting point
+  - boiling point
+  - {label: elastic modulus, hinweis: "Aufgabe nennt E-Modul; PMDco hat nur 'elastic modulus' (kein eigenes Young's modulus)"}
+  - ultimate tensile strength
+  - {label: hardness, hinweis: "E7: Härte hat verschiedene Skalen ohne einfachen Zahlenwert - Begriffs-Eintrag reicht, P1628 nur bei klarer Entsprechung"}
+  - thermal conductivity
+  - electrical conductivity
+  - {label: thermal expansion coefficient, hinweis: "Wikidata hat nur die lineare Variante (P5672) - siehe linear thermal expansion coefficient"}
+  - linear thermal expansion coefficient
+
+# Kandidatensuche (Pakete 1 und 2)
+kandidaten:
+  je_klasse: 3            # Top-N Begriffs-Eintraege je Ontologieklasse
+  je_eigenschaft: 2       # Top-N Wikidata-Eigenschaften je Ontologieklasse (P1628)
+  suchtreffer: 7          # Treffer je Suchanfrage (wbsearchentities / Volltext)
+  # Kandidaten mit kleinerem Score fallen weg (wissenschaftliche Artikel,
+  # Patente u. ae. landen bei < 0, siehe candidates.score_item)
+  min_score: 0
+  # feste Zusatzkandidaten je Klasse (Q... = Eintrag, P... = Eigenschaft),
+  # wenn die Suche sie nicht findet - mit Grund
+  zusatz:
+    PMD_0050149: [Q527601]    # amorphous metal glass <-> Metallisches Glas (Paket 0)
+    PMD_0050055: [Q1469949]   # oxide ceramic <-> Oxidkeramik (nur de-Label, PMD ohne de-Label)
+    PMD_0080198: [Q74760821]  # linear thermal expansion coefficient <- P1629 von P5672

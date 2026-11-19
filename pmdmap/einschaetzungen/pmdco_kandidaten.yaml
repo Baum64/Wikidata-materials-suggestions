@@ -1,0 +1,123 @@
+# Fachliche Einschaetzungen zu den Kandidaten der Pakete 1 und 2, PMDco.
+#
+# Wie pmdco.yaml, aber je Ontologieklasse gruppiert, weil ein Wikidata-
+# Eintrag Kandidat fuer mehrere Klassen sein kann:
+#
+#   PMD_0020096:            # Ontologieklasse (Endung der IRI)
+#     Q11427:               # Kandidat (Eintrag Q... oder Eigenschaft P...)
+#       vorschlag: neu: P1709 | neu: P2888+P4390 | neu: P1628 | verwerfen | offen | behalten
+#       p4390: close match  # nur bei neu: P2888+P4390
+#       grenzfall: true/false
+#       begruendung: ...
+#
+# Ersetzt nur den Vorschlag; die Regel-Befunde bleiben sichtbar.
+#
+# Stand: PMDco 3.1.2, Wikidata 19.11.2026. Erstellt vom Agenten nach Vergleich
+# von PMD-Definition und Wikidata-Beschreibung/Aliassen/P279.
+
+# --- Paket 1: Werkstoffe ------------------------------------------------------
+PMD_0000577:   # composite (PMD: object aggregate)
+  Q181790:
+    vorschlag: "neu: P2888+P4390"
+    p4390: close match
+    begruendung: >-
+      Gleicher Begriff (zwei+ verbundene, verschiedenartige Materialien), aber
+      PMDco modelliert "composite" als Objekt-Aggregat, Wikidata als
+      Werkstoffklasse (P279 Material, Werkstoff). Deckung im Kern, nicht in
+      der Kategorie -> close match statt P1709.
+  Q22657:
+    vorschlag: verwerfen
+    begruendung: "Beton ist ein Verbundwerkstoff (Unterklasse), nicht der Oberbegriff. PMDco hat keine Klasse fuer Beton."
+PMD_0050149:   # amorphous metal glass
+  Q527601:
+    vorschlag: "neu: P1709"
+    grenzfall: true
+    begruendung: >-
+      Metallisches Glas = amorphous metal glass. Haengt an Paket 0: Q527601
+      traegt dort P1709 auf "amorphous material" (PMD_0025030) mit Vorschlag
+      Umstellung auf P2888 broad match. Nur zusammen entscheiden, sonst
+      stuende zweimal P1709 an einem Eintrag. Die PMD-Definition nennt das
+      Metall selbst nicht - nur das Label.
+PMD_0000002:   # engineered material
+  Q5377799:
+    vorschlag: verwerfen
+    begruendung: "EMAS ist ein Sicherheitssystem an Landebahnen, kein Werkstoffbegriff. Kein passender Wikidata-Eintrag gefunden."
+PMD_0050055:   # oxide ceramic
+  Q1469949:
+    vorschlag: offen
+    begruendung: >-
+      Inhaltlich das Gegenstueck (Oxidkeramik, technische Keramik), aber der
+      Wikidata-Eintrag hat weder P31 noch P279 und kein en-Label. Erst den
+      Eintrag vervollstaendigen (P279 Keramik), dann P1709.
+PMD_0050101:   # silicate glass
+  Q425397:
+    vorschlag: verwerfen
+    begruendung: "Natronwasserglas ist eine chemische Verbindung (Natriumsilikat), kein Glas-Werkstoff. Kein Wikidata-Eintrag 'Silikatglas' gefunden."
+PMD_0050081:   # electroceramic
+  Q18235244:
+    vorschlag: "neu: P1709"
+    begruendung: "Nur Plural/Singular verschieden; beide: Keramik fuer elektrische/magnetische Anwendungen."
+PMD_0000654:   # functional material
+  Q21044663:
+    begruendung: "Beide: Werkstoff, dessen Funktion ueber das mechanische Tragen hinausgeht."
+PMD_0050004:   # thermoplastic polymer
+  Q380677:
+    begruendung: "Wikidata 'thermoplastic' hat 'thermoplastic polymer' als Alias; Definitionen gleich (beim Erwaermen formbar)."
+
+# --- Paket 2: Eigenschaften ---------------------------------------------------
+PMD_0000618:   # elastic modulus
+  Q2091584:
+    vorschlag: "neu: P1709"
+    begruendung: >-
+      Die PMD-Definition ("stiffness to loading in the normal direction,
+      ratio of stress to strain") ist die des Young's modulus. Q2091584 hat
+      "elastic modulus" und "modulus of elasticity" als Alias.
+  Q192005:
+    vorschlag: "neu: P2888+P4390"
+    p4390: narrow match
+    begruendung: >-
+      Wikidata "elastic modulus" ist der Oberbegriff (Young-, Schub-,
+      Kompressionsmodul); die PMD-Klasse meint nur die Normalrichtung -
+      enger. Optional; P1709 gehoert an Q2091584.
+  P5480:
+    vorschlag: "neu: P2888+P4390"
+    p4390: narrow match
+    begruendung: >-
+      P5480 ist nur der Zug-Elastizitaetsmodul (tensile); PMD meint
+      Normalrichtung allgemein (Zug und Druck). Keine Aequivalenz fuer
+      P1628, daher P2888 + narrow match an der Eigenschaft.
+  P5993:
+    vorschlag: "neu: P2888+P4390"
+    p4390: narrow match
+    begruendung: "Druck-Elastizitaetsmodul - wie P5480 nur ein Teil der PMD-Klasse."
+PMD_0000773:   # hardness
+  P5483:
+    vorschlag: offen
+    grenzfall: true
+    begruendung: >-
+      E7: Haerte hat verschiedene Skalen ohne einfachen Zahlenwert - der
+      Begriffs-Eintrag (Q3236003) reicht. P5483 existiert aber als
+      quantity-Eigenschaft mit derselben Beschreibung. Konventionsfrage:
+      P1628 trotzdem setzen oder bei E7 bleiben?
+  P1088:
+    vorschlag: verwerfen
+    begruendung: "Mohs-Haerte ist eine eigene PMD-Klasse (Mohs hardness, PMD_0000861) - dort abbilden, nicht hier."
+  Q714750:
+    vorschlag: verwerfen
+    begruendung: "Brinell-Pruefverfahren, kein Begriff 'Haerte'. PMD hat dafuer 'brinell hardness' (PMD_0000537)."
+PMD_0000851:   # melting point
+  P2101:
+    begruendung: >-
+      P2101 nennt "at atmospheric pressure", PMD die Phasengrenze allgemein.
+      Die Praxis gibt den Druck als Qualifier an (wie bei P2102); als
+      aequivalent vertretbar.
+PMD_0080196:   # thermal expansion coefficient
+  Q45760:
+    begruendung: "Allgemeiner Ausdehnungskoeffizient; Flaechen-/Raum-/Laengenausdehnung sind Unterklassen - wie in PMD."
+PMD_0080198:   # linear thermal expansion coefficient
+  Q74760821:
+    vorschlag: "neu: P1709"
+    begruendung: >-
+      Begriffs-Eintrag, auf den P5672 per P1629 verweist (per Zusatz in die
+      Kandidaten aufgenommen). "linear expansion coefficient" = Laengen-
+      ausdehnungskoeffizient; "thermal" fehlt nur im Label.

@@ -57,3 +57,11 @@ def kein_netz(monkeypatch):
     # - ohne Zuruecksetzen erbte ein Test die Tabelle des vorigen.
     wikidata._ELEMENT_QID_CACHE = None
     wikidata._SPACE_GROUP_CACHE = None
+
+    # pmdmap hat einen eigenen, ebenso einzigen Netzzugang (pmdmap.http._send).
+    from pmdmap import http as pmdmap_http
+
+    def pmdmap_gesperrt(session, method, url, *a, **kw):
+        raise AssertionError(f"Test versucht einen Netzzugriff (pmdmap): {method} {url}")
+
+    monkeypatch.setattr(pmdmap_http, "_send", pmdmap_gesperrt)
