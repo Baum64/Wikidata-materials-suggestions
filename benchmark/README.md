@@ -89,10 +89,10 @@ Properties.
 | `NIST` | NIST Chemistry WebBook | `P3078`, `P3071` |
 | `WD` | aus der Raumgruppe am Item abgeleitet | `P589` |
 | `(Formel)` | aus der Summenformel abgeleitet | `P2670`, `P527` |
-| `WPde-El` | de `{{Infobox Chemisches Element}}` | `P2101`, `P2102`, `P2054`, `P2068`, `P2055`, `P2056`, `P2075`, `P5593`, `P1088`, `P231`, `P556`, `P1552` |
-| `WPde-Chem` | de `{{Infobox Chemikalie}}` | `P2054`, `P2101`, `P2102`, `P231` |
+| `WPde-El` | de `{{Infobox Chemisches Element}}` | `P2101`, `P2102`, `P2054`, `P2068`, `P2055`, `P2056`, `P2075`, `P5593`, `P1088`, `P231`, `P556`, `P1552`, `P2066`, `P2116`, `P1108`, `P14936`, `P14937`, `P14938`, `P2807`, `P5480`, `P2119`, `P232`, `P2566` |
+| `WPde-Chem` | de `{{Infobox Chemikalie}}` | `P2054`, `P2101`, `P2102`, `P231`, `P232`, `P2566` |
 | `WPde-Min` | de `{{Infobox Mineral}}` | `P2054`, `P1088` |
-| `WPen-El` | en `Template:Infobox <element>` | `P2101`, `P2102`, `P2068`, `P1088`, `P2054`, `P5679`, `P556`, `P5672` |
+| `WPen-El` | en `Template:Infobox <element>` | `P2101`, `P2102`, `P2068`, `P1088`, `P2054`, `P5679`, `P556`, `P5672`, `P2066`, `P2116`, `P1108`, `P2260`, `P14936`, `P14937`, `P14938`, `P5480`, `P5668`, `P5673`, `P5593`, `P5674`, `P873` |
 | `WPen-Chem` | en `{{Chembox}}` | `P2101`, `P2102`, `P2054`, `P231` |
 
 Mehrere Kürzel heißen: mehrere Stufen könnten den Wert liefern; im Lauf

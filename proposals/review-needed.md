@@ -444,3 +444,46 @@ Kandidaten für neue Abbildungen; entschieden wird in `proposals/pmdmap/review_2
 
 - [ ] **hardness** (`PMD_0000773`) ↔ Härte (https://www.wikidata.org/wiki/Property:P5483): Vorschlag offen. Einschätzung: E7: Haerte hat verschiedene Skalen ohne einfachen Zahlenwert - der Begriffs-Eintrag (Q3236003) reicht. P5483 existiert aber als quantity-Eigenschaft mit derselben Beschreibung. Konventionsfrage: P1628 trotzdem setzen oder bei E7 bleiben?
 <!-- pmdmap:pmdco:paket2:end -->
+## Lauf 2026-11-20 19:59 (1 Fund(e))
+
+### Verbund-/Clad-Werkstoffe: fehlende Zwischenklasse 'clad metal'
+
+- **clad metal (fehlende Zwischenklasse)** (https://www.wikidata.org/wiki/Q181790): Zwischen Q181790 (composite material) und den einzelnen Clad-Werkstoffen (copper clad aluminium, copper clad steel, copper clad stainless steel, nickel clad copper ...) fehlt in Wikidata eine gemeinsame Klasse 'clad metal' / 'Plattierwerkstoff'. Solange sie fehlt, haengen die Clad-Werkstoffe im Entwurf direkt unter composite material. Zwischenklasse in Wikidata anlegen (composite material -> clad metal -> copper clad aluminium -> copper clad steel ...). Dieses Werkzeug legt keine Items an - offene Aufgabe fuer den Reviewer.
+
+## Offene Frage 2026-11-20: P922 „magnetic ordering" statt oder neben P1552?
+
+Gefunden bei der Durchsicht der Wikidata-Properties, die auf
+[[Wikidata:WikiProject Materials/Properties]] fehlen. Es geht um die Frage,
+welche Property die magnetische Ordnung eines Elements oder Werkstoffs trägt.
+Das Werkzeug entscheidet das nicht.
+
+- **Stand der Hausregel:** `.claude/rules/ontology-magnetismus-p1552.md`
+  modelliert das magnetische Verhalten konkreter Werkstoffe und Elemente als
+  `has quality (P1552) -> ferromagnetism (Q184207)` usw. Die
+  Magnetismus-Stufe (`materialswiki/infobox.py`, Feld „Magnetismus" der
+  de-Elementinfobox) erzeugt genau das.
+- **Was es in Wikidata gibt:** die eigens dafür angelegte Property
+  **P922 „magnetic ordering"** (https://www.wikidata.org/wiki/Property:P922),
+  itemwertig. Am 2026-11-20 ausgelesen:
+  - Subjekt-Constraint: `metal (Q11426)`,
+  - Wert-Constraint: Instanz von `magnetic ordering (Q15706549)`,
+  - one-of: Diamagnetismus Q201048, Antiferromagnetismus Q575224,
+    Ferrimagnetismus Q217121, Ferromagnetismus Q184207, Paramagnetismus
+    Q188479. Das sind **genau die fünf Werte** der P1552-`value_map` in
+    `materialswiki/properties.py`.
+  - Verwendet an nur **2 Items** (Beispiele an der Property: Eisen Q677,
+    Q925).
+- **Zu entscheiden:**
+  1. Soll P922 **statt** P1552 gelten? Dann wäre die Regel umzuschreiben, die
+     Magnetismus-Stufe auf P922 umzustellen, und bereits erzeugte
+     P1552-Entwürfe wären zurückzunehmen.
+  2. Soll P922 **zusätzlich** gelten? Dann stünde dieselbe Aussage doppelt am
+     Item.
+  3. Soll es **bei P1552 bleiben**, etwa weil P922 per Constraint auf Metalle
+     beschränkt ist und Nichtmetalle (Sauerstoff: paramagnetisch) oder
+     Keramiken/Ferrite dort eine Constraint-Verletzung wären?
+- **Bis zur Entscheidung:** P922 steht in `PROPERTY_MAP` nur als *bekannt*
+  (`magnetic_ordering`), keine Stufe liefert es. Ein Test
+  (`tests/test_infobox_erweiterung.py::test_p922_ist_bekannt_aber_offen`)
+  hält fest, dass das so bleibt. Das englische Infobox-Feld
+  `magnetic ordering` wird erst nach dieser Entscheidung angebunden.

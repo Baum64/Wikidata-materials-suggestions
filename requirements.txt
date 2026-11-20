@@ -17,5 +17,9 @@ pandas>=2.0
 rdflib>=7.0
 pyyaml>=6.0
 
+# Notebook europäische_städte.ipynb (Kernel + Dichteschaetzung)
+ipykernel>=6.29
+scipy>=1.13
+
 # nur fuer die Tests
 pytest>=9.0

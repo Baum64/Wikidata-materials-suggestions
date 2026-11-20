@@ -1137,6 +1137,75 @@ des Wikimedia-Imports gesetzt. Zu behandeln sind dabei `[[doi:…]]`,
 über den Namen aufgelöst werden muss. Ohne das ginge bei der spezifischen
 Wärmekapazität der Beleg verloren.
 
+### Erweiterte Feldkarten (seit 2026-11-20)
+
+Beide Elementinfoboxen führten schon lange Größen, für die es Wikidata-
+Properties gibt, die das Werkzeug aber nicht las. Die meisten davon stehen
+nicht auf der Projektseite des WikiProject Materials. Datentyp,
+Einheiten- und Pflicht-Qualifikator-Constraint sind am 2026-11-20 von
+wikidata.org gelesen, die Feldformate an allen 118 Vorlagen (de und en)
+abgelesen.
+
+| Größe | Property | de-Feld | en-Feld | Qualifikator |
+|---|---|---|---|---|
+| molare Schmelzwärme | `P2066` (kJ/mol) | `Schmelzwärme` | `heat fusion` | `P2076` = Schmelzpunkt derselben Infobox |
+| molare Verdampfungswärme | `P2116` (kJ/mol) | `Verdampfungswärme` | `heat vaporization` | `P2076` = Siedepunkt derselben Infobox |
+| Tripelpunkt, kritischer Punkt | `P873` (Item) | — | `triple point K/kPa`, `critical point K/MPa` | `P2076` + `P2077`, beide aus der Infobox |
+| Dampfdruck | `P2119` (Pa) | `Dampfdruck` + `RefTempDampfdruck_K` | — | `P2076` = Bezugstemperatur |
+| molares Volumen | `P2807` (m³/mol) | `MolaresVolumen` | — | — |
+| Elektronegativität (Pauling) | `P1108` | `Elektronegativität` | `electronegativity` | — |
+| erste Ionisierungsenergie | `P2260` (kJ/mol) | — (eV und kJ/mol gemischt in `{{ZahlExp}}`) | `ionization energy 1` | `P1545` = "1" |
+| Atom-, Kovalenz-, vdW-Radius | `P14936`/`P14937`/`P14938` (pm) | `Atomradius`, `KovalenterRadius`, `VanDerWaalsRadius` | `atomic radius`, `covalent radius`, `Van der Waals radius` | — |
+| E-Modul | `P5480` (GPa) | `E-Modul` (3 Elemente) | `Young's modulus` | `P2076` = 20 °C, **angenommen** |
+| Kompressions-, Schubmodul, Poissonzahl | `P5668`/`P5673`/`P5593` | — | `Bulk modulus`, `Shear modulus`, `Poisson ratio` | — |
+| Temperaturleitfähigkeit | `P5674` (mm²/s) | — | `thermal diffusivity` | — |
+| EG-Nummer, ECHA-ID | `P232`/`P2566` (Identifikator) | `EG-Nummer`, `ECHA-ID` (auch `{{Infobox Chemikalie}}`) | — | ohne Beleg |
+
+Die Pflicht-Qualifikatoren stehen in `PFLICHT_TEMPERATUR` und
+`FESTE_QUALIFIKATOREN` ([properties.py](properties.py)). Fehlt die
+Bezugstemperatur, etwa weil die Infobox keinen Schmelzpunkt nennt, wird die
+Zeile zur **manuellen Klärung** ausgewiesen statt ohne Qualifikator
+vorgeschlagen.
+
+Fallstricke, alle am Bestand gefunden:
+
+- **Molekulare Elemente.** Die Enthalpien von H, N, O, F, P, S, Cl, Br und I
+  gehen grundsätzlich in die Klärung (`MOLEKULARE_ELEMENTE`). Die
+  de-Infobox rechnet die Schmelzwärme des Stickstoffs pro Atom (0,36 kJ/mol),
+  die en-Infobox pro N₂ (0,72). Die Verdampfungswärme rechnet die
+  de-Infobox dagegen pro Molekül (5,58 = en 5,57). Welcher Bezug zum
+  Element-Item gehört, entscheidet das Werkzeug nicht.
+- **Atomradius ist nicht gleich Atomradius.** de `Atomradius` ist der auf
+  5 pm gerundete Slater-Wert (Eisen 140), en `atomic radius` der empirische
+  (Eisen 126). Eisen trägt in Wikidata schon beide, ohne Qualifikator. Weil
+  „schon vorhanden" auf die PID prüft, kommt höchstens ein Wert dazu.
+- **Ausreißer.** Neptunium hat in de eine Verdampfungswärme von
+  1420 kJ/mol (en: 336). Die Plausibilitätsschranke weist den Wert aus.
+- **E-Modul ohne Temperatur.** `P5480` verlangt `P2076`, keine der beiden
+  Vorlagen nennt eine. Gesetzt wird 20 °C nach derselben Konvention wie bei
+  der Dichte, und die Notiz der Zeile sagt ausdrücklich „angenommen".
+- **Phasenpunkte sind eine eigene Stufe** (`phasenpunkt_proposals_for_item`),
+  wie der Längenausdehnungskoeffizient. `P873` kann zweimal am Item stehen
+  (Tripelpunkt, kritischer Punkt), deshalb prüft „schon vorhanden" hier wie
+  bei `P1552` auf den **Wert**. Fehlt der Druck, entsteht keine Zeile.
+- **Gemessene Moduln stehen hinter MP.** In der Kaskade fragt die MP-Stufe
+  vor der Wikipedia. Kompressions-, Schubmodul und Poissonzahl aus der
+  en-Infobox kommen deshalb nur dort an, wo MP nichts liefert, oder mit
+  `--no-mp`.
+- **Nicht angebunden:** `magnetic ordering` (en). Es hängt an der offenen
+  Frage, ob `P922` statt `P1552` gelten soll (siehe
+  [../proposals/review-needed.md](../proposals/review-needed.md)).
+  Ebenfalls nicht angebunden sind die Oxidationsstufen (`P1121`, mehrwertig
+  und in Wikidata gut belegt) sowie Vickers- und Brinellhärte (`P5483` hat
+  keine erkennbare Konvention für das Prüfverfahren).
+
+Ausbeute an den 118 Vorlagen (2026-11-20), **vor** der Prüfung auf
+vorhandene Aussagen: de 80 Schmelz- und 78 Verdampfungswärmen, 79 molare
+Volumina, 12 Dampfdrücke, 88/89/54 Radien, 87 Elektronegativitäten; en 36
+Phasenpunkte, 61 E-Moduln, 118 Ionisierungsenergien. Viele davon fallen im
+Lauf als `BEREITS_VORHANDEN` heraus, Ionisierungsenergien und Radien
+praktisch alle.
+
 ## Werkstoffgruppen (`--group`)
 
 Statt über Elemente oder Formeln lässt sich eine ganze Gruppe bestehender
@@ -1479,8 +1548,9 @@ warnt das Skript auf stderr — ohne Einheit stünde in Wikidata eine nackte Zah
 ## Abgedeckte Properties
 
 `PROPERTY_MAP` in [properties.py](properties.py) enthält nur auf wikidata.org
-verifizierte Properties. **Bedient** werden davon die 23 unten — sie haben
-einen MP-Feldpfad, eine Infobox-Feldkarte oder eine Ableitung hinter sich:
+verifizierte Properties. **Bedient** werden davon die 37 unten — sie haben
+einen MP-Feldpfad, eine Infobox-Feldkarte oder eine Ableitung hinter sich
+(die letzten 14 seit dem 20.11.2026, siehe „Erweiterte Feldkarten"):
 
 | Größe | Property | Einheit / Typ |
 |---|---|---|
@@ -1507,6 +1577,18 @@ einen MP-Feldpfad, eine Infobox-Feldkarte oder eine Ableitung hinter sich:
 | molare Standardentropie | `P3071` | J/(mol·K), **mit Aggregatzustand** |
 | COD-ID | `P9824` | external-id |
 | Längenausdehnungskoeffizient | `P5672` | µm/(m·K), **mit Temperatur** |
+| molare Schmelzwärme | `P2066` | kJ/mol, **mit Temperatur** (Schmelzpunkt) |
+| molare Verdampfungswärme | `P2116` | kJ/mol, **mit Temperatur** (Siedepunkt) |
+| Phasenpunkt | `P873` | Item (Tripelpunkt, kritischer Punkt), **mit Temperatur und Druck** |
+| Dampfdruck | `P2119` | Pa, **mit Temperatur** |
+| molares Volumen | `P2807` | m³/mol |
+| Elektronegativität | `P1108` | dimensionslos (Pauling) |
+| Ionisierungsenergie | `P2260` | kJ/mol, **mit `P1545` = "1"** |
+| Atom-, Kovalenz-, Van-der-Waals-Radius | `P14936`/`P14937`/`P14938` | pm |
+| E-Modul | `P5480` | Gigapascal, **mit Temperatur** (20 °C angenommen) |
+| Temperaturleitfähigkeit | `P5674` | mm²/s |
+| EG-Nummer | `P232` | external-id |
+| ECHA-InfoCard-ID | `P2566` | external-id |
 
 Seit dem 28.08.2026 stehen zusätzlich die **44 übrigen Properties des
 WikiProject Materials** in der Tabelle (aus
@@ -1514,9 +1596,23 @@ WikiProject Materials** in der Tabelle (aus
 Datentyp und Einheiten-Constraint an dem Tag von wikidata.org geholt). Sie
 sind dort nur *bekannt*, nicht *bedient*: keine Quelle liefert sie, und wo
 die Property gar keinen Einheiten-Constraint trägt, bleibt `unit_qid` bewusst
-leer, bis eine Quelle den Wert wirklich liefert. Welche Properties ein Lauf
-abfragt, steht in der Spalte `quellen` des
-[Benchmarks](../benchmark/README.md), nicht in dieser Tabelle.
+leer, bis eine Quelle den Wert wirklich liefert. Ausnahmen seit dem
+20.11.2026: E-Modul (`P5480`) und Temperaturleitfähigkeit (`P5674`), die die
+englische Elementinfobox liefert. Welche Properties ein Lauf abfragt, steht
+in der Spalte `quellen` des [Benchmarks](../benchmark/README.md), nicht in
+dieser Tabelle.
+
+Seit dem 20.11.2026 kennt die Tabelle außerdem Properties, die **nicht auf
+der Projektseite stehen**: die 12 neu bedienten oben und 19 weitere, die nur
+*bekannt* sind. Darunter sind die Materials-Project-ID `P9902` (die MP-Stufe
+hält die mp-ID schon in der Hand; offen sind der Subjekt-Constraint „chemical
+compound" und die Polymorph-Frage), `P922` magnetische Ordnung (offene Frage,
+siehe [../proposals/review-needed.md](../proposals/review-needed.md)),
+Verlustfaktor `P5678`, Durchschlagfestigkeit `P14669`, Schwindung `P7079`,
+Rauheit `P7083` und die Mineral-Properties (Strichfarbe, Spaltbarkeit, Bruch,
+Habitus, Verzwilligung, Mindat-ID, IMA-Symbol). Ein Entwurf, um sie auf der
+Projektseite nachzutragen, liegt unter
+[../proposals/2026-11-20_wikiproject_materials_properties_ergaenzung.md](../proposals/2026-11-20_wikiproject_materials_properties_ergaenzung.md).
 
 Wichtig: **Ein Eintrag in `PROPERTY_MAP` allein erzeugt noch keine
 Vorschläge.** Aus dem Materials Project kommen nur Größen, die auch in
@@ -1544,9 +1640,9 @@ polykristalline Werkstoffe — nicht als `voigt` oder `reuss`.
 `P527` und `P2670` entstehen ohne externe Quelle aus dem Item selbst, `P690`
 und `P9824` liefert die COD, `P589` beide Wege. Alles Übrige stammt aus den
 Wikipedia-Infoboxen:
-bei Elementen alle 15 Kennwerte der Tabelle oben (einschließlich der
-magnetischen Ordnung `P1552`), bei Verbindungen Dichte, Schmelz- und
-Siedepunkt sowie die CAS-Nummer.
+bei Elementen alle 15 ursprünglichen Kennwerte der Tabelle oben
+(einschließlich der magnetischen Ordnung `P1552`) und die 14 neuen, bei
+Verbindungen Dichte, Schmelz- und Siedepunkt sowie CAS-, EG- und ECHA-Nummer.
 
 Feldnamen und Einheiten stammen aus dem öffentlichen OpenAPI-Schema
 (<https://api.materialsproject.org/openapi.json>, `SummaryDoc`, 69 Felder,
@@ -1564,10 +1660,14 @@ Bewusst **nicht** übernommen, obwohl MP es führt:
   `P2911` „time gap" und `P9279` „Egapro", und auch Silizium (Q670) und
   Galliumarsenid (Q147395) führen keine solche Aussage. Der saubere Weg wäre
   ein Property-Proposal mit `P1629` → `Q103982939`.
-- **Dielektrizitätskonstante, Brechungsindex, piezoelektrischer Modul,
-  Austrittsarbeit, Magnetisierung** — rechnerische Größen ohne etablierte
-  Wikidata-Property bzw. ohne eindeutigen Bezug zum Stoff statt zur
-  gerechneten Zelle.
+- **Dielektrizitätskonstante, Brechungsindex** — für beide gibt es
+  Properties (`P5675` relative Permittivität, `P1109` Brechungsindex, 233
+  Verwendungen am 2026-11-20). Der Grund, sie nicht zu übernehmen, ist die
+  Rechnung: DFT unterschätzt die Bandlücke und verfälscht damit beide Größen
+  systematisch.
+- **Piezoelektrischer Modul, Austrittsarbeit, Magnetisierung** —
+  rechnerische Größen ohne Wikidata-Property bzw. ohne eindeutigen Bezug zum
+  Stoff statt zur gerechneten Zelle.
 - **Wärme- und elektrische Leitfähigkeit** (`P2068`/`P2055`) stehen in
   `PROPERTY_MAP`, MP führt sie aber nicht — sie können nur aus der
   Wikipedia-Infobox kommen.

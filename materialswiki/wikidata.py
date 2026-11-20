@@ -469,15 +469,30 @@ def _siedepunkt_aus_claims(claims: dict) -> Optional[float]:
 
 _MERKMAL_CACHE: dict = {}
 
+# Itemwertige Properties, die an einem Item mehrfach mit VERSCHIEDENEN,
+# voneinander unabhaengigen Werten stehen - "schon vorhanden?" muss dort auf
+# den Wert gehen, nicht bloss auf die PID:
+#   P1552  Farbe, Kristallform, magnetische Ordnung ...
+#   P873   Tripelpunkt und kritischer Punkt (seit 2026-11-20 bedient)
+WERTGENAUE_PIDS = ("P1552", "P873")
 
-def _merkmale_aus_claims(claims: dict) -> set:
-    """Die Ziel-QIDs aller P1552-Aussagen ('has characteristic') eines Items."""
-    ziele = set()
-    for aussage in claims.get("P1552", []):
-        wert = aussage.get("mainsnak", {}).get("datavalue", {}).get("value")
-        if isinstance(wert, dict) and wert.get("id"):
-            ziele.add(wert["id"])
+
+def _merkmale_aus_claims(claims: dict) -> dict:
+    """{PID: {Ziel-QID, ...}} fuer die wertgenau geprueften Properties."""
+    ziele = {pid: set() for pid in WERTGENAUE_PIDS}
+    for pid in WERTGENAUE_PIDS:
+        for aussage in claims.get(pid, []):
+            wert = aussage.get("mainsnak", {}).get("datavalue", {}).get("value")
+            if isinstance(wert, dict) and wert.get("id"):
+                ziele[pid].add(wert["id"])
     return ziele
+
+
+def item_hat_wert(qid: str, pid: str, ziel_qid: str) -> bool:
+    """True, wenn das Item schon 'pid -> ziel_qid' traegt (nur WERTGENAUE_PIDS)."""
+    if qid not in _MERKMAL_CACHE:
+        claims_vorladen([qid])
+    return ziel_qid in _MERKMAL_CACHE.get(qid, {}).get(pid, set())
 
 
 def item_hat_merkmal(qid: str, ziel_qid: str) -> bool:
@@ -487,9 +502,7 @@ def item_hat_merkmal(qid: str, ziel_qid: str) -> bool:
     Kristallform, magnetische Ordnung), deshalb reicht item_has_statement hier
     nicht.
     """
-    if qid not in _MERKMAL_CACHE:
-        claims_vorladen([qid])
-    return ziel_qid in _MERKMAL_CACHE.get(qid, set())
+    return item_hat_wert(qid, "P1552", ziel_qid)
 
 
 def fetch_item_pids(qid: str) -> set:

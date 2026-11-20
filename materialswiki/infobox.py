@@ -21,9 +21,11 @@ from . import netz, wikidata
 from .ausgabe import Reference, WIKIPEDIA_EN_QID, make_row, round_significant
 from .properties import (
     AGGREGAT_FEST, AGGREGAT_FLUESSIG, AGGREGAT_GAS, AGGREGAT_PID,
-    CELSIUS_QID, CHEMBOX_FIELDS, NUR_FESTKOERPER, PLAUSIBEL, PROPERTY_MAP,
-    STANDARD_TEMPERATUR_C, TEMPERATUR_PID, WIKIPEDIA_DE_CHEM_FIELDS,
-    WIKIPEDIA_DE_FIELDS, WIKIPEDIA_NUMERIC_FIELDS, ist_plausibel,
+    CELSIUS_QID, CHEMBOX_FIELDS, DRUCK_PID, FESTE_QUALIFIKATOREN, KELVIN_QID,
+    MOLBEZUG_SCHLUESSEL, MOLEKULARE_ELEMENTE, NUR_FESTKOERPER, PFLICHT_TEMPERATUR,
+    PLAUSIBEL, PROPERTY_MAP, STANDARD_TEMPERATUR_C, TEMPERATUR_PID,
+    WIKIPEDIA_DE_CHEM_FIELDS, WIKIPEDIA_DE_FIELDS, WIKIPEDIA_NUMERIC_FIELDS,
+    ist_plausibel,
 )
 
 # ---------------------------------------------------------------------------
@@ -154,11 +156,18 @@ _DE_HEDGE = re.compile(r"^(etwa|ca\.?|ungefähr|circa|rund|≈|~)\s*", re.I)
 _DE_NUMBER = re.compile(r"^[+-]?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?$")
 # Einheiten, die hinter der Zahl stehen duerfen und abgetrennt werden.
 # "g·cm-3" und "°C" kommen aus der Verbindungsinfobox (siehe unten), die
-# Elementinfobox schreibt "g/cm³" bzw. gar keine Einheit.
+# Elementinfobox schreibt "g/cm³" bzw. gar keine Einheit. "kJ·mol-1" und
+# "kJ/mol" schreibt das Feld "Verdampfungswärme" selbst ins Feld (die
+# Vorlage haengt dort keine Einheit an); "pm" vereinzelt die Radien.
 _DE_UNIT = re.compile(
     r"\s*(g\s*/\s*cm\s*\^?\s*3|g/cm³|g\s*[·⋅*]\s*cm\s*\^?\s*-?\s*3"
-    r"|kg\s*/\s*m\s*\^?\s*3|°\s*C|K|W|S/m|m/s|GPa|Pa)\s*$"
+    r"|kg\s*/\s*m\s*\^?\s*3|kJ\s*[·⋅/]\s*mol(?:\s*-\s*1)?|°\s*C|K|W|S/m"
+    r"|m/s|GPa|Pa|pm)\s*$"
 )
+# Schmale und geschuetzte Leerzeichen um den Malpunkt ("4,85&#8239;·&#8239;
+# 10<sup>-6</sup>", Beryllium) - vor der Zehnerpotenz-Erkennung zu Leerzeichen,
+# sonst ginge der Wert verloren.
+_DE_LEERZEICHEN_ENTITY = re.compile(r"&(?:nbsp|thinsp|#8239|#160|#8201);", re.I)
 
 
 def parse_de_number(raw: str) -> Optional[float]:
@@ -176,6 +185,7 @@ def parse_de_number(raw: str) -> Optional[float]:
         return None  # mehrere Modifikationen / beschrifteter Wert
 
     # Zehnerpotenz normalisieren, bevor die Tags fallen
+    s = _DE_LEERZEICHEN_ENTITY.sub(" ", s)
     s = _DE_ZEHNERPOTENZ.sub(
         lambda m: f"{m.group(1)}e{m.group(2).replace(' ', '').replace('−', '-').replace('–', '-')}",
         s,
@@ -409,7 +419,39 @@ def wikipedia_de_values(fields: dict, article_wikitext: str = "") -> dict:
     if ordnung:
         merken("magnetism", ordnung, "Magnetismus",
                f"Infobox-Feld 'Magnetismus' = '{ordnung}'")
+
+    # Dampfdruck (P2119) NUR zusammen mit seiner Bezugstemperatur - P2119
+    # verlangt P2076, und ohne Temperatur ist ein Dampfdruck keine Angabe.
+    # Die Temperatur geht unter einem Hilfsschluessel mit, den PROPERTY_MAP
+    # nicht kennt (siehe PFLICHT_TEMPERATUR). Der Beleg steht oft am
+    # Temperaturfeld, deshalb werden beide Felder nach Einzelnachweisen
+    # durchsucht.
+    druck = parse_de_number(fields.get("Dampfdruck", ""))
+    bezug_k = parse_de_number(fields.get("RefTempDampfdruck_K", ""))
+    if druck is not None and bezug_k is not None and bezug_k > 0:
+        out["vapor_pressure"] = (
+            druck,
+            f"Infobox-Felder 'Dampfdruck' / 'RefTempDampfdruck_K' "
+            f"({druck:g} Pa bei {bezug_k:g} K)",
+            extract_ref_ids(fields.get("Dampfdruck", "") + " "
+                            + fields.get("RefTempDampfdruck_K", ""),
+                            article_wikitext),
+        )
+        out["_dampfdruck_temperatur"] = (bezug_k, "", {})
+
+    # EG- und ECHA-Nummer: beide Infoboxen (Element wie Chemikalie) fuehren
+    # sie unter diesen Feldnamen. Nur exakt das Format der Kennung zaehlt -
+    # alles andere (Vorlage, Kommentar, mehrere Nummern) wird nicht geraten.
+    for feld, key, muster in (("EG-Nummer", "ec_number", _DE_EG_NUMMER),
+                              ("ECHA-ID", "echa_infocard", _DE_ECHA_ID)):
+        kennung = strip_wiki_markup(fields.get(feld, ""))
+        if muster.fullmatch(kennung):
+            merken(key, kennung, feld, f"Infobox-Feld '{feld}'")
     return out
+
+
+_DE_EG_NUMMER = re.compile(r"\d{3}-\d{3}-\d")
+_DE_ECHA_ID = re.compile(r"100\.\d{3}\.\d{3}")
 
 
 def wikipedia_de_proposals_for_item(wd_match: dict, de_title: str,
@@ -491,6 +533,65 @@ def dichte_qualifikatoren(temperatur_c: float, zustand_qid: Optional[str]) -> li
     return qual
 
 
+def _beleg(ids: dict, note: str, quelle: str, projekt_qid: str,
+           permalink: str) -> Reference:
+    """Beleg eines Infobox-Wertes: DOI, sonst ISBN, sonst Wikimedia-Import."""
+    if ids.get("doi"):
+        return Reference(doi=ids["doi"],
+                         note=f"{note}, Beleg aus {quelle}: {permalink}")
+    if ids.get("isbn"):
+        return Reference(isbn=ids["isbn"],
+                         note=f"{note}, Beleg aus {quelle}: {permalink}")
+    return Reference(imported_from=projekt_qid, import_url=permalink, note=note)
+
+
+def _qs_zahl(wert: float) -> str:
+    """Zahl ohne Exponent und ohne ueberfluessige Nullen ('1811.0' -> '1811')."""
+    return format(Decimal(str(wert)).normalize(), "f")
+
+
+_BEZUG_KLARTEXT = {
+    "melting_point": "Schmelzpunkt",
+    "boiling_point": "Siedepunkt",
+    "_dampfdruck_temperatur": "Bezugstemperatur",
+}
+
+
+def pflicht_qualifikatoren(key: str, werte: dict, qid: str):
+    """(Qualifikatoren, Klaerungsgrund, Notizzusatz) einer Infobox-Groesse.
+
+    Ist der Klaerungsgrund gesetzt, darf die Zeile NICHT als Vorschlag
+    raus: entweder fehlt ein Pflicht-Qualifikator, oder der Molbezug ist
+    unklar (siehe MOLEKULARE_ELEMENTE). Fuer Groessen ohne Pflicht-
+    Qualifikator kommt ([], None, "") zurueck.
+    """
+    if key in MOLBEZUG_SCHLUESSEL and qid in MOLEKULARE_ELEMENTE:
+        formel = MOLEKULARE_ELEMENTE[qid]
+        return [], (f"molekulares Element: Bezug pro Mol Atome oder pro Mol "
+                    f"{formel} geht aus der Infobox nicht hervor"), ""
+
+    qualifiers = list(FESTE_QUALIFIKATOREN.get(key, []))
+    zusatz = ""
+    if key in PFLICHT_TEMPERATUR:
+        bezug = PFLICHT_TEMPERATUR[key]
+        if bezug is None:
+            zahl = _qs_zahl(STANDARD_TEMPERATUR_C)
+            qualifiers.insert(0, (TEMPERATUR_PID, f"{zahl}U{CELSIUS_QID[1:]}",
+                                  f"{zahl} °C"))
+            zusatz = (f"; Messtemperatur in der Quelle nicht genannt, "
+                      f"{zahl} °C angenommen")
+        else:
+            kelvin = werte.get(bezug)
+            if kelvin is None:
+                return [], (f"Pflicht-Qualifikator {TEMPERATUR_PID} fehlt: "
+                            f"kein {_BEZUG_KLARTEXT[bezug]} in derselben "
+                            f"Infobox"), ""
+            zahl = _qs_zahl(round_significant(kelvin[0]))
+            qualifiers.insert(0, (TEMPERATUR_PID, f"{zahl}U{KELVIN_QID[1:]}",
+                                  f"{zahl} K, {_BEZUG_KLARTEXT[bezug]}"))
+    return qualifiers, None, zusatz
+
+
 def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
                        permalink, messtemperatur=None) -> list:
     """Gemeinsame Zeilenerzeugung fuer beide Wikipedia-Sprachen.
@@ -513,18 +614,7 @@ def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
             continue
         if gasfoermig and key in NUR_FESTKOERPER:
             continue
-        if ids.get("doi"):
-            reference = Reference(
-                doi=ids["doi"], note=f"{note}, Beleg aus {quelle}: {permalink}"
-            )
-        elif ids.get("isbn"):
-            reference = Reference(
-                isbn=ids["isbn"], note=f"{note}, Beleg aus {quelle}: {permalink}"
-            )
-        else:
-            reference = Reference(
-                imported_from=projekt_qid, import_url=permalink, note=note
-            )
+        reference = _beleg(ids, note, quelle, projekt_qid, permalink)
         value_label = ""
         qualifiers = []
         if key == "density":
@@ -560,6 +650,19 @@ def _infobox_proposals(wd_match, werte, skip_keys, quelle, projekt_qid,
                     quelle, wd_match, prop_info, value, "", reference,
                 ))
                 continue
+
+        # Pflicht-Qualifikatoren (Temperatur, Seriennummer) und der unklare
+        # Molbezug molekularer Elemente - siehe PFLICHT_TEMPERATUR.
+        pflicht, klaerung, zusatz = pflicht_qualifikatoren(
+            key, werte, wd_match["qid"])
+        if klaerung:
+            proposals.append(make_row(
+                f"MANUELLE_KLAERUNG_NOETIG ({klaerung})",
+                quelle, wd_match, prop_info, value, "", reference,
+            ))
+            continue
+        qualifiers += pflicht
+        reference.note += zusatz
 
         if prop_info["pid"] == "P1552":
             # P1552 "has characteristic" traegt an einem Item oft mehrere,
@@ -640,6 +743,13 @@ def parse_wiki_number(raw: str) -> Optional[float]:
     Buchstaben werden verworfen statt interpretiert.
     """
     s = strip_wiki_markup(raw)
+    # Nackter Weblink als Beleg hinter der Zahl ("194 [https://periodic.lanl.
+    # gov/26.shtml]", Eisen, Van-der-Waals-Radius) - er ist kein Teil des
+    # Wertes. Eine Messunsicherheit ("31±5", kovalente Radien) faellt wie in
+    # der deutschen Infobox weg; uebernommen wird der Hauptwert.
+    s = re.sub(r"\[https?://[^\]]*\]", " ", s).strip()
+    if "±" in s:
+        s = s.split("±")[0].strip()
     if not s or "{{" in s or "}}" in s:
         return None
     s = s.replace(",", "")
@@ -789,15 +899,7 @@ def waermeausdehnung_proposals_for_item(wd_match: dict, fields: dict,
             "thermal expansion at 25")
     ids = extract_ref_ids(fields.get(feld, ""), wikitext)
     note = f"Infobox-Feld '{feld}' ({wert} um/(m*K) bei {temperatur_c:g} °C)"
-    if ids.get("doi"):
-        reference = Reference(doi=ids["doi"],
-                              note=f"{note}, Beleg aus Wikipedia (en): {permalink}")
-    elif ids.get("isbn"):
-        reference = Reference(isbn=ids["isbn"],
-                              note=f"{note}, Beleg aus Wikipedia (en): {permalink}")
-    else:
-        reference = Reference(imported_from=WIKIPEDIA_EN_QID,
-                              import_url=permalink, note=note)
+    reference = _beleg(ids, note, "Wikipedia (en)", WIKIPEDIA_EN_QID, permalink)
 
     zahl = format(Decimal(str(temperatur_c)).normalize(), "f")
     qualifiers = [(TEMPERATUR_PID, f"{zahl}U{CELSIUS_QID[1:]}", f"{zahl} °C")]
@@ -824,6 +926,77 @@ def waermeausdehnung_proposals_for_item(wd_match: dict, fields: dict,
     )]
 
 
+# ---------------------------------------------------------------------------
+# Phasenpunkte (P873) aus der englischen Elementinfobox
+# ---------------------------------------------------------------------------
+#
+# Tripelpunkt und kritischer Punkt stehen als Feldpaare Temperatur/Druck:
+#   | triple point K   = 13.8033      | triple point kPa   = 7.041
+#   | critical point K = 33.19<ref/>  | critical point MPa = 1.313<ref/>
+# Die Vorlage fuehrt die Einheit im FELDNAMEN, es wird also nichts geraten.
+# Am Bestand (2026-11-20): 18 Tripel- und 23 kritische Punkte.
+#
+# Eigene Stufe statt Feldkarte, aus zwei Gruenden: P873 ist itemwertig und
+# kann an einem Item ZWEIMAL stehen (Wert Tripelpunkt, Wert kritischer
+# Punkt), und beide Aussagen brauchen ZWEI Pflicht-Qualifikatoren aus zwei
+# verschiedenen Feldern. Fehlt eines der beiden Felder, entsteht keine
+# Zeile - eine Aussage ohne Druck verletzte den Constraint.
+PHASENPUNKT_FELDER = (
+    # (value_map-Schluessel, Temperaturfeld, Druckfeld, Druckeinheit, Kuerzel)
+    ("triple point", "triple point K", "triple point kPa", "Q21064807", "kPa"),
+    ("critical point", "critical point K", "critical point MPa",
+     "Q21062777", "MPa"),
+)
+
+
+def parse_phasenpunkte(fields: dict) -> list:
+    """[(value_map-Schluessel, Kelvin, Druck, Einheit-QID, Kuerzel), ...]."""
+    out = []
+    for name, feld_t, feld_p, einheit, kuerzel in PHASENPUNKT_FELDER:
+        kelvin = parse_wiki_number(fields.get(feld_t, ""))
+        druck = parse_wiki_number(fields.get(feld_p, ""))
+        if kelvin is None or druck is None:
+            continue
+        if not (0 < kelvin < 20000 and druck > 0):
+            continue  # physikalisch unmoeglich - dort steht etwas anderes
+        out.append((name, kelvin, druck, einheit, kuerzel))
+    return out
+
+
+def phasenpunkt_proposals_for_item(wd_match: dict, fields: dict,
+                                   permalink: str, wikitext: str,
+                                   skip_keys: set) -> list:
+    """P873-Vorschlaege (Tripelpunkt, kritischer Punkt) samt P2076/P2077."""
+    if "phase_point" in skip_keys:
+        return []
+    prop_info = PROPERTY_MAP["phase_point"]
+    zeilen = []
+    for name, kelvin, druck, einheit, kuerzel in parse_phasenpunkte(fields):
+        ziel, ziel_label = prop_info["value_map"][name]
+        feld_t, feld_p = f"{name} K", f"{name} {kuerzel}"
+        ids = extract_ref_ids(fields.get(feld_t, "") + " "
+                              + fields.get(feld_p, ""), wikitext)
+        note = (f"Infobox-Felder '{feld_t}' / '{feld_p}' "
+                f"({kelvin:g} K, {druck:g} {kuerzel})")
+        reference = _beleg(ids, note, "Wikipedia (en)", WIKIPEDIA_EN_QID,
+                           permalink)
+        qualifiers = [
+            (TEMPERATUR_PID, f"{_qs_zahl(kelvin)}U{KELVIN_QID[1:]}",
+             f"{kelvin:g} K"),
+            (DRUCK_PID, f"{_qs_zahl(druck)}U{einheit[1:]}",
+             f"{druck:g} {kuerzel}"),
+        ]
+        # Wertgenau wie bei P1552: ein vorhandener Tripelpunkt sagt nichts
+        # darueber, ob der kritische Punkt schon eingetragen ist.
+        vorhanden = wikidata.item_hat_wert(wd_match["qid"], "P873", ziel)
+        zeilen.append(make_row(
+            "BEREITS_VORHANDEN" if vorhanden else "VORSCHLAG",
+            "Wikipedia (en)", wd_match, prop_info, ziel, ziel_label,
+            reference, entry_id="phasenpunkt", qualifiers=qualifiers,
+        ))
+    return zeilen
+
+
 def wikipedia_proposals_for_item(wd_match: dict, name_en: str,
                                  skip_keys: set) -> list:
     """Vorschlaege aus der englischen Elementinfobox, als Import referenziert."""
@@ -835,8 +1008,11 @@ def wikipedia_proposals_for_item(wd_match: dict, name_en: str,
         "Wikipedia (en)", WIKIPEDIA_EN_QID, permalink,
         messtemperatur=parse_de_messtemperatur(fields.get("density", "")),
     )
-    return zeilen + waermeausdehnung_proposals_for_item(
-        wd_match, fields, permalink, wikitext, skip_keys)
+    return (zeilen
+            + waermeausdehnung_proposals_for_item(
+                wd_match, fields, permalink, wikitext, skip_keys)
+            + phasenpunkt_proposals_for_item(
+                wd_match, fields, permalink, wikitext, skip_keys))
 
 
 # ---------------------------------------------------------------------------

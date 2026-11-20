@@ -52,6 +52,7 @@ DFT_LABEL = "Dichtefunktionaltheorie"
 # Aggregatzustand (P515) als Qualifikatoren. Begruendung und Belege:
 # README, "Die Dichte traegt ihre Messbedingungen".
 TEMPERATUR_PID = "P2076"
+DRUCK_PID = "P2077"   # Pflicht-Qualifikator der Phasenpunkte (P873)
 AGGREGAT_PID = "P515"
 CELSIUS_QID = "Q25267"
 KELVIN_QID = "Q11579"
@@ -123,6 +124,30 @@ PLAUSIBEL = {
     # landen damit in der manuellen Klaerung statt im Entwurf, und das ist
     # richtig so: in Wikidata waeren sie eine Constraint-Verletzung.
     "mohs_hardness": (1.0, 10.0),               # dimensionslos
+    # --- Erweiterung der Infobox-Feldkarten (2026-11-20) -------------------
+    # Spannweiten an allen 118 Elementinfoboxen (de und en) abgelesen, wie
+    # oben grosszuegig gefasst.
+    # Schmelzwaerme: Helium 0,0138 bis Kohlenstoff ~117 kJ/mol.
+    "molar_fusion_enthalpy": (0.001, 200.0),        # kJ/mol
+    # Verdampfungswaerme: Helium 0,083 bis Wolfram ~824 kJ/mol.
+    "molar_vaporization_enthalpy": (0.01, 1000.0),  # kJ/mol
+    # Pauling-Skala: Caesium 0,79 bis Fluor 3,98.
+    "electronegativity": (0.5, 4.5),                # dimensionslos
+    # Erste Ionisierungsenergie: Caesium 375,7 bis Helium 2372,3 kJ/mol.
+    "ionization_energy": (300.0, 3000.0),           # kJ/mol
+    # Radien in Pikometer: Helium ~28 (kovalent) bis Caesium ~343 (vdW).
+    "atomic_radius": (10.0, 400.0),                 # pm
+    "covalent_radius": (10.0, 400.0),               # pm
+    "van_der_waals_radius": (10.0, 400.0),          # pm
+    # E-Modul: Caesium 1,7 GPa bis Diamant ~1050 GPa.
+    "tensile_modulus": (0.001, 1500.0),             # GPa
+    # Temperaturleitfaehigkeit: Metalle 5 bis ~175 mm^2/s, Diamant >1000.
+    "thermal_diffusivity": (0.01, 2000.0),          # mm^2/s
+    # Molares Volumen des Festkoerpers: Kohlenstoff 3,4e-6 bis Caesium
+    # 70,9e-6 m^3/mol. Ein Gasvolumen (22,4e-3) faellt hier heraus.
+    "molar_volume": (1e-6, 1e-4),                   # m^3/mol
+    # Dampfdruck: Bismut 5,78e-21 Pa (505 K) bis Brom 4,13e6 Pa.
+    "vapor_pressure": (1e-30, 1e9),                 # Pa
 }
 
 
@@ -428,9 +453,11 @@ PROPERTY_MAP = {
     # "Electric and Magnetic" von [[Wikidata:WikiProject Materials/Properties]].
     # Damit deckt PROPERTY_MAP die Projektseite vollstaendig ab.
     #
-    # ACHTUNG - eintragen heisst nicht liefern: KEINE Stufe erzeugt fuer diese
-    # Properties bisher eine Aussage. Es gibt weder ein MP-Feld noch eine
-    # Infobox-Feldkarte dafuer; sie sind hier nur bekannt, nicht bedient.
+    # ACHTUNG - eintragen heisst nicht liefern: fuer die meisten dieser
+    # Properties erzeugt KEINE Stufe eine Aussage. Es gibt weder ein MP-Feld
+    # noch eine Infobox-Feldkarte dafuer; sie sind hier nur bekannt, nicht
+    # bedient. Ausnahmen seit 2026-11-20: E-Modul (P5480) und
+    # Temperaturleitfaehigkeit (P5674) liefert die englische Elementinfobox.
     # Was ein Lauf wirklich abfragt, steht in der Spalte "quellen" des
     # Benchmarks, nicht in dieser Tabelle.
     #
@@ -599,10 +626,14 @@ PROPERTY_MAP = {
         "unit_qid": "Q11579",  # Kelvin, wie P2101/P2102
         "label": "Glasübergangstemperatur",
     },
+    # Seit 2026-11-20 bedient (englische Elementinfobox, Feld "thermal
+    # diffusivity"). Die Vorlage rechnet in mm^2/s, und der Constraint
+    # laesst Q26162546 ausdruecklich zu - also die Einheit der Quelle statt
+    # der bisherigen Platzhalter-SI-Einheit m^2/s, nichts umzurechnen.
     "thermal_diffusivity": {
         "pid": "P5674",
         "datatype": "quantity",
-        "unit_qid": "Q3332099",  # Quadratmeter pro Sekunde (SI)
+        "unit_qid": "Q26162546",  # Quadratmillimeter pro Sekunde
         "label": "Temperaturleitfähigkeit",
     },
     "heat_deflection_temperature": {
@@ -715,12 +746,275 @@ PROPERTY_MAP = {
         "unit_qid": "",  # dimensionslos laut Constraint
         "label": "relative permeabilität",
     },
+    # =======================================================================
+    # Ueber die Projektseite hinaus: von den Infoboxen BEDIENT (2026-11-20)
+    # =======================================================================
+    #
+    # Diese Properties stehen NICHT auf [[Wikidata:WikiProject Materials/
+    # Properties]], existieren aber und werden von den Elementinfoboxen
+    # geliefert. Datentyp, Einheiten- und Pflicht-Qualifikator-Constraint am
+    # 2026-11-20 von wikidata.org gelesen. Welche Feldkarte sie fuellt:
+    # WIKIPEDIA_DE_FIELDS / WIKIPEDIA_NUMERIC_FIELDS unten; welche
+    # Qualifikatoren sie tragen: PFLICHT_TEMPERATUR / FESTE_QUALIFIKATOREN.
+    #
+    # Verlangt P2076 (Temperatur): der Schmelzpunkt derselben Infobox.
+    "molar_fusion_enthalpy": {
+        "pid": "P2066",
+        "datatype": "quantity",
+        "unit_qid": "Q752197",  # Kilojoule pro Mol - Einheit beider Infoboxen
+        "label": "molare Schmelzwärme",
+    },
+    # Verlangt P2076: der Siedepunkt derselben Infobox (die Werte beider
+    # Infoboxen sind Verdampfungswaermen am Normalsiedepunkt, de zitiert
+    # dafuer durchgehend Zhang et al. 2011).
+    "molar_vaporization_enthalpy": {
+        "pid": "P2116",
+        "datatype": "quantity",
+        "unit_qid": "Q752197",  # Kilojoule pro Mol
+        "label": "molare Verdampfungswärme",
+    },
+    # Phasenpunkt: Tripelpunkt und kritischer Punkt, jeweils mit Temperatur
+    # (P2076) UND Druck (P2077) als Pflicht-Qualifikator. Der one-of-
+    # Constraint laesst genau diese zwei Werte zu. Eine Property, zwei
+    # moegliche Aussagen je Item - deshalb eine eigene Stufe
+    # (infobox.phasenpunkt_proposals_for_item) statt der Feldkarte, und die
+    # Pruefung "schon vorhanden?" geht wie bei P1552 auf den WERT.
+    "phase_point": {
+        "pid": "P873",
+        "datatype": "item",
+        "unit_qid": "",
+        "label": "Phasenpunkt",
+        "value_map": {
+            "triple point": ("Q106410", "Tripelpunkt"),
+            "critical point": ("Q111059", "kritischer Punkt"),
+        },
+    },
+    # Verlangt P2076: das Feld "RefTempDampfdruck_K" der de-Elementinfobox.
+    # Ohne diese Temperatur wird gar nichts vorgeschlagen.
+    "vapor_pressure": {
+        "pid": "P2119",
+        "datatype": "quantity",
+        "unit_qid": "Q44395",  # Pascal - die Vorlage haengt "Pa" an
+        "label": "Dampfdruck",
+    },
+    # Bisher an keinem einzigen Item (0 Verwendungen am 2026-11-20). Die
+    # Vorlage haengt m^3*mol^-1 an; diese Einheit ist erlaubt, also keine
+    # Umrechnung.
+    "molar_volume": {
+        "pid": "P2807",
+        "datatype": "quantity",
+        "unit_qid": "Q21615967",  # Kubikmeter pro Mol
+        "label": "molares Volumen",
+    },
+    # Pauling-Skala - beide Vorlagen nennen sie ausdruecklich. Der
+    # Constraint verlangt "keine Einheit" (Bestand: Einheit 1, kein
+    # Qualifikator).
+    "electronegativity": {
+        "pid": "P1108",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos laut Constraint
+        "label": "Elektronegativität",
+    },
+    # Verlangt P1545 (Seriennummer): welche Ionisierung gemeint ist. Der
+    # Bestand fuehrt die Werte in eV mit P1545 = "1", "2", "3"; kJ/mol ist
+    # ebenso erlaubt und die Einheit der en-Vorlage. Die de-Vorlage wird
+    # NICHT gelesen: dort steht eV und kJ/mol nebeneinander in {{ZahlExp}}.
+    "ionization_energy": {
+        "pid": "P2260",
+        "datatype": "quantity",
+        "unit_qid": "Q752197",  # Kilojoule pro Mol
+        "label": "Ionisierungsenergie",
+    },
+    # Die drei Radien: Constraint nur Pikometer, kein Qualifikator. Beide
+    # Vorlagen rechnen in pm. Achtung: de "Atomradius" (Slater, auf 5 pm
+    # gerundet) und en "atomic radius" (empirisch) weichen voneinander ab -
+    # Eisen traegt deshalb schon zwei P14936-Werte (126 und 140 pm). Weil die
+    # Kaskade de vor en fragt und "schon vorhanden" auf die PID prueft, kommt
+    # hoechstens EIN neuer Wert dazu.
+    "atomic_radius": {
+        "pid": "P14936",
+        "datatype": "quantity",
+        "unit_qid": "Q192274",  # Pikometer
+        "label": "Atomradius",
+    },
+    "covalent_radius": {
+        "pid": "P14937",
+        "datatype": "quantity",
+        "unit_qid": "Q192274",  # Pikometer
+        "label": "Kovalenzradius",
+    },
+    "van_der_waals_radius": {
+        "pid": "P14938",
+        "datatype": "quantity",
+        "unit_qid": "Q192274",  # Pikometer
+        "label": "Van-der-Waals-Radius",
+    },
+    # EG- und ECHA-Nummer: Identifikatoren, gehen also ohne Beleg raus
+    # (OHNE_BELEG_DATENTYPEN). Beide Infoboxen (Element wie Chemikalie)
+    # fuehren sie unter denselben Feldnamen.
+    "ec_number": {
+        "pid": "P232",
+        "datatype": "external-id",
+        "unit_qid": "",
+        "label": "EG-Nummer",
+    },
+    "echa_infocard": {
+        "pid": "P2566",
+        "datatype": "external-id",
+        "unit_qid": "",
+        "label": "ECHA-InfoCard-ID",
+    },
+    # =======================================================================
+    # Ueber die Projektseite hinaus: nur BEKANNT, nicht bedient
+    # =======================================================================
+    #
+    # Existieren in Wikidata, stehen nicht auf der Projektseite und werden
+    # von KEINER Stufe geliefert. Datentyp und Einheiten-Constraint am
+    # 2026-11-20 gelesen; wie oben bleibt unit_qid leer, wo der Constraint
+    # fehlt oder offensichtlich falsch ist.
+    #
+    # Materials Project ID: die MP-Stufe haelt die mp-ID schon in der Hand
+    # (MP_META_FIELDS), schreibt sie aber nicht. Offen, weil (a) der
+    # Subjekt-Constraint nur "chemical compound" (Q11173) zulaesst - an einem
+    # Element waere die Aussage eine Verletzung - und (b) eine mp-ID EIN
+    # Polymorph bezeichnet, ein Verbindungs-Item wie Titandioxid aber alle.
+    "materials_project_id": {
+        "pid": "P9902",
+        "datatype": "external-id",
+        "unit_qid": "",
+        "label": "Materials-Project-ID",
+    },
+    # OFFENE FRAGE, nicht bedient: P922 "magnetische Ordnung" ist die eigens
+    # dafuer angelegte Property (Subjekt-Constraint metal Q11426, one-of genau
+    # die fuenf Werte der value_map von "magnetism" oben). Die Hausregel
+    # .claude/rules/ontology-magnetismus-p1552.md setzt dagegen P1552. Ob P922
+    # statt oder neben P1552 gelten soll, ist nicht entschieden - siehe
+    # proposals/review-needed.md ("P922 magnetic ordering"). Bis dahin
+    # liefert die Magnetismus-Stufe unveraendert P1552.
+    "magnetic_ordering": {
+        "pid": "P922",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "magnetische Ordnung",
+    },
+    # Constraint nennt Hertz und Temperatur - offensichtlich fehlerhaft, der
+    # Verlustfaktor tan(delta) ist dimensionslos. Einheit erst festlegen,
+    # wenn eine Quelle liefert.
+    "dissipation_factor": {
+        "pid": "P5678",
+        "datatype": "quantity",
+        "unit_qid": "",
+        "label": "Verlustfaktor",
+    },
+    "dielectric_strength": {
+        "pid": "P14669",
+        "datatype": "quantity",
+        "unit_qid": "Q3562962",  # Volt pro Meter - einzige erlaubte Einheit
+        "label": "Durchschlagfestigkeit",
+    },
+    # Schwindung und Rauheit stehen auf der Projektseite noch als
+    # "Property proposal", existieren aber laengst.
+    "shrinkage": {
+        "pid": "P7079",
+        "datatype": "quantity",
+        "unit_qid": "Q11229",  # Prozent - einzige erlaubte Einheit
+        "label": "Schwindung",
+    },
+    "surface_roughness": {
+        "pid": "P7083",
+        "datatype": "quantity",
+        "unit_qid": "",  # kein Constraint
+        "label": "Rauheit",
+    },
+    "combustion_enthalpy": {
+        "pid": "P2117",
+        "datatype": "quantity",
+        "unit_qid": "Q752197",  # Kilojoule pro Mol, wie P2066/P2116
+        "label": "Verbrennungsenthalpie",
+    },
+    "decomposition_point": {
+        "pid": "P2107",
+        "datatype": "quantity",
+        "unit_qid": "Q11579",  # Kelvin, wie P2101/P2102
+        "label": "Zersetzungstemperatur",
+    },
+    "surface_tension": {
+        "pid": "P3013",
+        "datatype": "quantity",
+        "unit_qid": "Q12371104",  # Newton pro Meter (SI)
+        "label": "Oberflächenspannung",
+    },
+    "lower_flammable_limit": {
+        "pid": "P2202",
+        "datatype": "quantity",
+        "unit_qid": "Q2080811",  # Volumenprozent
+        "label": "untere Explosionsgrenze",
+    },
+    "upper_flammable_limit": {
+        "pid": "P2203",
+        "datatype": "quantity",
+        "unit_qid": "Q2080811",  # Volumenprozent
+        "label": "obere Explosionsgrenze",
+    },
+    "oxidation_state": {
+        "pid": "P1121",
+        "datatype": "quantity",
+        "unit_qid": "",  # dimensionslos laut Constraint
+        "label": "Oxidationsstufe",
+    },
+    # Mineralogie: {{Infobox Mineral}} fuehrt die meisten davon, aber als
+    # Freitext - itemwertige Properties brauchen erst eine value_map.
+    "mindat_mineral_id": {
+        "pid": "P6263",
+        "datatype": "external-id",
+        "unit_qid": "",
+        "label": "Mindat-Mineralkennung",
+    },
+    "ima_mineral_symbol": {
+        "pid": "P10113",
+        "datatype": "string",
+        "unit_qid": "",
+        "label": "IMA-Symbol",
+    },
+    "streak_color": {
+        "pid": "P534",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "Strichfarbe",
+    },
+    "crystal_habit": {
+        "pid": "P565",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "Kristallhabitus",
+    },
+    "cleavage": {
+        "pid": "P693",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "Spaltbarkeit",
+    },
+    "mineral_fracture": {
+        "pid": "P538",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "Bruch",
+    },
+    "twinning": {
+        "pid": "P537",
+        "datatype": "wikibase-item",
+        "unit_qid": "",
+        "label": "Verzwilligung",
+    },
 }
 
 
 NUR_FESTKOERPER = ("bulk_modulus", "shear_modulus", "poisson_ratio",
                    "density", "crystal_system", "space_group", "point_group",
-                   "linear_thermal_expansion", "mohs_hardness")
+                   "linear_thermal_expansion", "mohs_hardness",
+                   # seit 2026-11-20: E-Modul, und das molare Volumen - die
+                   # de-Vorlage nennt bei Gasen das des Festkoerpers "(fest)"
+                   "tensile_modulus", "molar_volume")
 RAUMTEMPERATUR_K = 293.15
 
 # P2102 wird in Wikidata in drei Einheiten gefuehrt (am Bestand: 32x Celsius,
@@ -758,6 +1052,22 @@ WIKIPEDIA_DE_FIELDS = {
     # Ein Artikel traegt immer nur eine der beiden Vorlagen, deshalb genuegt
     # dieser eine Eintrag fuer Elemente wie Minerale.
     "Mohshärte": ("mohs_hardness", 1.0),                 # dimensionslos
+    # --- seit 2026-11-20 -------------------------------------------------
+    # Einheiten laut Vorlagenquelltext (Vorlage:Infobox Chemisches Element):
+    # die Vorlage haengt kJ*mol^-1, pm und m^3*mol^-1 selbst an. Nur
+    # "Verdampfungswaerme" schreibt die Einheit ins Feld - parse_de_number
+    # trennt sie ab.
+    "Schmelzwärme": ("molar_fusion_enthalpy", 1.0),       # kJ/mol
+    "Verdampfungswärme": ("molar_vaporization_enthalpy", 1.0),  # kJ/mol
+    "Elektronegativität": ("electronegativity", 1.0),     # Pauling-Skala
+    # "Atomradius" ist der empirische Wert; der berechnete steht im eigenen
+    # Feld "AtomradiusBerechnet" und wird nicht gelesen.
+    "Atomradius": ("atomic_radius", 1.0),                 # pm
+    "KovalenterRadius": ("covalent_radius", 1.0),         # pm
+    "VanDerWaalsRadius": ("van_der_waals_radius", 1.0),   # pm
+    "MolaresVolumen": ("molar_volume", 1.0),              # m^3/mol
+    # Nur drei Elemente fuellen das Feld (Titan, Kupfer, Blei, 2026-11-20).
+    "E-Modul": ("tensile_modulus", 1.0),                  # GPa
 }
 
 
@@ -782,6 +1092,74 @@ WIKIPEDIA_NUMERIC_FIELDS = {
     "boiling point K": ("boiling_point", 1.0),        # schon Kelvin
     "thermal conductivity": ("thermal_conductivity", 1.0),  # W/(m*K)
     "Mohs hardness": ("mohs_hardness", 1.0),          # dimensionslos
+    # --- seit 2026-11-20 -------------------------------------------------
+    # Einheiten laut {{Infobox element}}: kJ/mol, pm, GPa, mm^2/s. An allen
+    # 118 Vorlagen abgelesen; Werte mit Modifikation ("diamond: 1050"),
+    # Molekuelbezug ("(N<sub>2</sub>) 0.72") oder Bereich ("130-188")
+    # verwirft parse_wiki_number.
+    "heat fusion": ("molar_fusion_enthalpy", 1.0),          # kJ/mol
+    "heat vaporization": ("molar_vaporization_enthalpy", 1.0),  # kJ/mol
+    "electronegativity": ("electronegativity", 1.0),        # Pauling-Skala
+    "ionization energy 1": ("ionization_energy", 1.0),      # kJ/mol
+    "atomic radius": ("atomic_radius", 1.0),                # pm, empirisch
+    "covalent radius": ("covalent_radius", 1.0),            # pm
+    "Van der Waals radius": ("van_der_waals_radius", 1.0),  # pm
+    # Elastische Konstanten als MESSWERTE. Im Lauf fragt die MP-Stufe vor
+    # der Wikipedia; Kompressions-, Schubmodul und Poissonzahl kommen hier
+    # also nur an, wo MP nichts liefert (oder mit --no-mp).
+    "Young's modulus": ("tensile_modulus", 1.0),            # GPa
+    "Shear modulus": ("shear_modulus", 1.0),                # GPa
+    "Bulk modulus": ("bulk_modulus", 1.0),                  # GPa
+    "Poisson ratio": ("poisson_ratio", 1.0),                # dimensionslos
+    "thermal diffusivity": ("thermal_diffusivity", 1.0),    # mm^2/s
+}
+
+
+# ---------------------------------------------------------------------------
+# Pflicht-Qualifikatoren der Infobox-Groessen
+# ---------------------------------------------------------------------------
+#
+# Mehrere der seit 2026-11-20 bedienten Properties tragen einen required-
+# qualifier-Constraint (am selben Tag gelesen). Ohne den Qualifikator waere
+# jede erzeugte Aussage eine Constraint-Verletzung.
+#
+# PFLICHT_TEMPERATUR: interner Schluessel -> woher die Temperatur (P2076)
+# kommt. Ein Schluessel aus derselben Infobox (Wert in Kelvin), oder None
+# fuer "die Quelle nennt keine - Raumtemperatur annehmen". Letzteres nach
+# derselben Konvention wie bei der Dichte (STANDARD_TEMPERATUR_C), und es
+# steht ausdruecklich in der Notiz der Zeile.
+#
+# Fehlt die Bezugstemperatur (kein Schmelzpunkt in der Infobox), wird die
+# Zeile zur MANUELLEN KLAERUNG ausgewiesen, nicht ohne Qualifikator
+# vorgeschlagen.
+PFLICHT_TEMPERATUR = {
+    "molar_fusion_enthalpy": "melting_point",       # P2066 am Schmelzpunkt
+    "molar_vaporization_enthalpy": "boiling_point",  # P2116 am Siedepunkt
+    # Hilfsschluessel, NICHT in PROPERTY_MAP: die Bezugstemperatur aus
+    # "RefTempDampfdruck_K", von wikipedia_de_values mit abgelegt.
+    "vapor_pressure": "_dampfdruck_temperatur",      # P2119
+    "tensile_modulus": None,                        # P5480, Quelle nennt keine
+}
+
+# Qualifikatoren, die fuer jede Aussage der Groesse gleich sind:
+# (PID, QuickStatements-Wert, Klartext). P1545 ist eine Zeichenkette und
+# steht deshalb in Anfuehrungszeichen.
+FESTE_QUALIFIKATOREN = {
+    "ionization_energy": [("P1545", '"1"', "erste Ionisierungsenergie")],
+}
+
+# Molekulare Elemente: ihre Infobox-Enthalpien sind nicht eindeutig auf
+# "pro Mol Atome" oder "pro Mol Molekuele" bezogen - und die de-Vorlage ist
+# darin nicht einmal in sich einig. Am Bestand (2026-11-20): Stickstoff
+# Schmelzwaerme de 0,36 / en "(N2) 0,72", Chlor 3,2 / 6,406, Brom 5,8 / 10,571,
+# Iod 7,76 / 15,52 - de rechnet die Schmelzwaerme pro Atom, die
+# Verdampfungswaerme aber pro Molekuel (Stickstoff 5,58 de = 5,57 en).
+# Welcher Bezug zum Element-Item gehoert, entscheidet das Werkzeug nicht:
+# diese Zeilen gehen in die manuelle Klaerung.
+MOLBEZUG_SCHLUESSEL = ("molar_fusion_enthalpy", "molar_vaporization_enthalpy")
+MOLEKULARE_ELEMENTE = {
+    "Q556": "H2", "Q627": "N2", "Q629": "O2", "Q650": "F2", "Q674": "P4",
+    "Q682": "S8", "Q688": "Cl2", "Q879": "Br2", "Q1103": "I2",
 }
 
 
@@ -808,8 +1186,9 @@ STUFEN_PIDS = {
                     for k, _ in MP_FIELD_MAP.values() if k in PROPERTY_MAP),
     "nist": _pids("formation_enthalpy", "molar_entropy"),
     # Die Infoboxen liefern alles, was in den vier Feldkarten steht, dazu
-    # Kristallsystem, CAS-Nummer, Laengenausdehnungskoeffizient und die
-    # magnetische Ordnung (P1552, Feld "Magnetismus").
+    # Kristallsystem, CAS-Nummer, Laengenausdehnungskoeffizient, die
+    # magnetische Ordnung (P1552, Feld "Magnetismus") und seit 2026-11-20
+    # Dampfdruck, Phasenpunkte sowie EG- und ECHA-Nummer.
     "wikipedia": frozenset(
         [PROPERTY_MAP[k]["pid"] for k, _ in WIKIPEDIA_DE_FIELDS.values()]
         + [PROPERTY_MAP[k]["pid"] for k, _ in WIKIPEDIA_DE_CHEM_FIELDS.values()]
@@ -818,5 +1197,6 @@ STUFEN_PIDS = {
         + [PROPERTY_MAP[k]["pid"] for k in
            ("crystal_system", "cas_number", "density", "melting_point",
             "boiling_point", "electrical_resistivity",
-            "linear_thermal_expansion", "magnetism")]),
+            "linear_thermal_expansion", "magnetism", "vapor_pressure",
+            "phase_point", "ec_number", "echa_infocard")]),
 }

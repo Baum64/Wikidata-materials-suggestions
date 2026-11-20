@@ -239,15 +239,21 @@ DEFAULT_AUS = {"formel": "--formel"}
 #
 # Nur der Laengenausdehnungskoeffizient (P5672) haengt an der englischen
 # Elementvorlage - also gibt es ihn ausserhalb des Elementlaufs gar nicht.
+#
+# Seit 2026-11-20 dazu: Dampfdruck (de, mit Bezugstemperatur), EG- und
+# ECHA-Nummer (beide de-Vorlagen, gleiche Feldnamen) und die Phasenpunkte
+# (en, eigene Stufe wie P5672).
 WP_SCHLUESSEL = {
     "de-element": ({k for k, _ in WIKIPEDIA_DE_FIELDS.values()}
-                   | {"cas_number", "crystal_system", "magnetism"}),
+                   | {"cas_number", "crystal_system", "magnetism",
+                      "vapor_pressure", "ec_number", "echa_infocard"}),
     "de-chemikalie": ({k for k, _ in WIKIPEDIA_DE_CHEM_FIELDS.values()}
-                      | {"melting_point", "boiling_point", "cas_number"}),
+                      | {"melting_point", "boiling_point", "cas_number",
+                         "ec_number", "echa_infocard"}),
     "de-mineral": {"density", "mohs_hardness"},
     "en-element": ({k for k, _ in WIKIPEDIA_NUMERIC_FIELDS.values()}
                    | {"density", "electrical_resistivity", "crystal_system",
-                      "linear_thermal_expansion"}),
+                      "linear_thermal_expansion", "phase_point"}),
     "en-chembox": ({k for k, _, _ in CHEMBOX_FIELDS.values()}
                    | {"cas_number"}),
 }
